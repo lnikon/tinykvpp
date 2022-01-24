@@ -19,12 +19,19 @@ namespace structures {
             /*
              * Determines the size (in Mb) of the table after which it should be flushed onto the disk.
              */
-            const std::size_t DefaultDiskFlushThresholdSize {8 * 1024 * 1024}; // 8 Megabyte
+            const std::size_t DefaultDiskFlushThresholdSize{8 * 1024 * 1024}; // 8 Megabyte
             std::size_t DiskFlushThresholdSize{DefaultDiskFlushThresholdSize};
+
+            /*
+             * Determines number of segments after which compaction process should start.
+             */
+            const std::size_t DefaultCompactionSegmentCount{16};
+            std::size_t CompactionSegmentCount{DefaultCompactionSegmentCount};
         };
 
         class LSMTree {
         public:
+            // TODO: Make LSMTreeConfig configurable via CLI
             LSMTree(const LSMTreeConfig& config)
                 : m_config(config)
             { }
@@ -53,6 +60,57 @@ namespace structures {
             MemTable m_table;
             std::size_t m_size;
             // TODO: Keep BloomFilter(BF) for reads. First check BF, if it says no, then abort searching. Otherwise perform search.
+            // TODO: Keep in-memory indices for segments.
+        };
+
+        // TODO: This is a scratch code to represent on-disk segments, compaction logic and related stuff.
+        template <typename T>
+        struct GenericWriter
+        {
+            // TODO: Maybe change @path with something general?
+            // TODO: Maybe use std::filesystem::path instead of std::string?
+            void Write(const T& value, const std::string& path)
+            {
+
+            }
+        };
+
+        template <typename T>
+        struct GenericReader
+        {
+            void Read(T& result)
+            {
+
+            }
+        };
+
+        struct LSMTreeSegment
+        {
+            void Read()
+            { }
+
+            void Write()
+            { }
+        };
+
+        struct LSMTreeWriter: GenericWriter<LSMTree>
+        {
+
+        };
+
+        struct LSMTreeReader: GenericReader<LSMTreeReader>
+        {
+
+        };
+
+        struct LSMTreeSegmentWriter: GenericWriter<LSMTreeSegmentWriter>
+        {
+
+        };
+
+        struct LSMTreeSegmentReader: GenericWriter<LSMTreeSegmentReader>
+        {
+
         };
     } // lsmtree
 } // structures

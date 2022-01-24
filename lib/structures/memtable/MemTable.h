@@ -119,7 +119,7 @@ namespace structure::memtable {
 
                     // TODO: Impl move assign operator
 
-                    std::size_t Size() const
+                    [[nodiscard]] std::size_t Size() const
                     {
                         return std::visit([](const UnderlyingValueType& value) {
                             if (value.index() == static_cast<std::size_t>(ValueType::Integer))
@@ -190,17 +190,17 @@ namespace structure::memtable {
                     return !(m_key < record.m_key);
                 }
 
-                Key GetKey() const
+                [[nodiscard]] Key GetKey() const
                 {
                     return m_key;
                 }
 
-                Value GetValue() const
+                [[nodiscard]] Value GetValue() const
                 {
                     return m_value;
                 }
 
-                std::size_t Size() const
+                [[nodiscard]] std::size_t Size() const
                 {
                     return m_key.Size() + m_value.Size();
                 }
@@ -229,17 +229,21 @@ namespace structure::memtable {
             {
                 Record record{key, Record::Value{""}};
 
-                std::lock_guard lg(m_mutex);
-                const auto it = std::lower_bound(m_data.begin(), m_data.end(), record);
+                decltype(m_data)::iterator it;
+                {
+                    std::lock_guard lg(m_mutex);
+                    it = std::lower_bound(m_data.begin(), m_data.end(), record);
+                }
+
                 return (it->GetKey() == key ? std::make_optional(*it) : std::nullopt);
             }
 
-            std::size_t Size() const
+            [[nodiscard]] std::size_t Size() const
             {
                 return m_size;
             }
 
-            std::size_t Count() const
+            [[nodiscard]] std::size_t Count() const
             {
                 return m_count;
             }
@@ -253,8 +257,8 @@ namespace structure::memtable {
         private:
             std::mutex m_mutex;
             std::vector<Record> m_data;
-            std::size_t m_size;
-            std::size_t m_count;
+            std::size_t m_size{0};
+            std::size_t m_count{0};
         };
     }
 
