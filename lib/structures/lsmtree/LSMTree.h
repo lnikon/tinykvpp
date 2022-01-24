@@ -27,9 +27,7 @@ namespace structures {
         public:
             LSMTree(const LSMTreeConfig& config)
                 : m_config(config)
-            {
-
-            }
+            { }
 
             LSMTree() = default;
             LSMTree(const LSMTree&) = delete;
@@ -37,14 +35,15 @@ namespace structures {
             LSMTree(LSMTree&&) = delete;
             LSMTree& operator=(LSMTree&&) = delete;
 
-            // TODO: Both Key and Value should support size!
             void Insert(const Key& key, const Value& value)
             {
                 std::lock_guard lg(m_mutex);
-                // 1. Construct record
-                // 2. Sum up records and table size, if greater then threshold, flush on disk
+                if (key.Size() + value.Size() + m_table.Size() >= m_config.DiskFlushThresholdSize)
+                {
+                    // TODO: For now, lock whole table, dump it into on-disk segment, and replace the table with new one.
+                    // TODO: For the future, keep LSMTree readable while dumping.
+                }
 
-                if (key.size() + value.size() + m_table.size() >= )
                 m_table.emplace(Record{key, value});
             }
 

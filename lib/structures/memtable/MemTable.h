@@ -220,19 +220,41 @@ namespace structure::memtable {
             {
                 std::lock_guard lg(m_mutex);
                 m_data.insert(std::lower_bound(m_data.begin(), m_data.end(), record), record);
+
+                updateSize(record);
+                m_count++;
             }
 
             std::optional<Record> find(const Record::Key& key)
             {
-                std::lock_guard lg(m_mutex);
                 Record record{key, Record::Value{""}};
+
+                std::lock_guard lg(m_mutex);
                 const auto it = std::lower_bound(m_data.begin(), m_data.end(), record);
                 return (it->GetKey() == key ? std::make_optional(*it) : std::nullopt);
+            }
+
+            std::size_t Size() const
+            {
+                return m_size;
+            }
+
+            std::size_t Count() const
+            {
+                return m_count;
+            }
+
+        private:
+            void updateSize(const Record& record)
+            {
+                m_size += record.Size();
             }
 
         private:
             std::mutex m_mutex;
             std::vector<Record> m_data;
+            std::size_t m_size;
+            std::size_t m_count;
         };
     }
 
