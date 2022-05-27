@@ -5,114 +5,47 @@
 #ifndef CPP_PROJECT_TEMPLATE_LSMTREE_H
 #define CPP_PROJECT_TEMPLATE_LSMTREE_H
 
-#include "structures/memtable/MemTable.h"
+#include <sstream>
+#include <thread>
 
-namespace structures {
-    namespace lsmtree {
-        using MemTable = structure::memtable::MemTable;
-        using Record = structure::memtable::MemTable::Record;
-        using Key = MemTable::Record::Key;
-        using Value = MemTable::Record::Value;
+#include "ILSMTreeSegment.h"
+#include "LSMTreeConfig.h"
+#include "LSMTreeRegularSegment.h"
+#include "LSMTreeSegmentStorage.h"
+#include "LSMTreeSegmentFactory.h"
+#include "LSMTreeSegmentManager.h"
+#include "LSMTreeTypes.h"
 
-        struct LSMTreeConfig
-        {
-            /*
-             * Determines the size (in Mb) of the table after which it should be flushed onto the disk.
-             */
-            const std::size_t DefaultDiskFlushThresholdSize{8 * 1024 * 1024}; // 8 Megabyte
-            std::size_t DiskFlushThresholdSize{DefaultDiskFlushThresholdSize};
+namespace structures::lsmtree {
 
-            /*
-             * Determines number of segments after which compaction process should start.
-             */
-            const std::size_t DefaultCompactionSegmentCount{16};
-            std::size_t CompactionSegmentCount{DefaultCompactionSegmentCount};
-        };
+/**
+ * Incapsulates MemTable, SegmentManager, and SegmentIndices.
+ */
+class LSMTree {
+public:
+  // TODO: Make LSMTreeConfig configurable via CLI
+  explicit LSMTree(const LSMTreeConfig &config);
 
-        class LSMTree {
-        public:
-            // TODO: Make LSMTreeConfig configurable via CLI
-            LSMTree(const LSMTreeConfig& config)
-                : m_config(config)
-            { }
+  LSMTree() = default;
+  LSMTree(const LSMTree &) = delete;
+  LSMTree &operator=(const LSMTree &) = delete;
+  LSMTree(LSMTree &&) = delete;
+  LSMTree &operator=(LSMTree &&) = delete;
 
-            LSMTree() = default;
-            LSMTree(const LSMTree&) = delete;
-            LSMTree& operator=(const LSMTree&) = delete;
-            LSMTree(LSMTree&&) = delete;
-            LSMTree& operator=(LSMTree&&) = delete;
+  void Put(const Key &key, const Value &value);
+  void Get();
 
-            void Insert(const Key& key, const Value& value)
-            {
-                std::lock_guard lg(m_mutex);
-                if (key.Size() + value.Size() + m_table.Size() >= m_config.DiskFlushThresholdSize)
-                {
-                    // TODO: For now, lock whole table, dump it into on-disk segment, and replace the table with new one.
-                    // TODO: For the future, keep LSMTree readable while dumping.
-                }
+private:
+  std::mutex m_mutex;
+  LSMTreeConfig m_config;
+  MemTableUniquePtr m_table;
+  LSMTreeSegmentManagerPtr m_segmentsMgr;
+  std::size_t m_size;
+  // TODO: Keep BloomFilter(BF) for reads. First check BF, if it says no, then
+  // abort searching. Otherwise perform search.
+  // TODO: Keep in-memory indices for segments.
+};
 
-                m_table.emplace(Record{key, value});
-            }
+} // namespace structures::lsmtree
 
-        private:
-            std::mutex m_mutex;
-            LSMTreeConfig m_config;
-            MemTable m_table;
-            std::size_t m_size;
-            // TODO: Keep BloomFilter(BF) for reads. First check BF, if it says no, then abort searching. Otherwise perform search.
-            // TODO: Keep in-memory indices for segments.
-        };
-
-        // TODO: This is a scratch code to represent on-disk segments, compaction logic and related stuff.
-        template <typename T>
-        struct GenericWriter
-        {
-            // TODO: Maybe change @path with something general?
-            // TODO: Maybe use std::filesystem::path instead of std::string?
-            void Write(const T& value, const std::string& path)
-            {
-
-            }
-        };
-
-        template <typename T>
-        struct GenericReader
-        {
-            void Read(T& result)
-            {
-
-            }
-        };
-
-        struct LSMTreeSegment
-        {
-            void Read()
-            { }
-
-            void Write()
-            { }
-        };
-
-        struct LSMTreeWriter: GenericWriter<LSMTree>
-        {
-
-        };
-
-        struct LSMTreeReader: GenericReader<LSMTreeReader>
-        {
-
-        };
-
-        struct LSMTreeSegmentWriter: GenericWriter<LSMTreeSegmentWriter>
-        {
-
-        };
-
-        struct LSMTreeSegmentReader: GenericWriter<LSMTreeSegmentReader>
-        {
-
-        };
-    } // lsmtree
-} // structures
-
-#endif //CPP_PROJECT_TEMPLATE_LSMTREE_H
+#endif // CPP_PROJECT_TEMPLATE_LSMTREE_H

@@ -15,251 +15,114 @@
 #include <iostream>
 
 #include <boost/date_time.hpp>
+#include <spdlog/spdlog.h>
 
-namespace structure::memtable {
-        // TODO: Maybe instead of supporting any K/V type, we can support fixed set of types?
-        // TODO: Use `concepts` to describe interface of template parameters.
-        // TODO: MemTable should be safe for concurrent access and *scalable*. Consider to use SkipList!
-//        template <template<typename> class StorageType>
+namespace structures::memtable {
+    // TODO: Maybe instead of supporting any K/V type, we can support fixed set of types?
+    // TODO: Use `concepts` to describe interface of template parameters.
+    // TODO: MemTable should be safe for concurrent access and *scalable*. Consider to use SkipList!
+    //       template <template<typename> class StorageType>
 
-        std::size_t StringSizeInBytes(const std::string& str)
-        {
-            return sizeof(std::string::value_type) * str.size();
-        }
+    std::size_t StringSizeInBytes(const std::string &str);
 
-        class MemTable {
-        public:
-            struct Record
-            {
-                enum class ValueType
-                {
-                    Integer = 0,
-                    Double,
-                    String
-                };
-
-                struct Key
-                {
-                    explicit Key(std::string key)
-                        : m_key(std::move(key))
-                    { }
-
-                    Key(const Key& other)
-                        : m_key(other.m_key)
-                    { }
-
-                    Key& operator=(const Key& other)
-                    {
-                        if (this == &other)
-                        {
-                            return *this;
-                        }
-
-                        Key tmp(other);
-                        swap(*this, tmp);
-
-                        return *this;
-                    }
-
-                    static void swap(Key& lhs, Key& rhs)
-                    {
-                        using std::swap;
-                        std::swap(lhs.m_key, rhs.m_key);
-                    }
-
-                    // TODO: Impl move assign operator
-
-                    [[nodiscard]] std::size_t Size() const
-                    {
-                        return StringSizeInBytes(m_key);
-                    }
-
-                    bool operator<(const Key& other) const
-                    {
-                        return m_key < other.m_key;
-                    }
-
-                    bool operator>(const Key& other) const
-                    {
-                        return !(*this < other);
-                    }
-
-                    bool operator==(const Key& other) const
-                    {
-                        return m_key == other.m_key;
-                    }
-
-                    std::string m_key;
-                };
-
-                struct Value
-                {
-                    using UnderlyingValueType = std::variant<int64_t, double, std::string>;
-
-                    explicit Value(UnderlyingValueType  value)
-                        : m_value(std::move(value))
-                    { }
-
-                    Value(const Value& other)
-                        : m_value(other.m_value)
-                    { }
-
-                    Value& operator=(const Value& other)
-                    {
-                        if (this == &other)
-                        {
-                            return *this;
-                        }
-
-                        Value tmp(other);
-                        std::swap(m_value, tmp.m_value);
-
-                        return *this;
-                    }
-
-                    // TODO: Impl move assign operator
-
-                    [[nodiscard]] std::size_t Size() const
-                    {
-                        return std::visit([](const UnderlyingValueType& value) {
-                            if (value.index() == static_cast<std::size_t>(ValueType::Integer))
-                            {
-                                return sizeof(int64_t);
-                            }
-                            else if (value.index() == static_cast<std::size_t>(ValueType::Double))
-                            {
-                                return sizeof(double);
-                            }
-                            else if (value.index() == static_cast<std::size_t>(ValueType::String))
-                            {
-                                return StringSizeInBytes(std::get<std::string>(value));
-                            }
-                            else
-                            {
-                                // TODO: Use spdlog here!
-                                assert(false);
-                            }
-                        }, m_value);
-                    }
-
-                    bool operator==(const Value& other) const
-                    {
-                        return m_value == other.m_value;
-                    }
-
-                    static void swap(Value& lhs, Value& rhs)
-                    {
-                        using std::swap;
-                        swap(lhs.m_value, rhs.m_value);
-                    }
-
-                    UnderlyingValueType m_value;
-                };
-
-                Record(const Key& key, const Value& value)
-                    : m_key(key)
-                    , m_value(value)
-                { }
-
-                Record(const Record& other)
-                    : m_key(other.m_key)
-                    , m_value(other.m_value)
-                { }
-
-                Record& operator=(const Record& other)
-                {
-                    if (this == &other)
-                    {
-                        return *this;
-                    }
-
-                    Record tmp(other);
-                    Record::Key::swap(m_key, tmp.m_key);
-                    Record::Value::swap(m_value, tmp.m_value);
-
-                    return *this;
-                }
-
-                bool operator<(const Record& record) const
-                {
-                    return m_key < record.m_key;
-                }
-
-                bool operator>(const Record& record) const
-                {
-                    return !(m_key < record.m_key);
-                }
-
-                [[nodiscard]] Key GetKey() const
-                {
-                    return m_key;
-                }
-
-                [[nodiscard]] Value GetValue() const
-                {
-                    return m_value;
-                }
-
-                [[nodiscard]] std::size_t Size() const
-                {
-                    return m_key.Size() + m_value.Size();
-                }
-
-            private:
-                Key m_key;
-                Value m_value;
+    class MemTable {
+    public:
+        struct Record {
+            enum class ValueType {
+                Integer = 0,
+                Double,
+                String
             };
 
-            MemTable() = default;
-            MemTable(const MemTable&) = delete;
-            MemTable& operator=(const MemTable&) = delete;
-            MemTable(MemTable&&) = delete;
-            MemTable& operator=(MemTable&&) = delete;
+            struct Key {
+                explicit Key(std::string key);
 
-            void emplace(const Record& record)
-            {
-                std::lock_guard lg(m_mutex);
-                m_data.insert(std::lower_bound(m_data.begin(), m_data.end(), record), record);
+                Key(const Key &other);
+                Key &operator=(const Key &other);
+                // TODO: Impl move assign operator
 
-                updateSize(record);
-                m_count++;
-            }
+                bool operator<(const Key &other) const;
+                bool operator>(const Key &other) const;
+                bool operator==(const Key &other) const;
 
-            std::optional<Record> find(const Record::Key& key)
-            {
-                Record record{key, Record::Value{""}};
+                void Write(std::ostream& os) const;
+                [[nodiscard]] std::size_t Size() const;
 
-                decltype(m_data)::iterator it;
-                {
-                    std::lock_guard lg(m_mutex);
-                    it = std::lower_bound(m_data.begin(), m_data.end(), record);
-                }
+                static void swap(Key &lhs, Key &rhs);
 
-                return (it->GetKey() == key ? std::make_optional(*it) : std::nullopt);
-            }
+                std::string m_key;
+            };
 
-            [[nodiscard]] std::size_t Size() const
-            {
-                return m_size;
-            }
+            struct Value {
+                using UnderlyingValueType = std::variant<int64_t, double, std::string>;
 
-            [[nodiscard]] std::size_t Count() const
-            {
-                return m_count;
-            }
+                explicit Value(UnderlyingValueType value);
+
+                Value(const Value &other);
+                Value &operator=(const Value &other);
+                // TODO: Impl move assign operator
+
+                bool operator==(const Value &other) const;
+
+                void Write(std::ostream& os);
+                [[nodiscard]] std::optional<std::size_t> Size() const;
+
+                static void swap(Value &lhs, Value &rhs);
+
+                UnderlyingValueType m_value;
+            };
+
+            Record(const Record &other);
+            Record(const Key &key, const Value &value);
+
+            bool operator<(const Record &record) const;
+            bool operator>(const Record &record) const;
+            Record &operator=(const Record &other);
+
+            [[nodiscard]] Key GetKey() const;
+            [[nodiscard]] Value GetValue() const;
+            [[nodiscard]] std::size_t Size() const;
 
         private:
-            void updateSize(const Record& record)
-            {
-                m_size += record.Size();
-            }
-
-        private:
-            std::mutex m_mutex;
-            std::vector<Record> m_data;
-            std::size_t m_size{0};
-            std::size_t m_count{0};
+            Key m_key;
+            Value m_value;
         };
+
+        MemTable() = default;
+        MemTable(const MemTable &) = delete;
+        MemTable &operator=(const MemTable &) = delete;
+        MemTable(MemTable &&) = delete;
+        MemTable &operator=(MemTable &&) = delete;
+
+        void Emplace(const Record &record);
+        std::optional<Record> Find(const Record::Key &key);
+        [[nodiscard]] std::size_t Size() const;
+        [[nodiscard]] std::size_t Count() const;
+
+        // TODO: Implement iterators to use for dumping
+        auto Begin();
+        auto End();
+
+        void Write(std::ostream& os);
+
+    private:
+        void updateSize(const Record &record);
+
+    private:
+        std::mutex m_mutex;
+        // TODO: Should abstract out this part to some generic storage with good O(n) times.
+        std::vector<Record> m_data;
+        std::size_t m_size{0};
+        std::size_t m_count{0};
+    };
+
+    using MemTableUniquePtr = std::unique_ptr<MemTable>;
+
+    template <typename... Args>
+    auto make_unique(Args... args)
+    {
+        return std::make_unique<MemTable>(std::forward<args>...);
     }
+}
 
 #endif //CPP_PROJECT_TEMPLATE_MEMTABLE_H
