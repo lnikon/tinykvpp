@@ -11,11 +11,15 @@ structures::lsmtree::LSMTreeConfig constructLSMTreeConfig(po::variables_map vm);
 
 int main(int argc, char** argv)
 {
+    spdlog::set_level(spdlog::level::debug);
+
     auto descriptions = constructOptionsDescription();
     auto vm = parseCommandLine(descriptions, argc, argv);
     if (vm.count("help"))
     {
-        spdlog::info(descriptions);
+        std::stringstream ss;
+        descriptions.print(ss);
+        spdlog::info(ss.str());
         return 0;
     }
 

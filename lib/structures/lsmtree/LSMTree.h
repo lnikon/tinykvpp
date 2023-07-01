@@ -33,7 +33,7 @@ public:
   LSMTree &operator=(LSMTree &&) = delete;
 
   void Put(const Key &key, const Value &value);
-  void Get();
+  std::optional<Record> Get(const Key &key) const;
 
 private:
   std::mutex m_mutex;

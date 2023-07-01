@@ -11,4 +11,4 @@ add_library(LSMTree "ILSMTreeSegment.cpp"
 target_include_directories(LSMTree INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 
 add_executable(LSMTreeTest "LSMTreeTest.cpp")
-target_link_libraries(LSMTreeTest PRIVATE LSMTree MemTable ${CONAN_LIBS})
+target_link_libraries(LSMTreeTest boost::boost Catch2::Catch2 gRPC::grpc spdlog::spdlog fmt::fmt ZLIB::ZLIB LSMTree MemTable)

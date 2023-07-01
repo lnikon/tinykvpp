@@ -7,12 +7,14 @@
 
 #include "LSMTreeTypes.h"
 
-namespace structures::lsmtree {
-    class ILSMTreeSegment {
+namespace structures::lsmtree
+{
+    class ILSMTreeSegment
+    {
     public:
         explicit ILSMTreeSegment(std::string name);
 
-        void SetContent(std::string content);
+        virtual void SetContent(std::string content);
 
         [[nodiscard]] std::string GetName() const;
 
@@ -28,4 +30,4 @@ namespace structures::lsmtree {
     using LSMTreeSegmentPtr = std::shared_ptr<ILSMTreeSegment>;
 }
 
-#endif //ZKV_ILSMTREESEGMENT_H
+#endif // ZKV_ILSMTREESEGMENT_H

@@ -17,17 +17,19 @@ const std::string componentName = "[LSMTree]";
 
 TEST_CASE("Emplace and Find", componentName)
 {
-
+    spdlog::set_level(spdlog::level::debug);
     LSMTreeConfig config;
     config.DiskFlushThresholdSize = 24;
     config.SegmentType = LSMTreeSegmentType::Mock;
-    LSMTree lsmTree(config);
 
-    lsmTree.Put(Key{"B"}, Value{4});
-    lsmTree.Put(Key{"A"}, Value{5});
-    lsmTree.Put(Key{"E"}, Value{3});
-    lsmTree.Put(Key{"Z"}, Value{2});
-    lsmTree.Put(Key{"K"}, Value{1});
+    SECTION("Put and Get") {
+        LSMTree lsmTree(config);
+        lsmTree.Put(Key{"B"}, Value{4});
+        lsmTree.Put(Key{"A"}, Value{5});
+        lsmTree.Put(Key{"E"}, Value{3});
+        lsmTree.Put(Key{"Z"}, Value{2});
+        lsmTree.Put(Key{"K"}, Value{1});
+    }
 }
 
 

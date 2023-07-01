@@ -12,9 +12,11 @@
 #include <optional>
 #include <mutex>
 #include <algorithm>
-#include <iostream>
+#include <sstream>
 
 #include <boost/date_time.hpp>
+
+#define FMT_HEADER_ONLY
 #include <spdlog/spdlog.h>
 
 namespace structures::memtable {
@@ -45,7 +47,7 @@ namespace structures::memtable {
                 bool operator>(const Key &other) const;
                 bool operator==(const Key &other) const;
 
-                void Write(std::ostream& os) const;
+                void Write(std::stringstream& os) const;
                 [[nodiscard]] std::size_t Size() const;
 
                 static void swap(Key &lhs, Key &rhs);
@@ -64,7 +66,7 @@ namespace structures::memtable {
 
                 bool operator==(const Value &other) const;
 
-                void Write(std::ostream& os);
+                void Write(std::stringstream& os);
                 [[nodiscard]] std::optional<std::size_t> Size() const;
 
                 static void swap(Value &lhs, Value &rhs);
@@ -103,7 +105,7 @@ namespace structures::memtable {
         auto Begin();
         auto End();
 
-        void Write(std::ostream& os);
+        void Write(std::stringstream& ss);
 
     private:
         void updateSize(const Record &record);
