@@ -12,3 +12,6 @@ The following is included:
 
 ## TODO
 * Support CI/CD
+
+## Resources
+* [Understanding: Log-Structured Merge Trees](https://otee.dev/2023/04/17/log-structured-merge-tree.html)

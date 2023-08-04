@@ -7,30 +7,30 @@
 
 #include "MemTable.h"
 
-using structures::memtable::MemTable;
-using Record = structures::memtable::MemTable::Record;
-using Key = structures::memtable::MemTable::Record::Key;
-using Value = structures::memtable::MemTable::Record::Value;
+using structures::memtable::memtable_t;
+using Record = structures::memtable::memtable_t::record_t;
+using Key = structures::memtable::memtable_t::record_t::key_t;
+using Value = structures::memtable::memtable_t::record_t::value_t;
 
 TEST_CASE("Emplace and Find", "[MemTable]")
 {
-    MemTable mt;
+    memtable_t mt;
     mt.Emplace(Record{Key{"B"}, Value{123}});
     mt.Emplace(Record{Key{"A"}, Value{-12}});
     mt.Emplace(Record{Key{"Z"}, Value{34.44}});
     mt.Emplace(Record{Key{"C"}, Value{"Hello"}});
-
+    
     auto record = mt.Find(Key{"C"});
     REQUIRE(record->GetKey() == Key{"C"});
     REQUIRE(record->GetValue() == Value{"Hello"});
-
+    
     record = mt.Find(Key{"V"});
     REQUIRE(record == std::nullopt);
 }
 
 TEST_CASE("Check record size before and after insertion", "[MemTable]")
 {
-    MemTable mt;
+    memtable_t mt;
 
     {
         Key k{"B"};
@@ -79,7 +79,7 @@ TEST_CASE("Check record size before and after insertion", "[MemTable]")
 
 TEST_CASE("Check size", "[MemTable]")
 {
-    MemTable mt;
+    memtable_t mt;
     auto k1 = Key{"B"}, k2 = Key{"A"}, k3 = Key{"Z"};
     auto v1 = Value{123}, v2 = Value{34.44}, v3 = Value{"Hello"};
     mt.Emplace(Record{k1, v1});
@@ -92,7 +92,7 @@ TEST_CASE("Check size", "[MemTable]")
 
 TEST_CASE("Check count", "[MemTable]")
 {
-    MemTable mt;
+    memtable_t mt;
     mt.Emplace(Record{Key{"B"}, Value{123}});
     mt.Emplace(Record{Key{"A"}, Value{-12}});
     mt.Emplace(Record{Key{"Z"}, Value{34.44}});

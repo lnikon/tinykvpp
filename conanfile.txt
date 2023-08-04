@@ -1,7 +1,6 @@
 [requires]
-boost/1.78.0
+boost/1.82.0
 catch2/2.13.8
-grpc/1.50.1
 spdlog/1.9.2
 fmt/8.0.1
 zlib/1.2.13

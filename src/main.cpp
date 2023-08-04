@@ -1,62 +1,61 @@
 #include <structures/lsmtree/LSMTree.h>
 
-#include <spdlog/spdlog.h>
 #include <boost/program_options.hpp>
+#include <spdlog/spdlog.h>
 
 namespace po = boost::program_options;
 
 po::options_description constructOptionsDescription();
-po::variables_map parseCommandLine(po::options_description descriptions, int argc, char** argv);
+po::variables_map parseCommandLine(po::options_description descriptions,
+                                   int argc, char **argv);
 structures::lsmtree::LSMTreeConfig constructLSMTreeConfig(po::variables_map vm);
 
-int main(int argc, char** argv)
-{
-    spdlog::set_level(spdlog::level::debug);
+int main(int argc, char **argv) {
+  spdlog::set_level(spdlog::level::debug);
 
-    auto descriptions = constructOptionsDescription();
-    auto vm = parseCommandLine(descriptions, argc, argv);
-    if (vm.count("help"))
-    {
-        std::stringstream ss;
-        descriptions.print(ss);
-        spdlog::info(ss.str());
-        return 0;
-    }
-
-    auto lsmTreeConfig = constructLSMTreeConfig(vm);
-
-    structures::lsmtree::LSMTree lsmTree(lsmTreeConfig);
-    // TODO: Run REPL loop for testing. Configure REPLing via config;
-
+  auto descriptions = constructOptionsDescription();
+  auto vm = parseCommandLine(descriptions, argc, argv);
+  if (vm.count("help")) {
+    std::stringstream ss;
+    descriptions.print(ss);
+    spdlog::info(ss.str());
     return 0;
+  }
+
+  auto lsmTreeConfig = constructLSMTreeConfig(vm);
+
+  structures::lsmtree::LSMTree lsmTree(lsmTreeConfig);
+  // TODO: Run REPL loop for testing. Configure REPLing via config;
+
+  return 0;
 }
 
-po::options_description constructOptionsDescription()
-{
-    po::options_description descriptions;
-    descriptions
-            .add_options()
-                    ("help", "show help message")
-                    ("diskFlushThresholdSize", po::value<uint64_t>(), "specify memtable size to write into sstable");
+po::options_description constructOptionsDescription() {
+  po::options_description descriptions;
+  descriptions.add_options()("help", "show help message")(
+      "diskFlushThresholdSize", po::value<uint64_t>(),
+      "specify memtable size to write into sstable");
 
-    return descriptions;
+  return descriptions;
 }
 
-po::variables_map parseCommandLine(po::options_description descriptions, int argc, char **argv) {
+po::variables_map parseCommandLine(po::options_description descriptions,
+                                   int argc, char **argv) {
 
-    po::variables_map vm;
-    po::store(po::parse_command_line(argc, argv, descriptions), vm);
-    po::notify(vm);
+  po::variables_map vm;
+  po::store(po::parse_command_line(argc, argv, descriptions), vm);
+  po::notify(vm);
 
-    return vm;
+  return vm;
 }
 
-structures::lsmtree::LSMTreeConfig constructLSMTreeConfig(po::variables_map vm) {
-    structures::lsmtree::LSMTreeConfig lsmTreeConfig;
-    if (vm.count("diskFlushThresholdSize"))
-    {
-        lsmTreeConfig.DiskFlushThresholdSize = vm["diskFlushThresholdSize"].as<uint64_t>();
-    }
+structures::lsmtree::LSMTreeConfig
+constructLSMTreeConfig(po::variables_map vm) {
+  structures::lsmtree::LSMTreeConfig lsmTreeConfig;
+  if (vm.count("diskFlushThresholdSize")) {
+    lsmTreeConfig.DiskFlushThresholdSize =
+        vm["diskFlushThresholdSize"].as<uint64_t>();
+  }
 
-    return lsmTreeConfig;
+  return lsmTreeConfig;
 }

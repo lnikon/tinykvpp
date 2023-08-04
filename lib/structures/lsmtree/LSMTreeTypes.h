@@ -13,11 +13,11 @@
 
 namespace structures::lsmtree {
     using namespace structures;
-    using MemTable = memtable::MemTable;
+    using MemTable = memtable::memtable_t;
     using MemTableUniquePtr = memtable::MemTableUniquePtr;
-    using Record = memtable::MemTable::Record;
-    using Key = MemTable::Record::Key;
-    using Value = MemTable::Record::Value;
+    using Record = memtable::memtable_t::record_t;
+    using Key = MemTable::record_t::key_t;
+    using Value = MemTable::record_t::value_t;
 
     enum class LSMTreeSegmentType
     {

@@ -5,7 +5,7 @@
 #ifndef CPP_PROJECT_TEMPLATE_LSMTREE_H
 #define CPP_PROJECT_TEMPLATE_LSMTREE_H
 
-#include <sstream>
+#include <optional>
 #include <thread>
 
 #include "ILSMTreeSegment.h"
@@ -19,7 +19,7 @@
 namespace structures::lsmtree {
 
 /**
- * Incapsulates MemTable, SegmentManager, and SegmentIndices.
+ * Encapsulates MemTable, SegmentManager, and SegmentIndices.
  */
 class LSMTree {
 public:
