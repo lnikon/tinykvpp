@@ -9,15 +9,15 @@
 #include <string>
 #include <memory>
 
-#include "structures/memtable/MemTable.h"
+#include "structures/memtable/memtable.h"
 
 namespace structures::lsmtree {
     using namespace structures;
-    using MemTable = memtable::memtable_t;
-    using MemTableUniquePtr = memtable::MemTableUniquePtr;
-    using Record = memtable::memtable_t::record_t;
-    using Key = MemTable::record_t::key_t;
-    using Value = MemTable::record_t::value_t;
+    using memtable_t = memtable::memtable_t;
+    using memtable_unique_ptr_t = memtable::unique_ptr_t;
+    using record_t = memtable::memtable_t::record_t;
+    using key_t = memtable_t::record_t::key_t;
+    using value_t = memtable_t::record_t::value_t;
 
     enum class LSMTreeSegmentType
     {

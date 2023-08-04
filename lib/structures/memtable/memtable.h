@@ -5,6 +5,11 @@
 #ifndef CPP_PROJECT_TEMPLATE_MEMTABLE_H
 #define CPP_PROJECT_TEMPLATE_MEMTABLE_H
 
+#include <boost/date_time.hpp>
+
+#define FMT_HEADER_ONLY
+#include <spdlog/spdlog.h>
+
 #include <algorithm>
 #include <mutex>
 #include <optional>
@@ -13,11 +18,6 @@
 #include <utility>
 #include <variant>
 #include <vector>
-
-#include <boost/date_time.hpp>
-
-#define FMT_HEADER_ONLY
-#include <spdlog/spdlog.h>
 
 #include "structures/sorted_vector/sorted_vector.h"
 
@@ -29,7 +29,7 @@ using namespace sorted_vector;
 // TODO: MemTable should be safe for concurrent access and *scalable*. Consider
 // to use SkipList! template <template<typename> class StorageType>
 
-std::size_t StringSizeInBytes(const std::string &str);
+std::size_t string_size_in_bytes(const std::string &str);
 
 class memtable_t {
 public:
@@ -56,7 +56,8 @@ public:
     };
 
     struct value_t {
-      using underlying_value_type_t = std::variant<int64_t, double, std::string>;
+      using underlying_value_type_t =
+          std::variant<int64_t, double, std::string>;
 
       explicit value_t(underlying_value_type_t value);
 
@@ -85,7 +86,7 @@ public:
     [[nodiscard]] value_t GetValue() const;
     [[nodiscard]] std::size_t Size() const;
 
-    friend std::ostream& operator<<(std::ostream &out, const record_t &r) {
+    friend std::ostream &operator<<(std::ostream &out, const record_t &r) {
       std::stringstream s;
       r.GetKey().Write(s);
       r.GetValue().Write(s);
@@ -112,13 +113,13 @@ public:
   // TODO: Implement iterators to use for dumping
   // Consider using std::iterator
   // https://en.cppreference.com/w/cpp/iterator/iterator
-  auto Begin();
-  auto End();
+  auto begin();
+  auto end();
 
-  void Write(std::stringstream &ss);
+  void write(std::stringstream &ss);
 
 private:
-  void updateSize(const record_t &record);
+  void update_size(const record_t &record);
 
 private:
   std::mutex m_mutex;
@@ -129,7 +130,7 @@ private:
   std::size_t m_count{0};
 };
 
-using MemTableUniquePtr = std::unique_ptr<memtable_t>;
+using unique_ptr_t = std::unique_ptr<memtable_t>;
 
 template <typename... Args> auto make_unique(Args... args) {
   return std::make_unique<memtable_t>(std::forward<args>...);

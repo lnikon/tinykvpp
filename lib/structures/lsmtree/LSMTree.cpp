@@ -19,8 +19,8 @@ LSMTree::LSMTree(const LSMTreeConfig &config)
     : m_config(config), m_table(memtable::make_unique()),
       m_segmentsMgr(std::make_shared<LSMTreeSegmentManager>()) {}
 
-void LSMTree::Put(const structures::lsmtree::Key &key,
-                  const structures::lsmtree::Value &value) {
+void LSMTree::Put(const structures::lsmtree::key_t &key,
+                  const structures::lsmtree::value_t &value) {
   // TODO: Wrap into check optionalValueSize and use everywhere
   const auto valueSizeOpt = value.Size();
   if (!valueSizeOpt.has_value()) {
@@ -41,17 +41,17 @@ void LSMTree::Put(const structures::lsmtree::Key &key,
     m_table = memtable::make_unique();
 
     std::stringstream ss;
-    tableToDump->Write(ss);
+    tableToDump->write(ss);
 
     auto segment = m_segmentsMgr->GetNewSegment(m_config.SegmentType);
     segment->SetContent(ss.str());
     segment->Flush();
   }
 
-  m_table->Emplace(Record{key, value});
+  m_table->Emplace(record_t{key, value});
 }
 
-std::optional<Record> structures::lsmtree::LSMTree::Get(const Key &key) const {
+std::optional<record_t> structures::lsmtree::LSMTree::Get(const key_t &key) const {
   // TODO: Use Index and on-disk segments.
   // For now we'll just lookup in-memory memtable.
 

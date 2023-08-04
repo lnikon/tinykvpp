@@ -5,7 +5,7 @@
 #define CATCH_CONFIG_MAIN
 #include <catch2/catch.hpp>
 
-#include "MemTable.h"
+#include "memtable.h"
 
 using structures::memtable::memtable_t;
 using Record = structures::memtable::memtable_t::record_t;

@@ -32,13 +32,13 @@ public:
   LSMTree(LSMTree &&) = delete;
   LSMTree &operator=(LSMTree &&) = delete;
 
-  void Put(const Key &key, const Value &value);
-  std::optional<Record> Get(const Key &key) const;
+  void Put(const key_t &key, const value_t &value);
+  std::optional<record_t> Get(const key_t &key) const;
 
 private:
   std::mutex m_mutex;
   LSMTreeConfig m_config;
-  MemTableUniquePtr m_table;
+  memtable_unique_ptr_t m_table;
   LSMTreeSegmentManagerPtr m_segmentsMgr;
   std::size_t m_size;
   // TODO: Keep BloomFilter(BF) for reads. First check BF, if it says no, then

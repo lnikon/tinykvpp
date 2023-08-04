@@ -1,11 +1,7 @@
-//
-// Created by nikon on 1/21/22.
-//
-
-#include "MemTable.h"
+#include "memtable.h"
 
 namespace structures::memtable {
-std::size_t StringSizeInBytes(const std::string &str) {
+std::size_t string_size_in_bytes(const std::string &str) {
   return sizeof(std::string::value_type) * str.size();
 }
 
@@ -14,8 +10,8 @@ memtable_t::record_t::key_t::key_t(std::string key) : m_key(std::move(key)) {}
 memtable_t::record_t::key_t::key_t(const memtable_t::record_t::key_t &other)
     : m_key(other.m_key) {}
 
-memtable_t::record_t::key_t &
-memtable_t::record_t::key_t::operator=(const memtable_t::record_t::key_t &other) {
+memtable_t::record_t::key_t &memtable_t::record_t::key_t::operator=(
+    const memtable_t::record_t::key_t &other) {
   if (this == &other) {
     return *this;
   }
@@ -27,13 +23,13 @@ memtable_t::record_t::key_t::operator=(const memtable_t::record_t::key_t &other)
 }
 
 void memtable_t::record_t::key_t::swap(memtable_t::record_t::key_t &lhs,
-                                 memtable_t::record_t::key_t &rhs) {
+                                       memtable_t::record_t::key_t &rhs) {
   using std::swap;
   std::swap(lhs.m_key, rhs.m_key);
 }
 
 std::size_t memtable_t::record_t::key_t::Size() const {
-  return StringSizeInBytes(m_key);
+  return string_size_in_bytes(m_key);
 }
 
 bool memtable_t::record_t::key_t::operator<(
@@ -51,17 +47,20 @@ bool memtable_t::record_t::key_t::operator==(
   return m_key == other.m_key;
 }
 
-void memtable_t::record_t::key_t::Write(std::stringstream &os) const { os << m_key; }
+void memtable_t::record_t::key_t::Write(std::stringstream &os) const {
+  os << m_key;
+}
 
 memtable_t::record_t::value_t::value_t(
     memtable_t::record_t::value_t::underlying_value_type_t value)
     : m_value(std::move(value)) {}
 
-memtable_t::record_t::value_t::value_t(const memtable_t::record_t::value_t &other)
+memtable_t::record_t::value_t::value_t(
+    const memtable_t::record_t::value_t &other)
     : m_value(other.m_value) {}
 
-memtable_t::record_t::value_t &
-memtable_t::record_t::value_t::operator=(const memtable_t::record_t::value_t &other) {
+memtable_t::record_t::value_t &memtable_t::record_t::value_t::operator=(
+    const memtable_t::record_t::value_t &other) {
   if (this == &other) {
     return *this;
   }
@@ -76,18 +75,19 @@ std::optional<std::size_t> memtable_t::record_t::value_t::Size() const {
   return std::visit(
       [](const underlying_value_type_t &value) {
         if (value.index() == static_cast<std::size_t>(ValueType::Integer)) {
-          return std::make_optional<std::size_t>(sizeof(int64_t));
+          return std::optional<std::size_t>(std::in_place, sizeof(int64_t));
         } else if (value.index() ==
                    static_cast<std::size_t>(ValueType::Double)) {
-          return std::make_optional<std::size_t>(sizeof(double));
+          return std::optional<std::size_t>(std::in_place, sizeof(double));
         } else if (value.index() ==
                    static_cast<std::size_t>(ValueType::String)) {
-          return std::make_optional<std::size_t>(
-              StringSizeInBytes(std::get<std::string>(value)));
+          return std::optional<std::size_t>(
+              std::in_place,
+              string_size_in_bytes(std::get<std::string>(value)));
         } else {
           spdlog::warn("Unsupported value type with value index=" +
                        std::to_string(value.index()));
-          return std::optional<std::size_t>(std::nullopt);
+          return std::optional<std::size_t>(std::in_place);
         }
       },
       m_value);
@@ -99,7 +99,7 @@ bool memtable_t::record_t::value_t::operator==(
 }
 
 void memtable_t::record_t::value_t::swap(memtable_t::record_t::value_t &lhs,
-                                   memtable_t::record_t::value_t &rhs) {
+                                         memtable_t::record_t::value_t &rhs) {
   using std::swap;
   swap(lhs.m_value, rhs.m_value);
 }
@@ -124,13 +124,14 @@ void memtable_t::record_t::value_t::Write(std::stringstream &os) {
 }
 
 memtable_t::record_t::record_t(const memtable_t::record_t::key_t &key,
-                         const memtable_t::record_t::value_t &value)
+                               const memtable_t::record_t::value_t &value)
     : m_key(key), m_value(value) {}
 
 memtable_t::record_t::record_t(const memtable_t::record_t &other)
     : m_key(other.m_key), m_value(other.m_value) {}
 
-memtable_t::record_t &memtable_t::record_t::operator=(const memtable_t::record_t &other) {
+memtable_t::record_t &
+memtable_t::record_t::operator=(const memtable_t::record_t &other) {
   if (this == &other) {
     return *this;
   }
@@ -150,9 +151,13 @@ bool memtable_t::record_t::operator>(const memtable_t::record_t &record) const {
   return !(m_key < record.m_key);
 }
 
-memtable_t::record_t::key_t memtable_t::record_t::GetKey() const { return m_key; }
+memtable_t::record_t::key_t memtable_t::record_t::GetKey() const {
+  return m_key;
+}
 
-memtable_t::record_t::value_t memtable_t::record_t::GetValue() const { return m_value; }
+memtable_t::record_t::value_t memtable_t::record_t::GetValue() const {
+  return m_value;
+}
 
 std::size_t memtable_t::record_t::Size() const {
   const auto valueSizeOpt = m_value.Size();
@@ -167,7 +172,7 @@ void memtable_t::Emplace(const memtable_t::record_t &record) {
   std::lock_guard lg(m_mutex);
   m_data.emplace(record);
 
-  updateSize(record);
+  update_size(record);
   m_count++;
 }
 
@@ -185,11 +190,11 @@ std::size_t memtable_t::Size() const { return m_size; }
 
 std::size_t memtable_t::Count() const { return m_count; }
 
-auto memtable_t::Begin() { return m_data.begin(); }
+auto memtable_t::begin() { return m_data.begin(); }
 
-auto memtable_t::End() { return m_data.end(); }
+auto memtable_t::end() { return m_data.end(); }
 
-void memtable_t::Write(std::stringstream &ss) {
+void memtable_t::write(std::stringstream &ss) {
   std::lock_guard lg(m_mutex);
   if (m_count == 0) {
     spdlog::warn("trying to Write() empty table");
@@ -199,15 +204,13 @@ void memtable_t::Write(std::stringstream &ss) {
   ss << m_count;
   for (const auto &record : m_data) {
     record.GetKey().Write(ss);
-    spdlog::debug("MemTable::Write(std::stringstream &ss): {}",
-                  record.GetKey().m_key);
     ss << ' ';
     record.GetValue().Write(ss);
     ss << '\n';
   }
 }
 
-void memtable_t::updateSize(const memtable_t::record_t &record) {
+void memtable_t::update_size(const memtable_t::record_t &record) {
   m_size += record.Size();
 }
 } // namespace structures::memtable
