@@ -8,6 +8,7 @@
 #include <boost/date_time.hpp>
 
 #define FMT_HEADER_ONLY
+#define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 #include <spdlog/spdlog.h>
 
 #include <algorithm>
@@ -34,7 +35,8 @@ std::size_t string_size_in_bytes(const std::string &str);
 class memtable_t {
 public:
   struct record_t {
-    enum class ValueType { Integer = 0, Double, String };
+    // TODO(vahag): Introduce 'buffer' type, an uninterpreted array of bytes
+    enum class record_value_type_t { integer_k = 0, double_k, string_k };
 
     struct key_t {
       explicit key_t(std::string key);
@@ -47,8 +49,8 @@ public:
       bool operator>(const key_t &other) const;
       bool operator==(const key_t &other) const;
 
-      void Write(std::stringstream &os) const;
-      [[nodiscard]] std::size_t Size() const;
+      void write(std::stringstream &os) const;
+      [[nodiscard]] std::size_t size() const;
 
       static void swap(key_t &lhs, key_t &rhs);
 
@@ -67,8 +69,8 @@ public:
 
       bool operator==(const value_t &other) const;
 
-      void Write(std::stringstream &os);
-      [[nodiscard]] std::optional<std::size_t> Size() const;
+      void write(std::stringstream &os) const;
+      [[nodiscard]] std::optional<std::size_t> size() const;
 
       static void swap(value_t &lhs, value_t &rhs);
 
@@ -82,19 +84,16 @@ public:
     bool operator>(const record_t &record) const;
     record_t &operator=(const record_t &other);
 
-    [[nodiscard]] key_t GetKey() const;
-    [[nodiscard]] value_t GetValue() const;
-    [[nodiscard]] std::size_t Size() const;
+    [[nodiscard]] std::size_t size() const;
 
     friend std::ostream &operator<<(std::ostream &out, const record_t &r) {
       std::stringstream s;
-      r.GetKey().Write(s);
-      r.GetValue().Write(s);
+      r.m_key.write(s);
+      r.m_value.write(s);
       out << s.str();
       return out;
     }
 
-  private:
     key_t m_key;
     value_t m_value;
   };
@@ -105,10 +104,10 @@ public:
   memtable_t(memtable_t &&) = delete;
   memtable_t &operator=(memtable_t &&) = delete;
 
-  void Emplace(const record_t &record);
-  std::optional<record_t> Find(const record_t::key_t &key);
-  [[nodiscard]] std::size_t Size() const;
-  [[nodiscard]] std::size_t Count() const;
+  void emplace(const record_t &record);
+  std::optional<record_t> find(const record_t::key_t &key);
+  [[nodiscard]] std::size_t size() const;
+  [[nodiscard]] std::size_t count() const;
 
   // TODO: Implement iterators to use for dumping
   // Consider using std::iterator

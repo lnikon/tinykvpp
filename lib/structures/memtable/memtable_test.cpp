@@ -2,29 +2,37 @@
 // Created by nikon on 1/22/22.
 //
 
+#define FMT_HEADER_ONLY
+#define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
+#include <spdlog/spdlog.h>
+
 #define CATCH_CONFIG_MAIN
 #include <catch2/catch.hpp>
 
 #include "memtable.h"
 
+using namespace structures;
+
 using structures::memtable::memtable_t;
-using Record = structures::memtable::memtable_t::record_t;
-using Key = structures::memtable::memtable_t::record_t::key_t;
-using Value = structures::memtable::memtable_t::record_t::value_t;
+using record_t = memtable::memtable_t::record_t;
+using record_key_t = structures::memtable::memtable_t::record_t::key_t;
+using record_value_t = structures::memtable::memtable_t::record_t::value_t;
 
 TEST_CASE("Emplace and Find", "[MemTable]")
 {
+    spdlog::set_pattern("[source %s] [function %!] [line %#] %v");
+
     memtable_t mt;
-    mt.Emplace(Record{Key{"B"}, Value{123}});
-    mt.Emplace(Record{Key{"A"}, Value{-12}});
-    mt.Emplace(Record{Key{"Z"}, Value{34.44}});
-    mt.Emplace(Record{Key{"C"}, Value{"Hello"}});
+    mt.emplace(record_t{record_key_t{"B"}, record_value_t{123}});
+    mt.emplace(record_t{record_key_t{"A"}, record_value_t{-12}});
+    mt.emplace(record_t{record_key_t{"Z"}, record_value_t{34.44}});
+    mt.emplace(record_t{record_key_t{"C"}, record_value_t{"Hello"}});
     
-    auto record = mt.Find(Key{"C"});
-    REQUIRE(record->GetKey() == Key{"C"});
-    REQUIRE(record->GetValue() == Value{"Hello"});
+    auto record = mt.find(record_key_t{"C"});
+    REQUIRE(record->m_key == record_key_t{"C"});
+    REQUIRE(record->m_value == record_value_t{"Hello"});
     
-    record = mt.Find(Key{"V"});
+    record = mt.find(record_key_t{"V"});
     REQUIRE(record == std::nullopt);
 }
 
@@ -33,46 +41,46 @@ TEST_CASE("Check record size before and after insertion", "[MemTable]")
     memtable_t mt;
 
     {
-        Key k{"B"};
-        Value v{"123"};
+        record_key_t k{"B"};
+        record_value_t v{"123"};
 
-        mt.Emplace(Record{k, v});
+        mt.emplace(record_t{k, v});
 
-        auto record = mt.Find(Key{"B"});
+        auto record = mt.find(record_key_t{"B"});
         REQUIRE(record != std::nullopt);
 
-        size_t actualSize = record->Size();
-        size_t expectedSize = k.Size() + v.Size().value();
+        size_t actualSize = record->size();
+        size_t expectedSize = k.size() + v.size().value();
         REQUIRE(actualSize == expectedSize);
     }
 
     {
-        Key k{"B"};
-        Value v{123};
+        record_key_t k{"B"};
+        record_value_t v{123};
 
-        mt.Emplace(Record{k, v});
+        mt.emplace(record_t{k, v});
 
-        auto record = mt.Find(Key{"B"});
+        auto record = mt.find(record_key_t{"B"});
         REQUIRE(record != std::nullopt);
 
-        size_t actualSize = record->Size();
-        size_t expectedSize = k.Size() + v.Size().value();
+        size_t actualSize = record->size();
+        size_t expectedSize = k.size() + v.size().value();
         REQUIRE(actualSize == expectedSize);
     }
 
     {
-        Key k{"B"};
-        Value v{123.456};
+        record_key_t k{"B"};
+        record_value_t v{123.456};
 
-        auto record = Record{k, v};
-        mt.Emplace(record);
+        auto record = record_t{k, v};
+        mt.emplace(record);
 
-        auto recordOpt = mt.Find(k);
+        auto recordOpt = mt.find(k);
         REQUIRE(recordOpt != std::nullopt);
         record = *recordOpt;
 
-        size_t actualSize = record.Size();
-        size_t expectedSize = k.Size() + v.Size().value();
+        size_t actualSize = record.size();
+        size_t expectedSize = k.size() + v.size().value();
         REQUIRE(actualSize == expectedSize);
     }
 }
@@ -80,24 +88,24 @@ TEST_CASE("Check record size before and after insertion", "[MemTable]")
 TEST_CASE("Check size", "[MemTable]")
 {
     memtable_t mt;
-    auto k1 = Key{"B"}, k2 = Key{"A"}, k3 = Key{"Z"};
-    auto v1 = Value{123}, v2 = Value{34.44}, v3 = Value{"Hello"};
-    mt.Emplace(Record{k1, v1});
-    mt.Emplace(Record{k2, v2});
-    mt.Emplace(Record{k3, v3});
+    auto k1 = record_key_t{"B"}, k2 = record_key_t{"A"}, k3 = record_key_t{"Z"};
+    auto v1 = record_value_t{123}, v2 = record_value_t{34.44}, v3 = record_value_t{"Hello"};
+    mt.emplace(record_t{k1, v1});
+    mt.emplace(record_t{k2, v2});
+    mt.emplace(record_t{k3, v3});
 
     // TODO: Not sure if this a good/correct way to check MemTable::Size() :)
-    REQUIRE(mt.Size() == k1.Size() + v1.Size().value() + k2.Size() + v2.Size().value() + k3.Size() + v3.Size().value());
+    REQUIRE(mt.size() == k1.size() + v1.size().value() + k2.size() + v2.size().value() + k3.size() + v3.size().value());
 }
 
 TEST_CASE("Check count", "[MemTable]")
 {
     memtable_t mt;
-    mt.Emplace(Record{Key{"B"}, Value{123}});
-    mt.Emplace(Record{Key{"A"}, Value{-12}});
-    mt.Emplace(Record{Key{"Z"}, Value{34.44}});
-    mt.Emplace(Record{Key{"C"}, Value{"Hello"}});
+    mt.emplace(record_t{record_key_t{"B"}, record_value_t{123}});
+    mt.emplace(record_t{record_key_t{"A"}, record_value_t{-12}});
+    mt.emplace(record_t{record_key_t{"Z"}, record_value_t{34.44}});
+    mt.emplace(record_t{record_key_t{"C"}, record_value_t{"Hello"}});
 
-    REQUIRE(mt.Count() == 4);
+    REQUIRE(mt.count() == 4);
 }
 

@@ -28,7 +28,7 @@ void memtable_t::record_t::key_t::swap(memtable_t::record_t::key_t &lhs,
   std::swap(lhs.m_key, rhs.m_key);
 }
 
-std::size_t memtable_t::record_t::key_t::Size() const {
+std::size_t memtable_t::record_t::key_t::size() const {
   return string_size_in_bytes(m_key);
 }
 
@@ -47,7 +47,7 @@ bool memtable_t::record_t::key_t::operator==(
   return m_key == other.m_key;
 }
 
-void memtable_t::record_t::key_t::Write(std::stringstream &os) const {
+void memtable_t::record_t::key_t::write(std::stringstream &os) const {
   os << m_key;
 }
 
@@ -71,16 +71,17 @@ memtable_t::record_t::value_t &memtable_t::record_t::value_t::operator=(
   return *this;
 }
 
-std::optional<std::size_t> memtable_t::record_t::value_t::Size() const {
+std::optional<std::size_t> memtable_t::record_t::value_t::size() const {
   return std::visit(
       [](const underlying_value_type_t &value) {
-        if (value.index() == static_cast<std::size_t>(ValueType::Integer)) {
+        if (value.index() ==
+            static_cast<std::size_t>(record_value_type_t::integer_k)) {
           return std::optional<std::size_t>(std::in_place, sizeof(int64_t));
         } else if (value.index() ==
-                   static_cast<std::size_t>(ValueType::Double)) {
+                   static_cast<std::size_t>(record_value_type_t::double_k)) {
           return std::optional<std::size_t>(std::in_place, sizeof(double));
         } else if (value.index() ==
-                   static_cast<std::size_t>(ValueType::String)) {
+                   static_cast<std::size_t>(record_value_type_t::string_k)) {
           return std::optional<std::size_t>(
               std::in_place,
               string_size_in_bytes(std::get<std::string>(value)));
@@ -104,17 +105,21 @@ void memtable_t::record_t::value_t::swap(memtable_t::record_t::value_t &lhs,
   swap(lhs.m_value, rhs.m_value);
 }
 
-void memtable_t::record_t::value_t::Write(std::stringstream &os) {
+void memtable_t::record_t::value_t::write(std::stringstream &os) const {
   std::visit(
       [&os](const underlying_value_type_t &value) {
-        if (value.index() == static_cast<std::size_t>(ValueType::Integer)) {
-          os << std::get<static_cast<std::size_t>(ValueType::Integer)>(value);
+        if (value.index() ==
+            static_cast<std::size_t>(record_value_type_t::integer_k)) {
+          os << std::get<static_cast<std::size_t>(
+              record_value_type_t::integer_k)>(value);
         } else if (value.index() ==
-                   static_cast<std::size_t>(ValueType::Double)) {
-          os << std::get<static_cast<std::size_t>(ValueType::Double)>(value);
+                   static_cast<std::size_t>(record_value_type_t::double_k)) {
+          os << std::get<static_cast<std::size_t>(
+              record_value_type_t::double_k)>(value);
         } else if (value.index() ==
-                   static_cast<std::size_t>(ValueType::String)) {
-          os << std::get<static_cast<std::size_t>(ValueType::String)>(value);
+                   static_cast<std::size_t>(record_value_type_t::string_k)) {
+          os << std::get<static_cast<std::size_t>(
+              record_value_type_t::string_k)>(value);
         } else {
           spdlog::warn("Unsupported value type with value index=" +
                        std::to_string(value.index()));
@@ -151,24 +156,16 @@ bool memtable_t::record_t::operator>(const memtable_t::record_t &record) const {
   return !(m_key < record.m_key);
 }
 
-memtable_t::record_t::key_t memtable_t::record_t::GetKey() const {
-  return m_key;
-}
-
-memtable_t::record_t::value_t memtable_t::record_t::GetValue() const {
-  return m_value;
-}
-
-std::size_t memtable_t::record_t::Size() const {
-  const auto valueSizeOpt = m_value.Size();
+std::size_t memtable_t::record_t::size() const {
+  const auto valueSizeOpt = m_value.size();
   if (!valueSizeOpt.has_value()) {
     spdlog::warn("Value has null size!");
   }
 
-  return m_key.Size() + valueSizeOpt.value_or(0);
+  return m_key.size() + valueSizeOpt.value_or(0);
 }
 
-void memtable_t::Emplace(const memtable_t::record_t &record) {
+void memtable_t::emplace(const memtable_t::record_t &record) {
   std::lock_guard lg(m_mutex);
   m_data.emplace(record);
 
@@ -177,7 +174,7 @@ void memtable_t::Emplace(const memtable_t::record_t &record) {
 }
 
 std::optional<memtable_t::record_t>
-memtable_t::Find(const memtable_t::record_t::key_t &key) {
+memtable_t::find(const memtable_t::record_t::key_t &key) {
   record_t record{key, record_t::value_t{""}};
 
   std::lock_guard lg(m_mutex);
@@ -186,9 +183,9 @@ memtable_t::Find(const memtable_t::record_t::key_t &key) {
   return (it.first ? std::make_optional(m_data.at(it.second)) : std::nullopt);
 }
 
-std::size_t memtable_t::Size() const { return m_size; }
+std::size_t memtable_t::size() const { return m_size; }
 
-std::size_t memtable_t::Count() const { return m_count; }
+std::size_t memtable_t::count() const { return m_count; }
 
 auto memtable_t::begin() { return m_data.begin(); }
 
@@ -203,14 +200,17 @@ void memtable_t::write(std::stringstream &ss) {
 
   ss << m_count;
   for (const auto &record : m_data) {
-    record.GetKey().Write(ss);
+    record.m_key.write(ss);
     ss << ' ';
-    record.GetValue().Write(ss);
+    record.m_value.write(ss);
     ss << '\n';
   }
+
+  spdlog::debug(ss.str());
 }
 
 void memtable_t::update_size(const memtable_t::record_t &record) {
-  m_size += record.Size();
+  m_size += record.size();
 }
+
 } // namespace structures::memtable

@@ -22,7 +22,7 @@ LSMTree::LSMTree(const LSMTreeConfig &config)
 void LSMTree::Put(const structures::lsmtree::key_t &key,
                   const structures::lsmtree::value_t &value) {
   // TODO: Wrap into check optionalValueSize and use everywhere
-  const auto valueSizeOpt = value.Size();
+  const auto valueSizeOpt = value.size();
   if (!valueSizeOpt.has_value()) {
     spdlog::warn("Value size is null! Refusing to insert!");
     return;
@@ -30,9 +30,9 @@ void LSMTree::Put(const structures::lsmtree::key_t &key,
 
   // TODO: Is it possible to use better locking strategy?
   std::unique_lock ul(m_mutex);
-  const auto newSize = key.Size() + valueSizeOpt.value() + m_table->Size();
+  const auto newSize = key.size() + valueSizeOpt.value() + m_table->size();
   if (newSize >= m_config.DiskFlushThresholdSize) {
-    spdlog::debug("flushing table. m_table->size()={}", m_table->Size());
+    spdlog::debug("flushing table. m_table->size()={}", m_table->size());
     // TODO: For now, lock whole table, dump it into on-disk segment, and
     // replace the table with new one.
     // TODO: For the future, keep LSMTree readable while dumping.
@@ -48,7 +48,7 @@ void LSMTree::Put(const structures::lsmtree::key_t &key,
     segment->Flush();
   }
 
-  m_table->Emplace(record_t{key, value});
+  m_table->emplace(record_t{key, value});
 }
 
 std::optional<record_t> structures::lsmtree::LSMTree::Get(const key_t &key) const {
@@ -56,7 +56,7 @@ std::optional<record_t> structures::lsmtree::LSMTree::Get(const key_t &key) cons
   // For now we'll just lookup in-memory memtable.
 
   // First, search in in-memory table.
-  auto result = m_table->Find(key);
+  auto result = m_table->find(key);
 
   // If can't find in in-memory table, then lookup on-disk segments.
   if (!result) {
