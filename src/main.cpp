@@ -1,4 +1,4 @@
-#include <structures/lsmtree/LSMTree.h>
+#include <structures/lsmtree/lsmtree.h>
 
 #include <boost/program_options.hpp>
 #include <spdlog/spdlog.h>
@@ -8,7 +8,7 @@ namespace po = boost::program_options;
 po::options_description constructOptionsDescription();
 po::variables_map parseCommandLine(po::options_description descriptions,
                                    int argc, char **argv);
-structures::lsmtree::LSMTreeConfig constructLSMTreeConfig(po::variables_map vm);
+structures::lsmtree::lsmtree_config_t constructLSMTreeConfig(po::variables_map vm);
 
 int main(int argc, char **argv) {
   spdlog::set_level(spdlog::level::debug);
@@ -24,7 +24,7 @@ int main(int argc, char **argv) {
 
   auto lsmTreeConfig = constructLSMTreeConfig(vm);
 
-  structures::lsmtree::LSMTree lsmTree(lsmTreeConfig);
+  structures::lsmtree::lsmtree_t lsmTree(lsmTreeConfig);
   // TODO: Run REPL loop for testing. Configure REPLing via config;
 
   return 0;
@@ -49,9 +49,9 @@ po::variables_map parseCommandLine(po::options_description descriptions,
   return vm;
 }
 
-structures::lsmtree::LSMTreeConfig
+structures::lsmtree::lsmtree_config_t
 constructLSMTreeConfig(po::variables_map vm) {
-  structures::lsmtree::LSMTreeConfig lsmTreeConfig;
+  structures::lsmtree::lsmtree_config_t lsmTreeConfig;
   if (vm.count("diskFlushThresholdSize")) {
     lsmTreeConfig.DiskFlushThresholdSize =
         vm["diskFlushThresholdSize"].as<uint64_t>();

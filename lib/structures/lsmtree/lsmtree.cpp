@@ -10,12 +10,6 @@
 
 namespace structures::lsmtree {
 
-enum class EStatus {
-  Undefined,
-  Ok,
-  AccessDenied,
-};
-
 lsmtree_t::lsmtree_t(const lsmtree_config_t &config)
     : m_config(config), m_table(memtable::make_unique()),
       m_segmentsMgr(std::make_shared<lsmtree_segment_manager_t>()) {}
