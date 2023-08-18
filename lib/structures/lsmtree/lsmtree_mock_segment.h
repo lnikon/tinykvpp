@@ -11,7 +11,7 @@ namespace structures::lsmtree {
 
 class lsmtree_mock_segment_t : public interface_lsmtree_segment_t {
 public:
-  lsmtree_mock_segment_t(std::string name);
+  lsmtree_mock_segment_t(std::string name, memtable_unique_ptr_t pMemtable);
 
   void flush() override;
 };

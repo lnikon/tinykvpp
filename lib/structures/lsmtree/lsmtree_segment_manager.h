@@ -7,8 +7,8 @@
 
 #include <unordered_map>
 
-#include "lsmtree_types.h"
 #include "interface_lsmtree_segment.h"
+#include "lsmtree_types.h"
 
 namespace structures::lsmtree {
 /**
@@ -17,11 +17,12 @@ namespace structures::lsmtree {
  */
 class lsmtree_segment_manager_t {
 public:
+  using segment_map_t = std::unordered_map<std::string, segment_shared_ptr_t>;
   /**
    * TODO: Should be thread-safe?
    */
-  shared_ptr_t get_new_segment(const lsmtree_segment_type_t type);
-  shared_ptr_t get_segment(const std::string &name);
+  segment_shared_ptr_t get_new_segment(const lsmtree_segment_type_t type, memtable_unique_ptr_t pMemtable);
+  segment_shared_ptr_t get_segment(const std::string &name);
 
   // TODO: Start merging on-disk segments.
   // void Compact();
@@ -30,10 +31,11 @@ private:
 
 private:
   uint64_t m_index{0};
-  std::unordered_map<std::string, shared_ptr_t> m_segments;
+  segment_map_t m_segments;
 };
 
-using lsmtree_segment_manager_shared_ptr_t = std::shared_ptr<lsmtree_segment_manager_t>;
+using lsmtree_segment_manager_shared_ptr_t =
+    std::shared_ptr<lsmtree_segment_manager_t>;
 } // namespace structures::lsmtree
 
 #endif // ZKV_LSMTREESEGMENTMANAGER_H

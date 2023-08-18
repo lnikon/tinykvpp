@@ -11,13 +11,12 @@
 
 namespace structures::lsmtree {
 
-lsmtree_mock_segment_t::lsmtree_mock_segment_t(std::string name)
-    : interface_lsmtree_segment_t(std::move(name)) {}
+lsmtree_mock_segment_t::lsmtree_mock_segment_t(std::string name,
+                                               memtable_unique_ptr_t pMemtable)
+    : interface_lsmtree_segment_t(std::move(name), std::move(pMemtable)) {}
 
 void lsmtree_mock_segment_t::flush() {
-  assert(!m_content.empty());
-  spdlog::info("mock segment flush");
-  spdlog::info("going to flash {:s}", m_content);
+  assert(m_pMemtable);
 }
 
 } // namespace structures::lsmtree

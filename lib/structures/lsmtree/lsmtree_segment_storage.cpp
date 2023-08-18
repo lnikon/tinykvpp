@@ -4,12 +4,12 @@
 
 namespace structures::lsmtree {
 
-shared_ptr_t lsmtree_segment_storage_t::get(const name_type_t &name) const {
+segment_shared_ptr_t lsmtree_segment_storage_t::get(const name_type_t &name) const {
   assert(!name.empty());
   return nullptr;
 }
 
-void lsmtree_segment_storage_t::put(shared_ptr_t pLsmTreeSegment) {
+void lsmtree_segment_storage_t::put(segment_shared_ptr_t pLsmTreeSegment) {
   assert(pLsmTreeSegment);
 }
 

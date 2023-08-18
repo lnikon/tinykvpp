@@ -11,7 +11,7 @@ namespace structures::lsmtree {
 
 class lsmtree_regular_segment_t : public interface_lsmtree_segment_t {
 public:
-  explicit lsmtree_regular_segment_t(std::string name);
+  explicit lsmtree_regular_segment_t(std::string name, memtable_unique_ptr_t pMemtable);
 
   void flush() override;
 };

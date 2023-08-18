@@ -9,14 +9,9 @@
 
 namespace structures::lsmtree {
 
-interface_lsmtree_segment_t::interface_lsmtree_segment_t(std::string name)
-    : m_name(std::move(name)) {}
-
-void interface_lsmtree_segment_t::set_content(std::string content) {
-  m_content = std::move(content);
-  spdlog::debug("content={}", m_content);
-  ;
-}
+interface_lsmtree_segment_t::interface_lsmtree_segment_t(
+    std::string name, memtable_unique_ptr_t pMemtable)
+    : m_pMemtable(std::move(pMemtable)), m_name(std::move(name)) {}
 
 std::string interface_lsmtree_segment_t::get_name() const { return m_name; }
 

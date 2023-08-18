@@ -10,8 +10,9 @@
 
 namespace structures::lsmtree {
 
-shared_ptr_t lsmtree_segment_factory(const lsmtree_segment_type_t type,
-                                     std::string name);
+segment_shared_ptr_t lsmtree_segment_factory(const lsmtree_segment_type_t type,
+                                             std::string name,
+                                             memtable_unique_ptr_t pMemtable);
 }
 
 #endif // ZKV_LSMTREESEGMENTFACTORY_H

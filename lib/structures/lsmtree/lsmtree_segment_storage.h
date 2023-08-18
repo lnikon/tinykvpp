@@ -12,12 +12,12 @@ class lsmtree_segment_storage_t {
 public:
   using name_type_t = std::string;
 
-  shared_ptr_t get(const name_type_t &name) const;
-  void put(shared_ptr_t pLsmTreeSegment);
+  segment_shared_ptr_t get(const name_type_t &name) const;
+  void put(segment_shared_ptr_t pLsmTreeSegment);
   void remove(const name_type_t &name);
 
 private:
-  std::unordered_map<name_type_t, shared_ptr_t> m_segments;
+  std::unordered_map<name_type_t, segment_shared_ptr_t> m_segments;
 };
 
 } // namespace structures::lsmtree

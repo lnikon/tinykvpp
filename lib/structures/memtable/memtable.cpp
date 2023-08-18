@@ -86,7 +86,7 @@ std::optional<std::size_t> memtable_t::record_t::value_t::size() const {
               std::in_place,
               string_size_in_bytes(std::get<std::string>(value)));
         } else {
-          spdlog::warn("Unsupported value type with value index=" +
+          spdlog::warn("unsupported value type with value index=" +
                        std::to_string(value.index()));
           return std::optional<std::size_t>(std::in_place);
         }

@@ -14,6 +14,7 @@ lsmtree_t::lsmtree_t(const lsmtree_config_t &config)
     : m_config(config), m_table(memtable::make_unique()),
       m_segmentsMgr(std::make_shared<lsmtree_segment_manager_t>()) {}
 
+// TODO (vahag): Update WAL
 void lsmtree_t::put(const structures::lsmtree::key_t &key,
                     const structures::lsmtree::value_t &value) {
   // TODO: Wrap into check optionalValueSize and use everywhere
@@ -39,8 +40,7 @@ void lsmtree_t::put(const structures::lsmtree::key_t &key,
     std::stringstream ss;
     tableToDump->write(ss);
 
-    auto segment = m_segmentsMgr->get_new_segment(m_config.SegmentType);
-    segment->set_content(ss.str());
+    auto segment = m_segmentsMgr->get_new_segment(m_config.SegmentType, std::move(tableToDump));
     segment->flush();
   }
 
