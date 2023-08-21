@@ -17,6 +17,15 @@ lsmtree_mock_segment_t::lsmtree_mock_segment_t(std::string name,
 
 void lsmtree_mock_segment_t::flush() {
   assert(m_pMemtable);
+  spdlog::info("(lsmtree_mock_segment_t): This is an mock implementation of "
+               "the segment\n"
+               "flush method. This will only print the memtable content.");
+
+  for (const auto &kv : *m_pMemtable) {
+    std::stringstream ss;
+    ss << kv;
+    spdlog::info(ss.str());
+  }
 }
 
 } // namespace structures::lsmtree

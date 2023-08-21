@@ -29,6 +29,16 @@ lsmtree_segment_manager_t::get_segment(const std::string &name) {
   return result;
 }
 
+std::vector<lsmtree_segment_manager_t::segment_name_t>
+lsmtree_segment_manager_t::get_segment_names() const {
+  std::vector<segment_name_t> result;
+  result.reserve(m_segments.size());
+  for (const auto &[name, _] : m_segments) {
+    result.emplace_back(name);
+  }
+  return result;
+}
+
 // TODO(vahag): Find better naming strategy
 std::string lsmtree_segment_manager_t::get_next_name() {
   return "segment_" + std::to_string(m_index++);

@@ -20,7 +20,7 @@ namespace structures::lsmtree {
 class lsmtree_t {
 public:
   // TODO: Make LSMTreeConfig configurable via CLI
-  explicit lsmtree_t(const lsmtree_config_t &config);
+  explicit lsmtree_t(const lsmtree_config_t &config, lsmtree_segment_manager_shared_ptr_t pSegmentsMgr);
 
   lsmtree_t() = default;
   lsmtree_t(const lsmtree_t &) = delete;
@@ -35,7 +35,7 @@ private:
   std::mutex m_mutex;
   lsmtree_config_t m_config;
   memtable_unique_ptr_t m_table;
-  lsmtree_segment_manager_shared_ptr_t m_segmentsMgr;
+  lsmtree_segment_manager_shared_ptr_t m_pSegmentsMgr;
   std::size_t m_size;
   // TODO: Keep BloomFilter(BF) for reads. First check BF, if it says no, then
   // abort searching. Otherwise perform search.

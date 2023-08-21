@@ -48,7 +48,7 @@ bool memtable_t::record_t::key_t::operator==(
 }
 
 void memtable_t::record_t::key_t::write(std::stringstream &os) const {
-  os << m_key;
+  os << m_key.size() << ' ' << m_key;
 }
 
 memtable_t::record_t::value_t::value_t(
@@ -107,19 +107,25 @@ void memtable_t::record_t::value_t::swap(memtable_t::record_t::value_t &lhs,
 
 void memtable_t::record_t::value_t::write(std::stringstream &os) const {
   std::visit(
-      [&os](const underlying_value_type_t &value) {
+      [&os, this](const underlying_value_type_t &value) {
         if (value.index() ==
             static_cast<std::size_t>(record_value_type_t::integer_k)) {
-          os << std::get<static_cast<std::size_t>(
-              record_value_type_t::integer_k)>(value);
+          spdlog::info("record_value_type_t::integer_k");
+          os << ' ' << size().value() << ' '
+             << std::get<static_cast<std::size_t>(
+                    record_value_type_t::integer_k)>(value);
         } else if (value.index() ==
                    static_cast<std::size_t>(record_value_type_t::double_k)) {
-          os << std::get<static_cast<std::size_t>(
-              record_value_type_t::double_k)>(value);
+          spdlog::info("record_value_type_t::double_k");
+          os << ' ' << size().value() << ' '
+             << std::get<static_cast<std::size_t>(
+                    record_value_type_t::double_k)>(value);
         } else if (value.index() ==
                    static_cast<std::size_t>(record_value_type_t::string_k)) {
-          os << std::get<static_cast<std::size_t>(
-              record_value_type_t::string_k)>(value);
+          spdlog::info("record_value_type_t::string_k");
+          os << ' ' << size().value() << ' '
+             << std::get<static_cast<std::size_t>(
+                    record_value_type_t::string_k)>(value);
         } else {
           spdlog::warn("Unsupported value type with value index=" +
                        std::to_string(value.index()));
@@ -187,9 +193,13 @@ std::size_t memtable_t::size() const { return m_size; }
 
 std::size_t memtable_t::count() const { return m_count; }
 
-auto memtable_t::begin() { return m_data.begin(); }
+typename memtable_t::storage_t::iterator memtable_t::begin() {
+  return m_data.begin();
+}
 
-auto memtable_t::end() { return m_data.end(); }
+typename memtable_t::storage_t::iterator memtable_t::end() {
+  return m_data.end();
+}
 
 void memtable_t::write(std::stringstream &ss) {
   std::lock_guard lg(m_mutex);

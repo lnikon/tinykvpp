@@ -87,16 +87,19 @@ public:
     [[nodiscard]] std::size_t size() const;
 
     friend std::ostream &operator<<(std::ostream &out, const record_t &r) {
-      std::stringstream s;
-      r.m_key.write(s);
-      r.m_value.write(s);
-      out << s.str();
+      std::stringstream ss;
+      r.m_key.write(ss);
+      r.m_value.write(ss);
+      ss << std::endl;
+      out << ss.str();
       return out;
     }
 
     key_t m_key;
     value_t m_value;
   };
+
+  using storage_t = sorted_vector_t<record_t>;
 
   memtable_t() = default;
   memtable_t(const memtable_t &) = delete;
@@ -112,8 +115,11 @@ public:
   // TODO: Implement iterators to use for dumping
   // Consider using std::iterator
   // https://en.cppreference.com/w/cpp/iterator/iterator
-  auto begin();
-  auto end();
+  // Memtable is essentially a key -> value maaping, so
+  // it should provide a universal begin/end iterators
+  // which will point to pair and be available for structural destruction
+  typename storage_t::iterator begin();
+  typename storage_t::iterator end();
 
   void write(std::stringstream &ss);
 
@@ -124,7 +130,7 @@ private:
   std::mutex m_mutex;
   // TODO: Should abstract out this part to some generic storage with good O(n)
   // times.
-  sorted_vector_t<record_t> m_data;
+  storage_t m_data;
   std::size_t m_size{0};
   std::size_t m_count{0};
 };

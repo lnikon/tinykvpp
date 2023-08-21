@@ -10,9 +10,9 @@
 
 namespace structures::lsmtree {
 
-lsmtree_t::lsmtree_t(const lsmtree_config_t &config)
+lsmtree_t::lsmtree_t(const lsmtree_config_t &config, lsmtree_segment_manager_shared_ptr_t pSegmentsMgr)
     : m_config(config), m_table(memtable::make_unique()),
-      m_segmentsMgr(std::make_shared<lsmtree_segment_manager_t>()) {}
+      m_pSegmentsMgr(pSegmentsMgr) {}
 
 // TODO (vahag): Update WAL
 void lsmtree_t::put(const structures::lsmtree::key_t &key,
@@ -40,7 +40,7 @@ void lsmtree_t::put(const structures::lsmtree::key_t &key,
     std::stringstream ss;
     tableToDump->write(ss);
 
-    auto segment = m_segmentsMgr->get_new_segment(m_config.SegmentType, std::move(tableToDump));
+    auto segment = m_pSegmentsMgr->get_new_segment(m_config.SegmentType, std::move(tableToDump));
     segment->flush();
   }
 

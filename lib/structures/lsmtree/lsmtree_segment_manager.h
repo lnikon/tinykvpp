@@ -17,13 +17,16 @@ namespace structures::lsmtree {
  */
 class lsmtree_segment_manager_t {
 public:
-  using segment_map_t = std::unordered_map<std::string, segment_shared_ptr_t>;
+  using segment_name_t = std::string;
+  using segment_map_t = std::unordered_map<segment_name_t, segment_shared_ptr_t>;
   /**
    * TODO: Should be thread-safe?
    */
   segment_shared_ptr_t get_new_segment(const lsmtree_segment_type_t type, memtable_unique_ptr_t pMemtable);
   segment_shared_ptr_t get_segment(const std::string &name);
 
+  std::vector<segment_name_t> get_segment_names() const;
+  
   // TODO: Start merging on-disk segments.
   // void Compact();
 private:
