@@ -41,6 +41,6 @@ lsmtree_segment_manager_t::get_segment_names() const {
 
 // TODO(vahag): Find better naming strategy
 std::string lsmtree_segment_manager_t::get_next_name() {
-  return "segment_" + std::to_string(m_index++);
+  return "segment_" + std::to_string(m_index++) + ".sst";
 }
 } // namespace structures::lsmtree
