@@ -10,7 +10,8 @@
 
 namespace structures::lsmtree {
 
-lsmtree_t::lsmtree_t(const lsmtree_config_t &config, lsmtree_segment_manager_shared_ptr_t pSegmentsMgr)
+lsmtree_t::lsmtree_t(const lsmtree_config_t &config,
+                     lsmtree_segment_manager_shared_ptr_t pSegmentsMgr)
     : m_config(config), m_table(memtable::make_unique()),
       m_pSegmentsMgr(pSegmentsMgr) {}
 
@@ -25,9 +26,10 @@ void lsmtree_t::put(const structures::lsmtree::key_t &key,
   }
 
   // TODO: Is it possible to use better locking strategy?
-  std::unique_lock ul(m_mutex);
-  const auto newSize = key.size() + valueSizeOpt.value() + m_table->size();
-  if (newSize >= m_config.DiskFlushThresholdSize) {
+  // TODO: Compactation can be a periodic job?
+  if (std::unique_lock ul(m_mutex);
+      key.size() + valueSizeOpt.value() + m_table->size() >=
+      m_config.DiskFlushThresholdSize) {
     spdlog::debug("flushing table. m_table->size()={}", m_table->size());
     // TODO: For now, lock whole table, dump it into on-disk segment, and
     // replace the table with new one.
@@ -36,12 +38,9 @@ void lsmtree_t::put(const structures::lsmtree::key_t &key,
     // to dump and creating a new copy.
     auto tableToDump = std::move(m_table);
     m_table = memtable::make_unique();
-
-    std::stringstream ss;
-    tableToDump->write(ss);
-
-    auto segment = m_pSegmentsMgr->get_new_segment(m_config.SegmentType, std::move(tableToDump));
-    segment->flush();
+    m_pSegmentsMgr
+        ->get_new_segment(m_config.SegmentType, std::move(tableToDump))
+        ->flush();
   }
 
   m_table->emplace(record_t{key, value});

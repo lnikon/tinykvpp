@@ -185,7 +185,6 @@ memtable_t::find(const memtable_t::record_t::key_t &key) {
 
   std::lock_guard lg(m_mutex);
   auto it = m_data.find(record);
-  std::cout << m_data.at(it.second);
   return (it.first ? std::make_optional(m_data.at(it.second)) : std::nullopt);
 }
 
