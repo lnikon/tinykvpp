@@ -25,6 +25,7 @@ public:
   void emplace(Data data, Comparator comparator = Comparator());
   std::pair<bool, index_type> find(Data data,
                                    Comparator comparator = Comparator()) const;
+
   size_type size() const;
   Data &at(const index_type index);
 

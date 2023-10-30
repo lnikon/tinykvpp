@@ -8,7 +8,6 @@
 #include <filesystem>
 #include <limits>
 #include <random>
-#include <ranges>
 
 namespace {
 template <typename TNumber>
@@ -74,7 +73,8 @@ TEST_CASE("Flush regular segment", std::string(componentName)) {
   using namespace structures;
 
   lsmtree::lsmtree_config_t config;
-  auto randomKeys = generateRandomStringPairVector(1024); SECTION("Put and Get") {
+  auto randomKeys = generateRandomStringPairVector(1024);
+  SECTION("Put and Get") {
     config.SegmentType = lsmtree::lsmtree_segment_type_t::mock_k;
 
     auto pSegmentManager =

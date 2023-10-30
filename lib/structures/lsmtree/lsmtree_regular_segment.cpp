@@ -31,6 +31,7 @@ void lsmtree_regular_segment_t::flush() {
     spdlog::error("(lsmtree_regular_segment_t): unable to flush regular "
                   "segment with name=" +
                   get_name() + "\n");
+    return;
   }
 
   stream << ss.str();

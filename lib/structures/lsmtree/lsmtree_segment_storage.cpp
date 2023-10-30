@@ -4,7 +4,8 @@
 
 namespace structures::lsmtree {
 
-segment_shared_ptr_t lsmtree_segment_storage_t::get(const name_type_t &name) const {
+segment_shared_ptr_t
+lsmtree_segment_storage_t::get(const name_type_t &name) const {
   assert(!name.empty());
   return nullptr;
 }

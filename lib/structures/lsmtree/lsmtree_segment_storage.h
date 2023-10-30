@@ -1,6 +1,8 @@
 #ifndef LSM_TREE_SEGMENT_STORAGE
 #define LSM_TREE_SEGMENT_STORAGE
 
+#include <iostream>
+#include <optional>
 #include <string>
 #include <unordered_map>
 

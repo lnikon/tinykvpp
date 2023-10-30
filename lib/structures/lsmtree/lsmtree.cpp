@@ -36,11 +36,9 @@ void lsmtree_t::put(const structures::lsmtree::key_t &key,
     // TODO: For the future, keep LSMTree readable while dumping.
     // This can be achieved by moving the current copy into the new async task
     // to dump and creating a new copy.
-    auto tableToDump = std::move(m_table);
-    m_table = memtable::make_unique();
-    m_pSegmentsMgr
-        ->get_new_segment(m_config.SegmentType, std::move(tableToDump))
+    m_pSegmentsMgr->get_new_segment(m_config.SegmentType, std::move(m_table))
         ->flush();
+    m_table = memtable::make_unique();
   }
 
   m_table->emplace(record_t{key, value});

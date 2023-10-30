@@ -2,8 +2,8 @@
 // Created by nikon on 1/21/22.
 //
 
-#ifndef CPP_PROJECT_TEMPLATE_MEMTABLE_H
-#define CPP_PROJECT_TEMPLATE_MEMTABLE_H
+#ifndef MEMTABLE_H
+#define MEMTABLE_H
 
 #include <boost/date_time.hpp>
 
@@ -142,4 +142,4 @@ template <typename... Args> auto make_unique(Args... args) {
 }
 } // namespace structures::memtable
 
-#endif // CPP_PROJECT_TEMPLATE_MEMTABLE_H
+#endif // MEMTABLE_H
