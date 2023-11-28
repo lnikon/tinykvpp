@@ -5,7 +5,7 @@
 #ifndef ZKV_LSMTREEREADERWRITER_H
 #define ZKV_LSMTREEREADERWRITER_H
 
-#include "lsmtree.h"
+#include <structures/lsmtree/lsmtree.h>
 
 namespace structures::lsmtree {
 

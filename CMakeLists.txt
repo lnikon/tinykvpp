@@ -17,7 +17,7 @@ find_package(fmt REQUIRED)
 find_package(ZLIB REQUIRED)
 
 include_directories(lib)
-add_subdirectory(lib/structures)
+add_subdirectory(lib)
 
 # TODO: Refactor
 set(sources "src/main.cpp")

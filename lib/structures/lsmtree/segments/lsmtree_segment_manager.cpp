@@ -2,17 +2,25 @@
 // Created by nikon on 2/6/22.
 //
 
-#include "lsmtree_segment_manager.h"
-#include "lsmtree_segment_factory.h"
-#include "lsmtree_types.h"
+#include <structures/lsmtree/lsmtree_types.h>
+#include <structures/lsmtree/segments/lsmtree_segment_factory.h>
+#include <structures/lsmtree/segments/lsmtree_segment_manager.h>
 
-namespace structures::lsmtree {
+namespace structures::lsmtree::segment_manager {
+
+lsmtree_segment_manager_t::lsmtree_segment_manager_t(
+    const std::filesystem::path &dbPath)
+    : m_dbPath{dbPath} {
+  assert(!dbPath.empty());
+}
+
 segment_shared_ptr_t lsmtree_segment_manager_t::get_new_segment(
     const structures::lsmtree::lsmtree_segment_type_t type,
     memtable_unique_ptr_t pMemtable) {
-  const auto name{get_next_name()};
-  auto result = lsmtree_segment_factory(type, name, std::move(pMemtable));
-  m_segments[name] = result;
+	const auto path{construct_path(get_next_name())};
+
+  auto result = lsmtree_segment_factory(type, path, std::move(pMemtable));
+  m_segments[result->get_name()] = result;
   return result;
 }
 
@@ -41,6 +49,14 @@ lsmtree_segment_manager_t::get_segment_names() const {
 
 // TODO(vahag): Find better naming strategy
 std::string lsmtree_segment_manager_t::get_next_name() {
+  // TODO(lnikon): Use timestamp instead of a index
   return "segment_" + std::to_string(m_index++) + ".sst";
 }
-} // namespace structures::lsmtree
+
+std::filesystem::path
+lsmtree_segment_manager_t::construct_path(const std::string &name) const {
+	// TODO(lnikon): Move "segments" into a constant
+  return m_dbPath / "segments" / name;
+}
+
+} // namespace structures::lsmtree::segment_manager

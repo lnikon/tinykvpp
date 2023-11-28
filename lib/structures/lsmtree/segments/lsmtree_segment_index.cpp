@@ -1,4 +1,4 @@
-#include "lsmtree_segment_index.h"
+#include <structures/lsmtree/segments/lsmtree_segment_index.h>
 
 namespace structures::lsmtree {
 

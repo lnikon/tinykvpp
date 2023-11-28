@@ -7,7 +7,7 @@
 
 #include <cstdint>
 
-#include "lsmtree_types.h"
+#include <structures/lsmtree/lsmtree_types.h>
 
 namespace structures::lsmtree {
 

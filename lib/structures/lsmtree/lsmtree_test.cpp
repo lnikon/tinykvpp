@@ -1,9 +1,9 @@
 #define CATCH_CONFIG_MAIN
 #include <catch2/catch.hpp>
 
-#include "lsmtree.h"
-#include "lsmtree_config.h"
-#include "lsmtree_types.h"
+#include <structures/lsmtree/lsmtree.h>
+#include <structures/lsmtree/lsmtree_config.h>
+#include <structures/lsmtree/lsmtree_types.h>
 
 #include <filesystem>
 #include <limits>
@@ -74,6 +74,7 @@ TEST_CASE("Flush regular segment", std::string(componentName)) {
 
   lsmtree::lsmtree_config_t config;
   auto randomKeys = generateRandomStringPairVector(1024);
+
   SECTION("Put and Get") {
     config.SegmentType = lsmtree::lsmtree_segment_type_t::mock_k;
 
