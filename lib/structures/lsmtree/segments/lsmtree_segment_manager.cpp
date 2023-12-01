@@ -17,7 +17,7 @@ lsmtree_segment_manager_t::lsmtree_segment_manager_t(
 segment_shared_ptr_t lsmtree_segment_manager_t::get_new_segment(
     const structures::lsmtree::lsmtree_segment_type_t type,
     memtable_unique_ptr_t pMemtable) {
-	const auto path{construct_path(get_next_name())};
+  const auto path{construct_path(get_next_name())};
 
   auto result = lsmtree_segment_factory(type, path, std::move(pMemtable));
   m_segments[result->get_name()] = result;
@@ -47,15 +47,26 @@ lsmtree_segment_manager_t::get_segment_names() const {
   return result;
 }
 
+std::vector<std::filesystem::path>
+lsmtree_segment_manager_t::get_segment_paths() const {
+	const auto& names = get_segment_names();
+	auto paths = std::vector<std::filesystem::path>{};
+	paths.reserve(names.size());
+	for (const auto& name : names) {
+		paths.emplace_back(construct_path(name));
+	}
+	return paths;
+}
+
 // TODO(vahag): Find better naming strategy
 std::string lsmtree_segment_manager_t::get_next_name() {
   // TODO(lnikon): Use timestamp instead of a index
-  return "segment_" + std::to_string(m_index++) + ".sst";
+  return "segment_" + std::to_string(m_index++);
 }
 
 std::filesystem::path
 lsmtree_segment_manager_t::construct_path(const std::string &name) const {
-	// TODO(lnikon): Move "segments" into a constant
+  // TODO(lnikon): Move "segments" into a constant
   return m_dbPath / "segments" / name;
 }
 

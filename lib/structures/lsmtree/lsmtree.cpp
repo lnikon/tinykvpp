@@ -5,8 +5,8 @@
 #define FMT_HEADER_ONLY
 #include <spdlog/spdlog.h>
 
-#include "interface_lsmtree_segment.h"
-#include "lsmtree.h"
+#include <structures/lsmtree/segments/interface_lsmtree_segment.h> 
+#include <structures/lsmtree/lsmtree.h> 
 
 namespace structures::lsmtree {
 

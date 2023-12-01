@@ -30,6 +30,7 @@ public:
   segment_shared_ptr_t get_segment(const segment_name_t &name);
 
   std::vector<segment_name_t> get_segment_names() const;
+  std::vector<std::filesystem::path> get_segment_paths() const;
 
   // TODO: Start merging on-disk segments.
   // void Compact();
@@ -48,7 +49,7 @@ using lsmtree_segment_manager_shared_ptr_t =
 
 template <typename... Args>
 lsmtree_segment_manager_shared_ptr_t make_shared(Args... args) {
-  return std::make_shared<lsmtree_segment_manager_t>(std::forward(args)...);
+	return std::make_shared<lsmtree_segment_manager_t>(std::forward<Args...>(args)...);
 }
 
 } // namespace structures::lsmtree::segment_manager

@@ -1,13 +1,13 @@
 cmake_minimum_required(VERSION 3.27)
 project(zkv)
 
-add_library(LSMTree "interface_lsmtree_segment.cpp"
-                    "lsmtree.cpp"
-                    "lsmtree_mock_segment.cpp"
-                    "lsmtree_regular_segment.cpp"
-                    "lsmtree_segment_factory.cpp"
-                    "lsmtree_segment_manager.cpp"
-                    "lsmtree_segment_storage.cpp")
+add_library(LSMTree "lsmtree.cpp"
+                    "segments/interface_lsmtree_segment.cpp"
+                    "segments/lsmtree_mock_segment.cpp"
+                    "segments/lsmtree_regular_segment.cpp"
+                    "segments/lsmtree_segment_factory.cpp"
+                    "segments/lsmtree_segment_manager.cpp"
+                    "segments/lsmtree_segment_storage.cpp")
 
 set_target_properties(LSMTree PROPERTIES CXX_STANDARD 23)
 target_include_directories(LSMTree INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})

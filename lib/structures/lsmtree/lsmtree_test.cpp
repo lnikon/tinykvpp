@@ -72,6 +72,7 @@ inline constexpr std::string_view componentName = "[LSMTree]";
 TEST_CASE("Flush regular segment", std::string(componentName)) {
   using namespace structures;
 
+  const auto dbPath = std::string(".");
   lsmtree::lsmtree_config_t config;
   auto randomKeys = generateRandomStringPairVector(1024);
 
@@ -79,7 +80,8 @@ TEST_CASE("Flush regular segment", std::string(componentName)) {
     config.SegmentType = lsmtree::lsmtree_segment_type_t::mock_k;
 
     auto pSegmentManager =
-        std::make_shared<structures::lsmtree::lsmtree_segment_manager_t>();
+        std::make_shared<structures::lsmtree::lsmtree_segment_manager_t>(
+            dbPath);
 
     lsmtree::lsmtree_t lsmt(config, pSegmentManager);
     for (const auto &kv : randomKeys) {
@@ -99,20 +101,22 @@ TEST_CASE("Flush regular segment", std::string(componentName)) {
     config.SegmentType = lsmtree::lsmtree_segment_type_t::regular_k;
 
     auto pSegmentManager =
-        std::make_shared<structures::lsmtree::lsmtree_segment_manager_t>();
+        std::make_shared<structures::lsmtree::lsmtree_segment_manager_t>(
+            dbPath);
 
     lsmtree::lsmtree_t lsmt(config, pSegmentManager);
     for (const auto &kv : randomKeys) {
       lsmt.put(lsmtree::key_t{kv.first}, lsmtree::value_t{kv.second});
     }
 
-    auto segmentNames = pSegmentManager->get_segment_names();
-    for (const auto &name : segmentNames) {
+    auto segmentPaths = pSegmentManager->get_segment_paths();
+    for (const auto &path : segmentPaths) {
       // Check that segment was created and dumped into disk
-      REQUIRE(std::filesystem::exists(name));
+			std::cout << path << std::endl;
+      REQUIRE(std::filesystem::exists(path));
 
       // Perform a cleanup
-      std::filesystem::remove(name);
+      std::filesystem::remove(path);
     }
   }
 }
