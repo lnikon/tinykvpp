@@ -15,4 +15,5 @@ target_link_libraries(
   ZLIB::ZLIB
 	DB
   LSMTree
-  MemTable)
+  MemTable
+	Config)
