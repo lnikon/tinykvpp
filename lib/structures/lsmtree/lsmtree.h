@@ -22,7 +22,7 @@ using namespace segment_manager;
 class lsmtree_t {
 public:
   // TODO: Make LSMTreeConfig configurable via CLI
-  explicit lsmtree_t(const lsmtree_config_t &config,
+  explicit lsmtree_t(const config::sptr_t config,
                      lsmtree_segment_manager_shared_ptr_t pSegmentsMgr);
 
   lsmtree_t() = default;
@@ -36,7 +36,7 @@ public:
 
 private:
   std::mutex m_mutex;
-  lsmtree_config_t m_config;
+	const config::sptr_t m_config;
   memtable_unique_ptr_t m_table;
   lsmtree_segment_manager_shared_ptr_t m_pSegmentsMgr;
   std::size_t m_size;

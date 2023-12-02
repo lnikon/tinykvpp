@@ -31,6 +31,9 @@ struct lsmtree_config_t {
   const lsmtree_segment_type_t DefaultSegmentType{
       lsmtree_segment_type_t::regular_k};
   lsmtree_segment_type_t SegmentType{DefaultSegmentType};
+
+  const std::string DefaultSegmentsDirectoryName = "segments";
+  std::string SegmentsDirectoryName{DefaultSegmentsDirectoryName};
 };
 
 } // namespace structures::lsmtree

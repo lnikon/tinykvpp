@@ -9,9 +9,9 @@
 namespace structures::lsmtree::segment_manager {
 
 lsmtree_segment_manager_t::lsmtree_segment_manager_t(
-    const std::filesystem::path &dbPath)
-    : m_dbPath{dbPath} {
-  assert(!dbPath.empty());
+    const config::sptr_t &config)
+    : m_config{config} {
+  assert(!m_config->LSMTreeConfig.SegmentsDirectoryName.empty());
 }
 
 segment_shared_ptr_t lsmtree_segment_manager_t::get_new_segment(
@@ -49,13 +49,13 @@ lsmtree_segment_manager_t::get_segment_names() const {
 
 std::vector<std::filesystem::path>
 lsmtree_segment_manager_t::get_segment_paths() const {
-	const auto& names = get_segment_names();
-	auto paths = std::vector<std::filesystem::path>{};
-	paths.reserve(names.size());
-	for (const auto& name : names) {
-		paths.emplace_back(construct_path(name));
-	}
-	return paths;
+  const auto &names = get_segment_names();
+  auto paths = std::vector<std::filesystem::path>{};
+  paths.reserve(names.size());
+  for (const auto &name : names) {
+    paths.emplace_back(construct_path(name));
+  }
+  return paths;
 }
 
 // TODO(vahag): Find better naming strategy
@@ -66,8 +66,8 @@ std::string lsmtree_segment_manager_t::get_next_name() {
 
 std::filesystem::path
 lsmtree_segment_manager_t::construct_path(const std::string &name) const {
-  // TODO(lnikon): Move "segments" into a constant
-  return m_dbPath / "segments" / name;
+  return m_config->DatabaseConfig.DatabasePath /
+         m_config->LSMTreeConfig.DefaultSegmentsDirectoryName / name;
 }
 
 } // namespace structures::lsmtree::segment_manager

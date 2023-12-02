@@ -7,8 +7,8 @@
 namespace db {
 
 struct db_config_t {
-  std::filesystem::path dbPath;
-  structures::lsmtree::lsmtree_config_t lsmTreeConfig;
+  const std::filesystem::path DefaultDabasePath{"."};
+  std::filesystem::path DatabasePath{DefaultDabasePath};
 };
 
 } // namespace db

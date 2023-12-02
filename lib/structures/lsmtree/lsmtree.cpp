@@ -5,12 +5,12 @@
 #define FMT_HEADER_ONLY
 #include <spdlog/spdlog.h>
 
-#include <structures/lsmtree/segments/interface_lsmtree_segment.h> 
-#include <structures/lsmtree/lsmtree.h> 
+#include <structures/lsmtree/lsmtree.h>
+#include <structures/lsmtree/segments/interface_lsmtree_segment.h>
 
 namespace structures::lsmtree {
 
-lsmtree_t::lsmtree_t(const lsmtree_config_t &config,
+lsmtree_t::lsmtree_t(const config::sptr_t config,
                      lsmtree_segment_manager_shared_ptr_t pSegmentsMgr)
     : m_config(config), m_table(memtable::make_unique()),
       m_pSegmentsMgr(pSegmentsMgr) {}
@@ -29,14 +29,16 @@ void lsmtree_t::put(const structures::lsmtree::key_t &key,
   // TODO: Compactation can be a periodic job?
   if (std::unique_lock ul(m_mutex);
       key.size() + valueSizeOpt.value() + m_table->size() >=
-      m_config.DiskFlushThresholdSize) {
+      m_config->LSMTreeConfig.DiskFlushThresholdSize) {
     spdlog::debug("flushing table. m_table->size()={}", m_table->size());
     // TODO: For now, lock whole table, dump it into on-disk segment, and
     // replace the table with new one.
     // TODO: For the future, keep LSMTree readable while dumping.
     // This can be achieved by moving the current copy into the new async task
     // to dump and creating a new copy.
-    m_pSegmentsMgr->get_new_segment(m_config.SegmentType, std::move(m_table))
+    m_pSegmentsMgr
+        ->get_new_segment(m_config->LSMTreeConfig.SegmentType,
+                          std::move(m_table))
         ->flush();
     m_table = memtable::make_unique();
   }

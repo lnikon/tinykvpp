@@ -4,6 +4,8 @@
 
 #pragma once
 
+#include <config/config.h>
+#include <structures/lsmtree/lsmtree_config.h>
 #include <structures/lsmtree/lsmtree_types.h>
 #include <structures/lsmtree/segments/interface_lsmtree_segment.h>
 
@@ -21,7 +23,7 @@ public:
   using segment_map_t =
       std::unordered_map<segment_name_t, segment_shared_ptr_t>;
 
-  explicit lsmtree_segment_manager_t(const std::filesystem::path &dbPath);
+  explicit lsmtree_segment_manager_t(const config::sptr_t &config);
 
   // TODO(lnikon): Should be thread-safe?
   segment_shared_ptr_t get_new_segment(const lsmtree_segment_type_t type,
@@ -36,10 +38,10 @@ public:
   // void Compact();
 private:
   std::string get_next_name();
-	std::filesystem::path construct_path(const std::string& name) const;
+  std::filesystem::path construct_path(const std::string &name) const;
 
 private:
-  std::filesystem::path m_dbPath;
+	config::sptr_t m_config;
   uint64_t m_index{0};
   segment_map_t m_segments;
 };
@@ -49,7 +51,8 @@ using lsmtree_segment_manager_shared_ptr_t =
 
 template <typename... Args>
 lsmtree_segment_manager_shared_ptr_t make_shared(Args... args) {
-	return std::make_shared<lsmtree_segment_manager_t>(std::forward<Args...>(args)...);
+  return std::make_shared<lsmtree_segment_manager_t>(
+      std::forward<Args...>(args)...);
 }
 
 } // namespace structures::lsmtree::segment_manager
