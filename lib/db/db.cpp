@@ -14,7 +14,9 @@ bool db_t::open() {
     return false;
   }
 
-  return false;
+  // TODO(lnikon): DB recovery happens here
+
+  return true;
 }
 
 bool db_t::prepare_directory_structure() {
@@ -22,8 +24,7 @@ bool db_t::prepare_directory_structure() {
     std::filesystem::create_directory(m_config->DatabaseConfig.DatabasePath);
   }
 
-  const auto& segmentsPath{m_config->DatabaseConfig.DatabasePath /
-                          m_config->LSMTreeConfig.SegmentsDirectoryName};
+  const auto &segmentsPath{m_config->get_segments_path()};
   if (!std::filesystem::exists(segmentsPath)) {
     std::filesystem::create_directory(segmentsPath);
   }

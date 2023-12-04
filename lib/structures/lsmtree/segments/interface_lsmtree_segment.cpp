@@ -17,6 +17,8 @@ std::string interface_lsmtree_segment_t::get_name() const {
   return m_path.stem().string();
 }
 
-std::filesystem::path interface_lsmtree_segment_t::get_path() const { return m_path; }
+std::filesystem::path interface_lsmtree_segment_t::get_path() const {
+  return m_path;
+}
 
 } // namespace structures::lsmtree

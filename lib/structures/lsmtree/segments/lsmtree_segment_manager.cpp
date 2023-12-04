@@ -66,8 +66,7 @@ std::string lsmtree_segment_manager_t::get_next_name() {
 
 std::filesystem::path
 lsmtree_segment_manager_t::construct_path(const std::string &name) const {
-  return m_config->DatabaseConfig.DatabasePath /
-         m_config->LSMTreeConfig.DefaultSegmentsDirectoryName / name;
+  return m_config->get_segments_path() / name;
 }
 
 } // namespace structures::lsmtree::segment_manager
