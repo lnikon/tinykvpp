@@ -10,14 +10,14 @@ namespace db {
 
 using namespace structures::lsmtree;
 
-/** Directory structure
- * -- dbroot
- *  -- segments
- *   -- segment_1.sst
- *   -- segment_2.sst
- *   -- ...
- *   -- segment_N.sst
-*/
+// Directory structure:
+// -- dbroot
+//  -- segments
+//		-- segment_1.sst
+//		-- segment_2.sst
+//		-- ...
+//		-- segment_N.sst
+
 class db_t {
 public:
   using segmgr_sptr_t = segment_manager::lsmtree_segment_manager_shared_ptr_t;
@@ -28,12 +28,18 @@ public:
 
   bool open();
 
-private:
-	// TODO(lnikon): Prepare directory structure for the database when opening a DB
-	bool prepare_directory_structure();
+  void put(const structures::lsmtree::key_t &key,
+           const structures::lsmtree::value_t &value);
+
+  std::optional<record_t> get(const structures::lsmtree::key_t &key) const;
 
 private:
-	const config::sptr_t m_config;
+  // TODO(lnikon): Prepare directory structure for the database when opening a
+  // DB
+  bool prepare_directory_structure();
+
+private:
+  const config::sptr_t m_config;
   segmgr_sptr_t m_pSegmentManager;
   lsmtree_t m_lsmTree;
 };

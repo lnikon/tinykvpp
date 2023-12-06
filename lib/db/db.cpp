@@ -15,8 +15,21 @@ bool db_t::open() {
   }
 
   // TODO(lnikon): DB recovery happens here
+  // TODO(lnikon): Init thread pool here?
+  // TODO(lnikon): Allocate separate thread for compactation inside the thread
+  // pool
 
   return true;
+}
+
+// TODO(lnikon): Indicate on insertion failure
+void db_t::put(const structures::lsmtree::key_t &key,
+               const structures::lsmtree::value_t &value) {
+  m_lsmTree.put(key, value);
+}
+
+std::optional<record_t> db_t::get(const structures::lsmtree::key_t &key) const {
+  return m_lsmTree.get(key);
 }
 
 bool db_t::prepare_directory_structure() {
