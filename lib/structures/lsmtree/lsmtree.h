@@ -9,8 +9,8 @@
 #include <thread>
 
 #include <structures/lsmtree/lsmtree_config.h>
-#include <structures/lsmtree/segments/lsmtree_segment_manager.h>
 #include <structures/lsmtree/lsmtree_types.h>
+#include <structures/lsmtree/segments/lsmtree_segment_manager.h>
 
 namespace structures::lsmtree {
 
@@ -36,12 +36,12 @@ public:
 
 private:
   std::mutex m_mutex;
-	const config::sptr_t m_config;
+  const config::sptr_t m_config;
   memtable_unique_ptr_t m_table;
   lsmtree_segment_manager_shared_ptr_t m_pSegmentsMgr;
   std::size_t m_size;
-  // TODO(lnikon): Keep BloomFilter(BF) for reads. First check BF, if it says no, then
-  // abort searching. Otherwise perform search.
+  // TODO(lnikon): Keep BloomFilter(BF) for reads. First check BF, if it says
+  // no, then abort searching. Otherwise perform search.
   // TODO(lnikon): Keep in-memory indices for segments.
 };
 
