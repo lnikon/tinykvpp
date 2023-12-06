@@ -1,6 +1,6 @@
 #include <cassert>
 
-#include "lsmtree_segment_storage.h"
+#include <structures/lsmtree/segments/lsmtree_segment_storage.h>
 
 namespace structures::lsmtree {
 

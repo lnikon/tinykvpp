@@ -9,7 +9,7 @@
 #include <memory>
 #include <string>
 
-#include "structures/memtable/memtable.h"
+#include <structures/memtable/memtable.h>
 
 namespace structures::lsmtree {
 

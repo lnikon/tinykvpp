@@ -1,9 +1,9 @@
 #define CATCH_CONFIG_MAIN
 #include <catch2/catch.hpp>
 
-#include "lsmtree.h"
-#include "lsmtree_config.h"
-#include "lsmtree_types.h"
+#include <structures/lsmtree/lsmtree.h>
+#include <structures/lsmtree/lsmtree_config.h>
+#include <structures/lsmtree/lsmtree_types.h>
 
 #include <filesystem>
 #include <limits>
@@ -72,15 +72,18 @@ inline constexpr std::string_view componentName = "[LSMTree]";
 TEST_CASE("Flush regular segment", std::string(componentName)) {
   using namespace structures;
 
-  lsmtree::lsmtree_config_t config;
   auto randomKeys = generateRandomStringPairVector(1024);
+
   SECTION("Put and Get") {
-    config.SegmentType = lsmtree::lsmtree_segment_type_t::mock_k;
+    config::sptr_t pConfig{config::make_shared()};
+    pConfig->LSMTreeConfig.SegmentType =
+        lsmtree::lsmtree_segment_type_t::mock_k;
 
     auto pSegmentManager =
-        std::make_shared<structures::lsmtree::lsmtree_segment_manager_t>();
+        std::make_shared<structures::lsmtree::lsmtree_segment_manager_t>(
+            pConfig);
 
-    lsmtree::lsmtree_t lsmt(config, pSegmentManager);
+    lsmtree::lsmtree_t lsmt(pConfig, pSegmentManager);
     for (const auto &kv : randomKeys) {
       lsmt.put(lsmtree::key_t{kv.first}, lsmtree::value_t{kv.second});
     }
@@ -94,24 +97,28 @@ TEST_CASE("Flush regular segment", std::string(componentName)) {
   }
 
   SECTION("Flush segment when memtable is full") {
-    config.DiskFlushThresholdSize = 2048;
-    config.SegmentType = lsmtree::lsmtree_segment_type_t::regular_k;
+    config::sptr_t pConfig{config::make_shared()};
+    pConfig->LSMTreeConfig.DiskFlushThresholdSize = 2048;
+    pConfig->LSMTreeConfig.SegmentType =
+        lsmtree::lsmtree_segment_type_t::regular_k;
 
     auto pSegmentManager =
-        std::make_shared<structures::lsmtree::lsmtree_segment_manager_t>();
+        std::make_shared<structures::lsmtree::lsmtree_segment_manager_t>(
+            pConfig);
 
-    lsmtree::lsmtree_t lsmt(config, pSegmentManager);
+    lsmtree::lsmtree_t lsmt(pConfig, pSegmentManager);
     for (const auto &kv : randomKeys) {
       lsmt.put(lsmtree::key_t{kv.first}, lsmtree::value_t{kv.second});
     }
 
-    auto segmentNames = pSegmentManager->get_segment_names();
-    for (const auto &name : segmentNames) {
+    auto segmentPaths = pSegmentManager->get_segment_paths();
+    for (const auto &path : segmentPaths) {
       // Check that segment was created and dumped into disk
-      REQUIRE(std::filesystem::exists(name));
+      std::cout << path << std::endl;
+      REQUIRE(std::filesystem::exists(path));
 
       // Perform a cleanup
-      std::filesystem::remove(name);
+      std::filesystem::remove(path);
     }
   }
 }

@@ -8,11 +8,13 @@
 #include <optional>
 #include <thread>
 
-#include "lsmtree_config.h"
-#include "lsmtree_segment_manager.h"
-#include "lsmtree_types.h"
+#include <structures/lsmtree/lsmtree_config.h>
+#include <structures/lsmtree/lsmtree_types.h>
+#include <structures/lsmtree/segments/lsmtree_segment_manager.h>
 
 namespace structures::lsmtree {
+
+using namespace segment_manager;
 
 /**
  * Encapsulates MemTable, SegmentManager, and SegmentIndices.
@@ -20,7 +22,8 @@ namespace structures::lsmtree {
 class lsmtree_t {
 public:
   // TODO: Make LSMTreeConfig configurable via CLI
-  explicit lsmtree_t(const lsmtree_config_t &config, lsmtree_segment_manager_shared_ptr_t pSegmentsMgr);
+  explicit lsmtree_t(const config::sptr_t config,
+                     lsmtree_segment_manager_shared_ptr_t pSegmentsMgr);
 
   lsmtree_t() = default;
   lsmtree_t(const lsmtree_t &) = delete;
@@ -33,13 +36,13 @@ public:
 
 private:
   std::mutex m_mutex;
-  lsmtree_config_t m_config;
+  const config::sptr_t m_config;
   memtable_unique_ptr_t m_table;
   lsmtree_segment_manager_shared_ptr_t m_pSegmentsMgr;
   std::size_t m_size;
-  // TODO: Keep BloomFilter(BF) for reads. First check BF, if it says no, then
-  // abort searching. Otherwise perform search.
-  // TODO: Keep in-memory indices for segments.
+  // TODO(lnikon): Keep BloomFilter(BF) for reads. First check BF, if it says
+  // no, then abort searching. Otherwise perform search.
+  // TODO(lnikon): Keep in-memory indices for segments.
 };
 
 } // namespace structures::lsmtree

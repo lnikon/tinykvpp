@@ -110,19 +110,19 @@ void memtable_t::record_t::value_t::write(std::stringstream &os) const {
       [&os, this](const underlying_value_type_t &value) {
         if (value.index() ==
             static_cast<std::size_t>(record_value_type_t::integer_k)) {
-          spdlog::info("record_value_type_t::integer_k");
+          // spdlog::info("record_value_type_t::integer_k");
           os << ' ' << size().value() << ' '
              << std::get<static_cast<std::size_t>(
                     record_value_type_t::integer_k)>(value);
         } else if (value.index() ==
                    static_cast<std::size_t>(record_value_type_t::double_k)) {
-          spdlog::info("record_value_type_t::double_k");
+          // spdlog::info("record_value_type_t::double_k");
           os << ' ' << size().value() << ' '
              << std::get<static_cast<std::size_t>(
                     record_value_type_t::double_k)>(value);
         } else if (value.index() ==
                    static_cast<std::size_t>(record_value_type_t::string_k)) {
-          spdlog::info("record_value_type_t::string_k");
+          // spdlog::info("record_value_type_t::string_k");
           os << ' ' << size().value() << ' '
              << std::get<static_cast<std::size_t>(
                     record_value_type_t::string_k)>(value);

@@ -6,7 +6,7 @@
 #include <string>
 #include <unordered_map>
 
-#include "interface_lsmtree_segment.h"
+#include <structures/lsmtree/segments/interface_lsmtree_segment.h>
 
 namespace structures::lsmtree {
 

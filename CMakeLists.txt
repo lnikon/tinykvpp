@@ -17,9 +17,10 @@ find_package(fmt REQUIRED)
 find_package(ZLIB REQUIRED)
 
 include_directories(lib)
-add_subdirectory(lib/structures)
+add_subdirectory(lib)
+add_subdirectory(app)
 
 # TODO: Refactor
-set(sources "src/main.cpp")
-add_executable(main ${sources})
-target_link_libraries(main boost::boost Catch2::Catch2 gRPC::grpc spdlog::spdlog fmt::fmt ZLIB::ZLIB LSMTree MemTable)
+#set(sources "src/main.cpp")
+#add_executable(main ${sources})
+#target_link_libraries(main boost::boost Catch2::Catch2 gRPC::grpc spdlog::spdlog fmt::fmt ZLIB::ZLIB LSMTree MemTable)

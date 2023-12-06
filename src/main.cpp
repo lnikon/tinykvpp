@@ -2,6 +2,7 @@
 
 #include <boost/program_options.hpp>
 #include <spdlog/spdlog.h>
+#include <iostream>
 
 namespace po = boost::program_options;
 
@@ -10,6 +11,8 @@ po::variables_map parseCommandLine(po::options_description descriptions,
                                    int argc, char **argv);
 structures::lsmtree::lsmtree_config_t
 constructLSMTreeConfig(po::variables_map vm);
+
+void sayHello() { std::cout << "hello\n"; }
 
 int main(int argc, char **argv) {
   (void)argc;

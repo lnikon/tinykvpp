@@ -7,13 +7,13 @@
 
 #include <cassert>
 
-#include "lsmtree_mock_segment.h"
+#include <structures/lsmtree/segments/lsmtree_mock_segment.h>
 
 namespace structures::lsmtree {
 
-lsmtree_mock_segment_t::lsmtree_mock_segment_t(std::string name,
+lsmtree_mock_segment_t::lsmtree_mock_segment_t(std::filesystem::path path,
                                                memtable_unique_ptr_t pMemtable)
-    : interface_lsmtree_segment_t(std::move(name), std::move(pMemtable)) {}
+    : interface_lsmtree_segment_t(std::move(path), std::move(pMemtable)) {}
 
 void lsmtree_mock_segment_t::flush() {
   assert(m_pMemtable);

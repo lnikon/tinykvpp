@@ -7,13 +7,13 @@
 
 #include <cassert>
 
-#include "lsmtree_regular_segment.h"
+#include <structures/lsmtree/segments/lsmtree_regular_segment.h>
 
 namespace structures::lsmtree {
 
 lsmtree_regular_segment_t::lsmtree_regular_segment_t(
-    std::string name, memtable_unique_ptr_t pMemtable)
-    : interface_lsmtree_segment_t(std::move(name), std::move(pMemtable)) {}
+    std::filesystem::path path, memtable_unique_ptr_t pMemtable)
+    : interface_lsmtree_segment_t(std::move(path), std::move(pMemtable)) {}
 
 void lsmtree_regular_segment_t::flush() {
   assert(m_pMemtable);
@@ -24,13 +24,13 @@ void lsmtree_regular_segment_t::flush() {
 
   // TODO(vahag): Use fadvise() and O_DIRECT
   // TODO(vahag): Async IO?
-  std::fstream stream(get_name(), std::fstream::out);
+  std::fstream stream(get_path(), std::fstream::out | std::fstream::app);
   if (!stream.is_open()) {
     // TODO(vahag): How to handle situation when it's impossible to flush
     // memtable into disk?
     spdlog::error("(lsmtree_regular_segment_t): unable to flush regular "
-                  "segment with name=" +
-                  get_name() + "\n");
+                  "segment with path=" +
+                  get_path().string() + "\n");
     return;
   }
 

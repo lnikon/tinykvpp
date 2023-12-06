@@ -4,6 +4,7 @@ catch2/2.13.8
 spdlog/1.9.2
 fmt/8.0.1
 zlib/1.2.13
+grpc/1.54.3
 
 [generators]
 CMakeDeps
