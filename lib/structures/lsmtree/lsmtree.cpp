@@ -49,7 +49,20 @@ std::optional<record_t>
 structures::lsmtree::lsmtree_t::get(const key_t &key) const {
   // TODO(lnikon): Use Index and on-disk segments.
   // For now we'll just lookup in-memory memtable.
-  return m_table->find(key);
+  auto result{m_table->find(key)};
+  if (result) {
+    return result;
+  } else {
+    const auto segments = m_pSegmentsMgr->get_segments();
+    for (const auto &segment : *segments) {
+      result = segment->get_record(key);
+      if (result.has_value()) {
+        return result;
+      }
+    }
+  }
+
+  return std::nullopt;
 }
 
 } // namespace structures::lsmtree

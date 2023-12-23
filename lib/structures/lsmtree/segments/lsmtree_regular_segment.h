@@ -14,6 +14,9 @@ public:
   explicit lsmtree_regular_segment_t(std::filesystem::path path,
                                      memtable_unique_ptr_t pMemtable);
 
+  [[nodiscard]] std::optional<lsmtree::record_t>
+  get_record(const lsmtree::key_t &key) override;
+
   void flush() override;
 };
 

@@ -13,11 +13,11 @@ interface_lsmtree_segment_t::interface_lsmtree_segment_t(
     std::filesystem::path path, memtable_unique_ptr_t pMemtable)
     : m_pMemtable(std::move(pMemtable)), m_path(std::move(path)) {}
 
-std::string interface_lsmtree_segment_t::get_name() const {
+interface_lsmtree_segment_t::name_t interface_lsmtree_segment_t::get_name() const {
   return m_path.stem().string();
 }
 
-std::filesystem::path interface_lsmtree_segment_t::get_path() const {
+interface_lsmtree_segment_t::path_t interface_lsmtree_segment_t::get_path() const {
   return m_path;
 }
 

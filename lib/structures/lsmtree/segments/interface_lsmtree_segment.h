@@ -5,6 +5,7 @@
 #ifndef ZKV_INTERFACE_LSMTREE_SEGMENT_H
 #define ZKV_INTERFACE_LSMTREE_SEGMENT_H
 
+#include <structures/hashindex/hashindex.h>
 #include <structures/lsmtree/lsmtree_types.h>
 
 #include <filesystem>
@@ -15,6 +16,9 @@ namespace structures::lsmtree {
 
 class interface_lsmtree_segment_t {
 public:
+  using name_t = std::string;
+  using path_t = std::filesystem::path;
+
   explicit interface_lsmtree_segment_t(std::filesystem::path path,
                                        memtable_unique_ptr_t pMemtable);
 
@@ -28,8 +32,11 @@ public:
 
   virtual ~interface_lsmtree_segment_t() = default;
 
-  [[nodiscard]] std::string get_name() const;
-  [[nodiscard]] std::filesystem::path get_path() const;
+  [[nodiscard]] name_t get_name() const;
+  [[nodiscard]] path_t get_path() const;
+
+  [[nodiscard]] virtual std::optional<lsmtree::record_t> 
+  get_record(const lsmtree::key_t &key) = 0;
 
   virtual void flush() = 0;
 

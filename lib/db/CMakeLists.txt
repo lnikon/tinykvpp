@@ -19,4 +19,5 @@ target_link_libraries(
   LSMTree
   MemTable
   DB
-	Config)
+	Config
+	HashIndex)

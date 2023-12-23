@@ -5,10 +5,6 @@
 #ifndef ZKV_LSMTREETYPES_H
 #define ZKV_LSMTREETYPES_H
 
-#include <cstddef>
-#include <memory>
-#include <string>
-
 #include <structures/memtable/memtable.h>
 
 namespace structures::lsmtree {

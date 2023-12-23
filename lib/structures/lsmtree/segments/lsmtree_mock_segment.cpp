@@ -15,6 +15,11 @@ lsmtree_mock_segment_t::lsmtree_mock_segment_t(std::filesystem::path path,
                                                memtable_unique_ptr_t pMemtable)
     : interface_lsmtree_segment_t(std::move(path), std::move(pMemtable)) {}
 
+[[nodiscard]] std::optional<lsmtree::record_t>
+lsmtree_mock_segment_t::get_record(const lsmtree::key_t &) {
+  return std::nullopt;
+}
+
 void lsmtree_mock_segment_t::flush() {
   assert(m_pMemtable);
   spdlog::info("(lsmtree_mock_segment_t): This is an mock implementation of "

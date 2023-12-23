@@ -11,14 +11,12 @@
 #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 #include <spdlog/spdlog.h>
 
-#include <algorithm>
 #include <mutex>
 #include <optional>
 #include <sstream>
 #include <string>
 #include <utility>
 #include <variant>
-#include <vector>
 
 #include "structures/sorted_vector/sorted_vector.h"
 
@@ -141,5 +139,13 @@ template <typename... Args> auto make_unique(Args... args) {
   return std::make_unique<memtable_t>(std::forward<args>...);
 }
 } // namespace structures::memtable
+
+template <>
+struct std::hash<structures::memtable::memtable_t::record_t::key_t> {
+  using S = structures::memtable::memtable_t::record_t::key_t;
+  std::size_t operator()(const S &s) const {
+    return std::hash<std::string>{}(s.m_key);
+  }
+};
 
 #endif // MEMTABLE_H
