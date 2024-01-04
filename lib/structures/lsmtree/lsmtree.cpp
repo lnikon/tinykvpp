@@ -28,18 +28,21 @@ void lsmtree_t::put(const structures::lsmtree::key_t &key,
   // TODO(lnikon): Is it possible to use better locking strategy?
   // TODO(lnikon): Compactation can be a periodic job?
   if (std::unique_lock ul(m_mutex);
-      key.size() + valueSizeOpt.value() + m_table->size() >=
-      m_config->LSMTreeConfig.DiskFlushThresholdSize) {
+      m_table->size() && key.size() + valueSizeOpt.value() + m_table->size() >=
+                             m_config->LSMTreeConfig.DiskFlushThresholdSize) {
     spdlog::debug("flushing table. m_table->size()={}", m_table->size());
 
     // TODO(lnikon): For the future, keep LSMTree readable while dumping.
     // This can be achieved by moving the current copy into the new async task
     // to dump and creating a new copy.
-    m_pSegmentsMgr
-        ->get_new_segment(m_config->LSMTreeConfig.SegmentType,
-                          std::move(m_table))
-        ->flush();
+    auto pSegment = m_pSegmentsMgr->get_new_segment(
+        m_config->LSMTreeConfig.SegmentType, std::move(m_table));
+
+    // TODO(lnikon): Somehow signal via some cv that it's safe to use the new
+    // memtable
     m_table = memtable::make_unique();
+    pSegment->flush();
+    m_pSegmentsMgr->get_segments()->put(pSegment);
   }
 
   m_table->emplace(record_t{key, value});
@@ -49,7 +52,20 @@ std::optional<record_t>
 structures::lsmtree::lsmtree_t::get(const key_t &key) const {
   // TODO(lnikon): Use Index and on-disk segments.
   // For now we'll just lookup in-memory memtable.
-  return m_table->find(key);
+  auto result{m_table->find(key)};
+  if (result) {
+    return result;
+  } else {
+    const auto segments = m_pSegmentsMgr->get_segments();
+    for (const auto &segment : *segments) {
+      result = segment->get_record(key);
+      if (result.has_value()) {
+        return result;
+      }
+    }
+  }
+
+  return std::nullopt;
 }
 
 } // namespace structures::lsmtree

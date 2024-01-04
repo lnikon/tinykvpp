@@ -11,14 +11,12 @@
 #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 #include <spdlog/spdlog.h>
 
-#include <algorithm>
 #include <mutex>
 #include <optional>
 #include <sstream>
 #include <string>
 #include <utility>
 #include <variant>
-#include <vector>
 
 #include "structures/sorted_vector/sorted_vector.h"
 
@@ -39,6 +37,8 @@ public:
     enum class record_value_type_t { integer_k = 0, double_k, string_k };
 
     struct key_t {
+			using storage_type_t = std::string;
+
       explicit key_t(std::string key);
 
       key_t(const key_t &other);
@@ -54,7 +54,7 @@ public:
 
       static void swap(key_t &lhs, key_t &rhs);
 
-      std::string m_key;
+      storage_type_t m_key;
     };
 
     struct value_t {
@@ -141,5 +141,13 @@ template <typename... Args> auto make_unique(Args... args) {
   return std::make_unique<memtable_t>(std::forward<args>...);
 }
 } // namespace structures::memtable
+
+template <>
+struct std::hash<structures::memtable::memtable_t::record_t::key_t> {
+  using S = structures::memtable::memtable_t::record_t::key_t;
+  std::size_t operator()(const S &s) const {
+    return std::hash<std::string>{}(s.m_key);
+  }
+};
 
 #endif // MEMTABLE_H

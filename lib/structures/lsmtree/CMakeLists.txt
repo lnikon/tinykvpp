@@ -26,4 +26,5 @@ target_link_libraries(
   ZLIB::ZLIB
   LSMTree
   MemTable
-	Config)
+	Config
+	HashIndex)

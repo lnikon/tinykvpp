@@ -35,6 +35,8 @@ public:
   const_iterator cbegin() const;
   const_iterator cend() const;
 
+  iterator erase(iterator begin, iterator end);
+
 private:
   std::vector<Data> m_data;
 };
@@ -91,6 +93,12 @@ template <typename Data, typename Comparator>
 typename sorted_vector_t<Data, Comparator>::const_iterator
 sorted_vector_t<Data, Comparator>::cend() const {
   m_data.cend();
+}
+
+template <typename Data, typename Comparator>
+typename sorted_vector_t<Data, Comparator>::iterator
+sorted_vector_t<Data, Comparator>::erase(iterator begin, iterator end) {
+  return m_data.erase(begin, end);
 }
 
 } // namespace structures::sorted_vector

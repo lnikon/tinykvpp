@@ -9,8 +9,8 @@
 namespace structures::lsmtree::segment_manager {
 
 lsmtree_segment_manager_t::lsmtree_segment_manager_t(
-    const config::sptr_t &config)
-    : m_config{config} {
+    const config::sptr_t &config, lsmtree::segment_storage::sptr pStorage)
+    : m_config{config}, m_pStorage{pStorage} {
   assert(!m_config->LSMTreeConfig.SegmentsDirectoryName.empty());
 }
 
@@ -18,31 +18,24 @@ segment_shared_ptr_t lsmtree_segment_manager_t::get_new_segment(
     const structures::lsmtree::lsmtree_segment_type_t type,
     memtable_unique_ptr_t pMemtable) {
   const auto path{construct_path(get_next_name())};
-
-  auto result = lsmtree_segment_factory(type, path, std::move(pMemtable));
-  m_segments[result->get_name()] = result;
-  return result;
+  return lsmtree_segment_factory(type, path, std::move(pMemtable));
 }
 
 segment_shared_ptr_t
 lsmtree_segment_manager_t::get_segment(const std::string &name) {
-  assert(!name.empty());
-  segment_shared_ptr_t result{nullptr};
-  if (auto it = m_segments.find(name); it != m_segments.end()) {
-    result = it->second;
-  } else {
-    spdlog::warn("unable to find lsm tree segment with name {:s}", name);
-  }
+  return m_pStorage->get(name);
+}
 
-  return result;
+lsmtree::segment_storage::sptr lsmtree_segment_manager_t::get_segments() {
+  return m_pStorage->shared_from_this();
 }
 
 std::vector<lsmtree_segment_manager_t::segment_name_t>
 lsmtree_segment_manager_t::get_segment_names() const {
   std::vector<segment_name_t> result;
-  result.reserve(m_segments.size());
-  for (const auto &[name, _] : m_segments) {
-    result.emplace_back(name);
+  result.reserve(m_pStorage->size());
+  for (const auto &segment : *m_pStorage) {
+    result.emplace_back(segment->get_name());
   }
   return result;
 }

@@ -4,8 +4,6 @@
 #include <db/db_config.h>
 #include <structures/lsmtree/lsmtree.h>
 
-#include <filesystem>
-
 namespace db {
 
 using namespace structures::lsmtree;
@@ -20,6 +18,7 @@ using namespace structures::lsmtree;
 
 class db_t {
 public:
+  using segstorage_sptr_t = lsmtree::segment_storage::sptr;
   using segmgr_sptr_t = segment_manager::lsmtree_segment_manager_shared_ptr_t;
   using lsmtree_config_t = structures::lsmtree::lsmtree_config_t;
   using lsmtree_t = structures::lsmtree::lsmtree_t;
@@ -40,6 +39,7 @@ private:
 
 private:
   const config::sptr_t m_config;
+  segstorage_sptr_t m_pSegmentStorage;
   segmgr_sptr_t m_pSegmentManager;
   lsmtree_t m_lsmTree;
 };

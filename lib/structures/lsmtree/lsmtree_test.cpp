@@ -4,7 +4,6 @@
 #include <structures/lsmtree/lsmtree.h>
 #include <structures/lsmtree/lsmtree_config.h>
 #include <structures/lsmtree/lsmtree_types.h>
-
 #include <filesystem>
 #include <limits>
 #include <random>
@@ -75,13 +74,14 @@ TEST_CASE("Flush regular segment", std::string(componentName)) {
   auto randomKeys = generateRandomStringPairVector(1024);
 
   SECTION("Put and Get") {
-    config::sptr_t pConfig{config::make_shared()};
+    auto pConfig{config::make_shared()};
     pConfig->LSMTreeConfig.SegmentType =
         lsmtree::lsmtree_segment_type_t::mock_k;
+    auto pStorage{lsmtree::segment_storage::make_shared()};
 
     auto pSegmentManager =
         std::make_shared<structures::lsmtree::lsmtree_segment_manager_t>(
-            pConfig);
+            pConfig, pStorage);
 
     lsmtree::lsmtree_t lsmt(pConfig, pSegmentManager);
     for (const auto &kv : randomKeys) {
@@ -101,10 +101,11 @@ TEST_CASE("Flush regular segment", std::string(componentName)) {
     pConfig->LSMTreeConfig.DiskFlushThresholdSize = 2048;
     pConfig->LSMTreeConfig.SegmentType =
         lsmtree::lsmtree_segment_type_t::regular_k;
+    auto pStorage{lsmtree::segment_storage::make_shared()};
 
     auto pSegmentManager =
         std::make_shared<structures::lsmtree::lsmtree_segment_manager_t>(
-            pConfig);
+            pConfig, pStorage);
 
     lsmtree::lsmtree_t lsmt(pConfig, pSegmentManager);
     for (const auto &kv : randomKeys) {

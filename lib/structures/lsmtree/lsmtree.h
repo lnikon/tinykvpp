@@ -6,7 +6,6 @@
 #define CPP_PROJECT_TEMPLATE_LSMTREE_H
 
 #include <optional>
-#include <thread>
 
 #include <structures/lsmtree/lsmtree_config.h>
 #include <structures/lsmtree/lsmtree_types.h>

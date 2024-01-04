@@ -12,11 +12,11 @@ target_link_libraries(
   DBTest
   boost::boost
   Catch2::Catch2
-  gRPC::grpc
   spdlog::spdlog
   fmt::fmt
   ZLIB::ZLIB
   LSMTree
   MemTable
   DB
-	Config)
+	Config
+	HashIndex)
