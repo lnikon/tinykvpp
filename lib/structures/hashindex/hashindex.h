@@ -22,6 +22,11 @@ public:
 
   void emplace(structures::lsmtree::key_t key);
 
+  bool empty() const;
+
+  [[nodiscard]] std::optional<offset_t>
+  get_offset(const structures::lsmtree::key_t &key) const;
+
 private:
   cursor_t m_cursor;
   std::unordered_map<structures::lsmtree::key_t, offset_t> m_offsets;

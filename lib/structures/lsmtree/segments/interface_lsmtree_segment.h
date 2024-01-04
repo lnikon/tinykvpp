@@ -14,6 +14,11 @@
 
 namespace structures::lsmtree {
 
+enum class SegmentMode {
+	Read,
+	Write,
+};
+
 class interface_lsmtree_segment_t {
 public:
   using name_t = std::string;

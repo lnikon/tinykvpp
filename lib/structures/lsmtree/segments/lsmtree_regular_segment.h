@@ -18,6 +18,9 @@ public:
   get_record(const lsmtree::key_t &key) override;
 
   void flush() override;
+
+private:
+	hashindex::hashindex_t m_hashIndex;
 };
 
 } // namespace structures::lsmtree

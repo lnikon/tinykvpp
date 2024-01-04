@@ -37,6 +37,8 @@ public:
     enum class record_value_type_t { integer_k = 0, double_k, string_k };
 
     struct key_t {
+			using storage_type_t = std::string;
+
       explicit key_t(std::string key);
 
       key_t(const key_t &other);
@@ -52,7 +54,7 @@ public:
 
       static void swap(key_t &lhs, key_t &rhs);
 
-      std::string m_key;
+      storage_type_t m_key;
     };
 
     struct value_t {

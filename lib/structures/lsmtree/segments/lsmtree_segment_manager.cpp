@@ -18,10 +18,7 @@ segment_shared_ptr_t lsmtree_segment_manager_t::get_new_segment(
     const structures::lsmtree::lsmtree_segment_type_t type,
     memtable_unique_ptr_t pMemtable) {
   const auto path{construct_path(get_next_name())};
-
-  auto result = lsmtree_segment_factory(type, path, std::move(pMemtable));
-  m_pStorage->put(result);
-  return result;
+  return lsmtree_segment_factory(type, path, std::move(pMemtable));
 }
 
 segment_shared_ptr_t

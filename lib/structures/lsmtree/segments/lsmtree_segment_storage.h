@@ -5,6 +5,7 @@
 #include <unordered_map>
 
 #include <structures/lsmtree/segments/interface_lsmtree_segment.h>
+#include <structures/sorted_vector/sorted_vector.h>
 
 namespace structures::lsmtree::segment_storage {
 
@@ -30,7 +31,11 @@ public:
 private:
   mutable std::mutex m_mutex;
   segment_name_sptr_map m_segmentsMap;
-  segment_sptr_vector m_segmentsVector;
+  // segment_sptr_vector m_segmentsVector;
+  structures::sorted_vector::sorted_vector_t<
+      segment_shared_ptr_t,
+      std::function<bool(segment_shared_ptr_t, segment_shared_ptr_t)>>
+      m_segmentsVector;
 };
 
 using sptr = std::shared_ptr<lsmtree_segment_storage_t>;
