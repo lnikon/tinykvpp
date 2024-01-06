@@ -33,8 +33,6 @@ public:
   std::optional<record_t> get(const structures::lsmtree::key_t &key) const;
 
 private:
-  // TODO(lnikon): Prepare directory structure for the database when opening a
-  // DB
   bool prepare_directory_structure();
 
 private:
