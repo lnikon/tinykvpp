@@ -19,6 +19,9 @@ int main(int argc, char *argv[]) {
   auto pConfig = config::make_shared();
   pConfig->LSMTreeConfig.DiskFlushThresholdSize = 10;
   db::db_t db(pConfig);
+  if (!db.open()) {
+    std::cerr << "Unable to open the database" << std::endl;
+  }
 
   db.put(db::lsmtree::key_t{"aaaaaa"}, db::lsmtree::value_t{"version1"});
   db.put(db::lsmtree::key_t{"aaaaaa"}, db::lsmtree::value_t{"version2"});
