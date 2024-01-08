@@ -2,15 +2,15 @@ FROM debian:latest
 
 # Install necessary packages for development
 RUN apt-get update && \
-		apt-get -y install \
-					cmake \
-					clang-16 \
-					clangd-16 \
-					clang-format-16 \
-					clang-tidy-16 \
-					python3 \
-					python3-pip \
-					python3-virtualenv
+    apt-get -y install \
+                cmake \
+                clang-16 \
+                clangd-16 \
+                clang-format-16 \
+                clang-tidy-16 \
+                python3 \
+                python3-pip \
+                python3-virtualenv
 
 # Setup correct symlinks
 RUN update-alternatives --install /bin/clang clang /usr/bin/clang-16 0
