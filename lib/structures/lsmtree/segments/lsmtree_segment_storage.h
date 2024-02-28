@@ -9,6 +9,8 @@
 
 namespace structures::lsmtree::segment_storage {
 
+// TODO(lnikon): Generic storage
+// template <typename TStorageType, typename TStorageComparatorType>
 class lsmtree_segment_storage_t
     : public std::enable_shared_from_this<lsmtree_segment_storage_t> {
 public:
@@ -16,26 +18,30 @@ public:
   using segment_sptr_vector = std::vector<segment_shared_ptr_t>;
   using segment_name_sptr_map =
       std::unordered_map<name_type_t, segment_shared_ptr_t>;
+  using segment_sptr_comp_t =
+      std::function<bool(segment_shared_ptr_t, segment_shared_ptr_t)>;
+  using storage_t =
+      structures::sorted_vector::sorted_vector_t<segment_shared_ptr_t,
+                                                 segment_sptr_comp_t>;
 
-  using size_type = segment_sptr_vector::size_type;
+  // TODO(lnikon): Generic storage
+  // using segment_sptr_comp_t = TStorageType;
+  // using storage_t = TStorageComparatorType;
+
+  using size_type = storage_t::size_type;
 
   [[nodiscard]] segment_shared_ptr_t get(const name_type_t &name) const;
   void put(segment_shared_ptr_t pSegment);
   void remove(const name_type_t &name);
-  [[nodiscard]] size_type size() const { return m_segmentsVector.size(); }
 
-  // TODO(lnikon): Iterate in sorted order
-  [[nodiscard]] inline auto begin() { return m_segmentsVector.begin(); }
-  [[nodiscard]] inline auto end() { return m_segmentsVector.end(); }
+  [[nodiscard]] inline auto size() const { return std::size(m_segmentsVector); }
+  [[nodiscard]] inline auto begin() { return std::begin(m_segmentsVector); }
+  [[nodiscard]] inline auto end() { return std::end(m_segmentsVector); }
 
 private:
   mutable std::mutex m_mutex;
   segment_name_sptr_map m_segmentsMap;
-  // segment_sptr_vector m_segmentsVector;
-  structures::sorted_vector::sorted_vector_t<
-      segment_shared_ptr_t,
-      std::function<bool(segment_shared_ptr_t, segment_shared_ptr_t)>>
-      m_segmentsVector;
+  storage_t m_segmentsVector;
 };
 
 using sptr = std::shared_ptr<lsmtree_segment_storage_t>;

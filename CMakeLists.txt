@@ -3,7 +3,7 @@ project(zkv)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-#set(CMAKE_CXX_STANDARD_REQUIRED True)
+set(CMAKE_CXX_STANDARD_REQUIRED True)
 #set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -stdlib=libc++ -lc++abi")
 add_compile_options(-Wall -Wextra -pedantic -O0 -g)
 

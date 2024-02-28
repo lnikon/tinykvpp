@@ -40,6 +40,7 @@ void lsmtree_t::put(const structures::lsmtree::key_t &key,
 
     // TODO(lnikon): Somehow signal via some cv that it's safe to use the new
     // memtable
+		// TODO(lnikon): Keep memtable associated with a newly created segment in memory for reads until SST is ready
     m_table = memtable::make_unique();
     pSegment->flush();
     m_pSegmentsMgr->get_segments()->put(pSegment);
