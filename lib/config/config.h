@@ -4,20 +4,24 @@
 #include <structures/lsmtree/lsmtree_config.h>
 #include <structures/lsmtree/segments/segment_config.h>
 
-namespace config {
+namespace config
+{
 
-struct config_t {
-  db::db_config_t DatabaseConfig;
-  structures::lsmtree::lsmtree_config_t LSMTreeConfig;
-  structures::lsmtree::segments::segment_config_t SegmentConfig;
+struct config_t
+{
+    db::db_config_t DatabaseConfig;
+    structures::lsmtree::lsmtree_config_t LSMTreeConfig;
+    structures::lsmtree::segments::segment_config_t SegmentConfig;
 
-  [[nodiscard]] std::filesystem::path get_segments_path() const;
+    [[nodiscard]] std::filesystem::path datadir_path() const;
 };
 
-using sptr_t = std::shared_ptr<config_t>;
+using shared_ptr_t = std::shared_ptr<config_t>;
 
-template <typename... Args> sptr_t make_shared(Args... args) {
-  return std::make_shared<config_t>(std::forward(args)...);
+template <typename... Args>
+auto make_shared(Args... args)
+{
+    return std::make_shared<config_t>(std::forward(args)...);
 }
 
-} // namespace config
+}  // namespace config

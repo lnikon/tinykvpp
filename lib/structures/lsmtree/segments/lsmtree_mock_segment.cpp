@@ -2,35 +2,53 @@
 // Created by nikon on 2/6/22.
 //
 
-#define FMT_HEADER_ONLY
-#include <spdlog/spdlog.h>
+#include <structures/lsmtree/segments/lsmtree_mock_segment.h>
 
 #include <cassert>
 
-#include <structures/lsmtree/segments/lsmtree_mock_segment.h>
+namespace structures::lsmtree::segments::mock_segment
+{
 
-namespace structures::lsmtree {
-
-lsmtree_mock_segment_t::lsmtree_mock_segment_t(std::filesystem::path path,
-                                               memtable_unique_ptr_t pMemtable)
-    : interface_lsmtree_segment_t(std::move(path), std::move(pMemtable)) {}
-
-[[nodiscard]] std::optional<lsmtree::record_t>
-lsmtree_mock_segment_t::get_record(const lsmtree::key_t &) {
-  return std::nullopt;
+mock_segment_t::mock_segment_t([[maybe_unused]] std::filesystem::path path,
+                               memtable_unique_ptr_t pMemtable) noexcept
+    : segment_interface_t{},
+      m_pMemtable{std::move(pMemtable)}
+{
 }
 
-void lsmtree_mock_segment_t::flush() {
-  assert(m_pMemtable);
-  spdlog::info("(lsmtree_mock_segment_t): This is an mock implementation of "
-               "the segment\n"
-               "flush method. This will only print the memtable content.");
-
-  for (const auto &kv : *m_pMemtable) {
-    std::stringstream ss;
-    ss << kv;
-    spdlog::info(ss.str());
-  }
+[[nodiscard]] std::optional<lsmtree::record_t> mock_segment_t::record(
+    const lsmtree::key_t &)
+{
+    return std::nullopt;
 }
 
-} // namespace structures::lsmtree
+void mock_segment_t::flush()
+{
+    assert(m_pMemtable);
+    for (const auto &kv : *m_pMemtable)
+    {
+        std::stringstream ss;
+        ss << kv;
+    }
+}
+
+types::name_t mock_segment_t::get_name() const
+{
+    return structures::lsmtree::segments::types::name_t();
+}
+
+types::path_t mock_segment_t::get_path() const
+{
+    return structures::lsmtree::segments::types::path_t();
+}
+
+memtable::unique_ptr_t mock_segment_t::memtable()
+{
+    return structures::memtable::unique_ptr_t();
+}
+
+void mock_segment_t::restore()
+{
+}
+
+}  // namespace structures::lsmtree::segments::mock_segment

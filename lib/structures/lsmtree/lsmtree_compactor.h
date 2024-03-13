@@ -16,6 +16,6 @@ namespace structures::lsmtree
 
 // void compactLSMTree(MemTableUniquePtr memTable);
 
-}
+}  // namespace structures::lsmtree
 
-#endif //ZKV_LSMTREECOMPACTOR_H
+#endif  // ZKV_LSMTREECOMPACTOR_H

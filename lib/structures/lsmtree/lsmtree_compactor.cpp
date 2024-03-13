@@ -4,6 +4,7 @@
 
 // #include "LSMTreeCompactor.h"
 
-namespace structures::lsmtree {
+namespace structures::lsmtree
+{
 // void compactLSMTree(MemTableUniquePtr memTable) {}
-} // namespace structures::lsmtree
+}  // namespace structures::lsmtree

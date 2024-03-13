@@ -1,11 +1,12 @@
 [requires]
-boost/1.82.0
-catch2/2.13.8
-spdlog/1.9.2
-fmt/8.0.1
+libsystemd/255
+boost/1.84.0
+catch2/3.5.3
+spdlog/1.13.0
+fmt/10.2.1
+grpc/1.54.3
+protobuf/3.21.12
 zlib/1.2.13
-grpc/1.50.1
-protobuf/3.21.9
 
 [generators]
 CMakeDeps

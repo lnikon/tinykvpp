@@ -1,72 +1,63 @@
-//
-// Created by nikon on 1/21/22.
-//
-
-#define FMT_HEADER_ONLY
-#include <spdlog/spdlog.h>
-
 #include <structures/lsmtree/lsmtree.h>
-#include <structures/lsmtree/segments/interface_lsmtree_segment.h>
+#include <structures/lsmtree/segments/segment_interface.h>
 
-namespace structures::lsmtree {
+#include <format>
 
-lsmtree_t::lsmtree_t(const config::sptr_t config,
-                     lsmtree_segment_manager_shared_ptr_t pSegmentsMgr)
-    : m_config(config), m_table(memtable::make_unique()),
-      m_pSegmentsMgr(pSegmentsMgr) {}
+namespace structures::lsmtree
+{
 
-// TODO (vahag): Update WAL
+lsmtree_t::lsmtree_t(const config::shared_ptr_t pConfig) noexcept
+    : m_pConfig{pConfig},
+      m_pTable{memtable::make_unique()},
+      m_levels{pConfig}
+{
+}
+
 void lsmtree_t::put(const structures::lsmtree::key_t &key,
-                    const structures::lsmtree::value_t &value) {
-  // TODO: Wrap into check optionalValueSize and use everywhere
-  const auto valueSizeOpt = value.size();
-  if (!valueSizeOpt.has_value()) {
-    spdlog::warn("Value size is null! Refusing to insert!");
-    return;
-  }
+                    const structures::lsmtree::value_t &value) noexcept
+{
+    assert(m_pTable);
+    assert(m_pConfig);
 
-  // TODO(lnikon): Is it possible to use better locking strategy?
-  // TODO(lnikon): Compactation can be a periodic job?
-  if (std::unique_lock ul(m_mutex);
-      m_table->size() && key.size() + valueSizeOpt.value() + m_table->size() >=
-                             m_config->LSMTreeConfig.DiskFlushThresholdSize) {
-    spdlog::debug("flushing table. m_table->size()={}", m_table->size());
-
-    // TODO(lnikon): For the future, keep LSMTree readable while dumping.
-    // This can be achieved by moving the current copy into the new async task
-    // to dump and creating a new copy.
-    auto pSegment = m_pSegmentsMgr->get_new_segment(
-        m_config->LSMTreeConfig.SegmentType, std::move(m_table));
-
-    // TODO(lnikon): Somehow signal via some cv that it's safe to use the new
-    // memtable
-		// TODO(lnikon): Keep memtable associated with a newly created segment in memory for reads until SST is ready
-    m_table = memtable::make_unique();
-    pSegment->flush();
-    m_pSegmentsMgr->get_segments()->put(pSegment);
-  }
-
-  m_table->emplace(record_t{key, value});
-}
-
-std::optional<record_t>
-structures::lsmtree::lsmtree_t::get(const key_t &key) const {
-  // TODO(lnikon): Use Index and on-disk segments.
-  // For now we'll just lookup in-memory memtable.
-  auto result{m_table->find(key)};
-  if (result) {
-    return result;
-  } else {
-    const auto segments = m_pSegmentsMgr->get_segments();
-    for (const auto &segment : *segments) {
-      result = segment->get_record(key);
-      if (result.has_value()) {
-        return result;
-      }
+    // If addition of the current record will increase
+    // size of the memtable above the threashold, then flush the memtable,
+    // and insert the record into the new one
+    const auto recordPlusTableSize =
+        (key.size() + value.size()) + m_pTable->size();
+    if (recordPlusTableSize >= m_pConfig->LSMTreeConfig.DiskFlushThresholdSize)
+    {
+        m_levels.segment(m_pConfig->LSMTreeConfig.SegmentType,
+                         std::move(m_pTable));
+        m_pTable = memtable::make_unique();
     }
-  }
 
-  return std::nullopt;
+    m_pTable->emplace(record_t{key, value});
 }
 
-} // namespace structures::lsmtree
+std::optional<record_t> structures::lsmtree::lsmtree_t::get(
+    const key_t &key) const noexcept
+{
+    assert(m_pTable);
+
+    // TODO(lnikon): Skip searching if record doesn't exist
+    //    const auto recordExists{m_bloom.exists(key)};
+    //    if (!recordExists)
+    //    {
+    //        return std::nullopt;
+    //    }
+
+    // If bloom check passed, then record probably exists.
+    // Lookup in-memory table for the table
+    auto result{m_pTable->find(key)};
+
+    // If key isn't in in-memory table, then it probably was flushed.
+    // Lookup for the key in on-disk segments
+    if (!result.has_value())
+    {
+        result = m_levels.record(key);
+    }
+
+    return result;
+}
+
+}  // namespace structures::lsmtree

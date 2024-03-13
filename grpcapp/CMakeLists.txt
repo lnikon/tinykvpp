@@ -59,23 +59,7 @@ target_link_libraries(tinykvpp_grpc_proto
   ${_PROTOBUF_LIBPROTOBUF})
 
 add_executable(GrpcAppMain "main.cpp")
-
 set_target_properties(GrpcAppMain PROPERTIES CXX_STANDARD 23)
 target_include_directories(GrpcAppMain INTERFACE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})
-target_link_libraries(
-  GrpcAppMain
-  boost::boost
-  Catch2::Catch2
-  gRPC::grpc
-  spdlog::spdlog
-  fmt::fmt
-  ZLIB::ZLIB
-	DB
-  LSMTree
-  MemTable
-	Config
-	HashIndex
-  tinykvpp_grpc_proto
-  ${_REFLECTION}
-  ${_GRPC_GRPCPP}
-  ${_PROTOBUF_LIBPROTOBUF})
+target_link_libraries(GrpcAppMain systemd gRPC::grpc spdlog::spdlog fmt::fmt ZLIB::ZLIB DB LSMTree MemTable Config HashIndex tinykvpp_grpc_proto ${_REFLECTION} ${_GRPC_GRPCPP} ${_PROTOBUF_LIBPROTOBUF})
+add_definitions(-DHAVE_LIBSYSTEMD)
