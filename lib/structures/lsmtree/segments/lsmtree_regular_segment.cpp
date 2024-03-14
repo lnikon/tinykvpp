@@ -112,6 +112,11 @@ memtable::unique_ptr_t regular_segment_t::memtable()
 void regular_segment_t::restore()
 {
     // TODO: Check that the segment is in appropriate state to be restored
+    if (m_pMemtable)
+    {
+        return;
+    }
+    
     m_pMemtable.reset();
     m_pMemtable = memtable::make_unique();
 

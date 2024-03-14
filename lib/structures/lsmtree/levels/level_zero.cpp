@@ -21,8 +21,8 @@ segments::interface::shared_ptr_t level_zero_t::compact() const noexcept
     // 'level_zero_compactation_threshold'
 
     // Number of segments on which level0 should compact itself
-    const auto compactationThreshold{4};
-    if (m_pStorage->size() >= compactationThreshold)
+    const auto compactationThreshold{1};
+    if (m_pStorage->size() < compactationThreshold)
     {
         return nullptr;
     }
@@ -64,6 +64,11 @@ segments::interface::shared_ptr_t level_zero_t::segment(
 
     // Try to compact the storage
     auto levelZeroCompactedSegment = compact();
+
+    // If the level0 is successfully compacted,
+    // then flush the newly compacted segment into the disk,
+    // and remove old segments from memory and disk.
+    // Otherwise, just flush the newly created segment
     if (levelZeroCompactedSegment)
     {
         // If compactation succeeded, then flush the compacted segment into disk
@@ -86,6 +91,10 @@ segments::interface::shared_ptr_t level_zero_t::segment(
 
         // Compacted segment is the new result
         return levelZeroCompactedSegment;
+    }
+    else
+    {
+        pSegment->flush();
     }
 
     return pSegment;

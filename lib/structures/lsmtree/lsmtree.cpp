@@ -19,23 +19,20 @@ void lsmtree_t::put(const structures::lsmtree::key_t &key,
     assert(m_pTable);
     assert(m_pConfig);
 
-    // If addition of the current record will increase
-    // size of the memtable above the threashold, then flush the memtable,
-    // and insert the record into the new one
-    const auto recordPlusTableSize =
-        (key.size() + value.size()) + m_pTable->size();
-    if (recordPlusTableSize >= m_pConfig->LSMTreeConfig.DiskFlushThresholdSize)
+    // Add record into memtable
+    m_pTable->emplace(record_t{key, value});
+
+    // Check whether after addition size of the memtable increased above the
+    // threashold. If so flush the memtable
+    if (m_pTable->size() >= m_pConfig->LSMTreeConfig.DiskFlushThresholdSize)
     {
         m_levels.segment(m_pConfig->LSMTreeConfig.SegmentType,
                          std::move(m_pTable));
         m_pTable = memtable::make_unique();
     }
-
-    m_pTable->emplace(record_t{key, value});
 }
 
-std::optional<record_t> structures::lsmtree::lsmtree_t::get(
-    const key_t &key) const noexcept
+std::optional<record_t> lsmtree_t::get(const key_t &key) const noexcept
 {
     assert(m_pTable);
 

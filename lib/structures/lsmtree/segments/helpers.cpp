@@ -18,8 +18,7 @@ auto unix_timestamp()
 
 types::name_t segment_name()
 {
-    // return types::name_t{std::format("segment_{}", unix_timestamp())};
-    return types::name_t{std::format("segment")};
+    return types::name_t{std::format("segment_{}", unix_timestamp())};
 }
 
 std::filesystem::path segment_path(const std::filesystem::path datadir,
