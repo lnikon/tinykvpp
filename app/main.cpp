@@ -23,6 +23,7 @@ int main(int argc, char *argv[])
     if (!db.open())
     {
         std::cerr << "Unable to open the database" << std::endl;
+        return 1;
     }
 
     db.put(db::lsmtree::key_t{"aaaaaa"}, db::lsmtree::value_t{"version1"});
@@ -30,10 +31,14 @@ int main(int argc, char *argv[])
     db.put(db::lsmtree::key_t{"aaaaaa"}, db::lsmtree::value_t{"version3"});
     db.put(db::lsmtree::key_t{"cccccc"}, db::lsmtree::value_t{"dddddd"});
 
-    auto recordOpt{db.get(db::lsmtree::key_t{"aaaaaa"})};
-    if (recordOpt)
+    if (auto recordOpt{db.get(db::lsmtree::key_t{"aaaaaa"})}; recordOpt)
     {
-        const auto record{recordOpt.value()};
+        std::cout << *recordOpt << std::endl;
+    }
+
+    if (auto recordOpt{db.get(db::lsmtree::key_t{"cccccc"})}; recordOpt)
+    {
+        std::cout << *recordOpt << std::endl;
     }
 
     return 0;

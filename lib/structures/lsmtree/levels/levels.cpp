@@ -17,6 +17,7 @@ segments::interface::shared_ptr_t levels_t::segment(
     const structures::lsmtree::lsmtree_segment_type_t type,
     structures::lsmtree::memtable_unique_ptr_t pMemtable)
 {
+    assert(pMemtable);
     return m_level_zero.segment(type, std::move(pMemtable));
 }
 std::optional<record_t> levels_t::record(const key_t& key) const noexcept

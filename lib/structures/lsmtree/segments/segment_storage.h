@@ -23,8 +23,7 @@ struct last_write_time_comparator_t
 {
     bool operator()(segment::shared_ptr_t lhs, segment::shared_ptr_t rhs)
     {
-        return std::filesystem::last_write_time(lhs->get_path()) <
-               std::filesystem::last_write_time(rhs->get_path());
+        return lhs->last_write_time() <= rhs->last_write_time();
     }
 };
 
@@ -33,21 +32,29 @@ class segment_storage_t : public std::enable_shared_from_this<segment_storage_t>
    public:
     using name_t = types::name_t;
     using segment_map_t = std::unordered_map<name_t, segment::shared_ptr_t>;
+
     using segment_comp_t =
         std::function<bool(segment::shared_ptr_t, segment::shared_ptr_t)>;
+
     using storage_t =
         structures::sorted_vector::sorted_vector_t<segment::shared_ptr_t,
                                                    segment_comp_t>;
+
     using iterator = storage_t::iterator;
     using const_iterator = storage_t::const_iterator;
+    using reverse_iteartor = storage_t::reverse_iterator;
+    using size_type = storage_t::size_type;
 
-    [[nodiscard]] storage_t::size_type size() const noexcept;
+    [[nodiscard]] size_type size() const noexcept;
 
     [[nodiscard]] iterator begin() noexcept;
     [[nodiscard]] iterator end() noexcept;
 
     [[nodiscard]] const_iterator cbegin() const noexcept;
     [[nodiscard]] const_iterator cend() const noexcept;
+
+    [[nodiscard]] reverse_iteartor rbegin() noexcept;
+    [[nodiscard]] reverse_iteartor rend() noexcept;
 
     void emplace(segment::shared_ptr_t pSegment, segment_comp_t comp);
     void clear() noexcept;

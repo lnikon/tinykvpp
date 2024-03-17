@@ -16,8 +16,14 @@ mock_segment_t::mock_segment_t([[maybe_unused]] std::filesystem::path path,
 {
 }
 
-[[nodiscard]] std::optional<lsmtree::record_t> mock_segment_t::record(
-    const lsmtree::key_t &)
+[[nodiscard]] std::vector<std::optional<lsmtree::record_t>>
+mock_segment_t::record(const lsmtree::key_t &)
+{
+    return {};
+}
+
+std::optional<record_t> mock_segment_t::record(
+    const hashindex::hashindex_t::offset_t &)
 {
     return std::nullopt;
 }
@@ -45,6 +51,11 @@ types::path_t mock_segment_t::get_path() const
 memtable::unique_ptr_t mock_segment_t::memtable()
 {
     return structures::memtable::unique_ptr_t();
+}
+
+std::filesystem::file_time_type mock_segment_t::last_write_time()
+{
+    return std::filesystem::file_time_type::min();
 }
 
 void mock_segment_t::restore()

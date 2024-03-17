@@ -16,6 +16,7 @@ class sorted_vector_t
     using index_type = size_type;
     using iterator = typename std::vector<Data>::iterator;
     using const_iterator = typename std::vector<Data>::const_iterator;
+    using reverse_iterator = typename std::vector<Data>::reverse_iterator;
 
     sorted_vector_t() = default;
     sorted_vector_t(sorted_vector_t &) = default;
@@ -34,6 +35,9 @@ class sorted_vector_t
 
     iterator begin();
     iterator end();
+
+    reverse_iterator rbegin();
+    reverse_iterator rend();
 
     const_iterator cbegin() const;
     const_iterator cend() const;
@@ -97,6 +101,20 @@ typename sorted_vector_t<Data, Comparator>::iterator
 sorted_vector_t<Data, Comparator>::end()
 {
     return m_data.end();
+}
+
+template <typename Data, typename Comparator>
+typename sorted_vector_t<Data, Comparator>::reverse_iterator
+sorted_vector_t<Data, Comparator>::rbegin()
+{
+    return m_data.rbegin();
+}
+
+template <typename Data, typename Comparator>
+typename sorted_vector_t<Data, Comparator>::reverse_iterator
+sorted_vector_t<Data, Comparator>::rend()
+{
+    return m_data.rend();
 }
 
 template <typename Data, typename Comparator>

@@ -9,6 +9,7 @@ void segment_storage_t::emplace(segment::shared_ptr_t pSegment,
                                 segment_comp_t comp)
 {
     assert(pSegment);
+    assert(m_segmentsMap.size() == m_segmentsVector.size());
 
     std::lock_guard lg(m_mutex);
     if (auto it = m_segmentsMap.find(pSegment->get_name());
@@ -17,6 +18,8 @@ void segment_storage_t::emplace(segment::shared_ptr_t pSegment,
         m_segmentsMap.emplace(pSegment->get_name(), pSegment);
         m_segmentsVector.emplace(pSegment, comp);
     }
+
+    assert(m_segmentsMap.size() == m_segmentsVector.size());
 }
 
 // TODO: Implement remove
@@ -37,7 +40,7 @@ void segment_storage_t::emplace(segment::shared_ptr_t pSegment,
 //    }
 //}
 
-segment_storage_t::storage_t::size_type segment_storage_t::size() const noexcept
+segment_storage_t::size_type segment_storage_t::size() const noexcept
 {
     return std::size(m_segmentsVector);
 }
@@ -60,6 +63,16 @@ segment_storage_t::const_iterator segment_storage_t::cbegin() const noexcept
 segment_storage_t::const_iterator segment_storage_t::cend() const noexcept
 {
     return m_segmentsVector.cend();
+}
+
+segment_storage_t::reverse_iteartor segment_storage_t::rbegin() noexcept
+{
+    return m_segmentsVector.rbegin();
+}
+
+segment_storage_t::reverse_iteartor segment_storage_t::rend() noexcept
+{
+    return m_segmentsVector.rend();
 }
 
 void segment_storage_t::clear() noexcept

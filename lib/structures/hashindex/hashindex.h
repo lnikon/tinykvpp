@@ -3,7 +3,7 @@
 #include <structures/lsmtree/lsmtree_types.h>
 
 #include <cstdint>        // std::uint64_t
-#include <unordered_map>  // std::unordered_map
+#include <map>
 
 namespace structures::hashindex
 {
@@ -15,7 +15,7 @@ class hashindex_t
    public:
     using offset_t = std::uint64_t;
     using cursor_t = std::uint64_t;
-    using storage_t = std::unordered_map<structures::lsmtree::key_t, offset_t>;
+    using storage_t = std::multimap<structures::lsmtree::key_t, offset_t>;
     using iterator = storage_t::iterator;
 
     hashindex_t();
@@ -27,10 +27,10 @@ class hashindex_t
     [[nodiscard]] iterator begin();
     [[nodiscard]] iterator end();
 
-    void emplace(structures::lsmtree::key_t key);
+    void emplace(structures::lsmtree::record_t key, const std::size_t length);
     bool empty() const;
 
-    [[nodiscard]] std::optional<offset_t> get_offset(
+    [[nodiscard]] std::vector<offset_t> offset(
         const structures::lsmtree::key_t &key) const;
 
    private:

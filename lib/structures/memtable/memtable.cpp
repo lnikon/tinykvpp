@@ -1,5 +1,8 @@
 #include "memtable.h"
 
+template <class>
+inline constexpr bool always_false_v = false;
+
 namespace structures::memtable
 {
 std::size_t string_size_in_bytes(const std::string &str)
@@ -56,25 +59,24 @@ memtable_t::record_t::value_t::value_t(
 std::size_t memtable_t::record_t::value_t::size() const
 {
     return std::visit(
-        [](const underlying_value_type_t &value)
+        [](auto &&value)
         {
-            if (value.index() ==
-                static_cast<std::size_t>(record_value_type_t::integer_k))
+            using T = std::decay_t<decltype(value)>;
+            if constexpr (std::is_same_v<T, int64_t>)
             {
-                return sizeof(int64_t);
+                return sizeof(value);
             }
-            else if (value.index() ==
-                     static_cast<std::size_t>(record_value_type_t::double_k))
+            else if constexpr (std::is_same_v<T, double>)
             {
-                return sizeof(double);
+                return sizeof(value);
             }
-            else if (value.index() ==
-                     static_cast<std::size_t>(record_value_type_t::string_k))
+            else if constexpr (std::is_same_v<T, std::string>)
             {
-                return string_size_in_bytes(std::get<std::string>(value));
+                return string_size_in_bytes(value);
             }
             else
             {
+                static_assert(always_false_v<T>, "non-exhaustive visitor!");
                 return std::size_t{0};
             }
         },

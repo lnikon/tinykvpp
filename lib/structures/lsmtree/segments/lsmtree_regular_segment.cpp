@@ -9,6 +9,9 @@
 #include <fstream>
 #include <optional>
 
+#include <boost/iostreams/stream.hpp>
+#include <boost/iostreams/device/file_descriptor.hpp>
+
 namespace structures::lsmtree::segments::regular_segment
 {
 
@@ -22,7 +25,7 @@ regular_segment_t::regular_segment_t(std::filesystem::path path,
 {
 }
 
-[[nodiscard]] std::optional<lsmtree::record_t> regular_segment_t::record(
+[[nodiscard]] std::vector<std::optional<record_t>> regular_segment_t::record(
     const lsmtree::key_t &key)
 {
     // TODO(lnikon): Check `prepopulate_segment_index`. If set, skip building
@@ -30,34 +33,41 @@ regular_segment_t::regular_segment_t(std::filesystem::path path,
 
     assert(!m_hashIndex.empty());
 
-    const auto offset{m_hashIndex.get_offset(key)};
-    if (offset)
+    std::vector<std::optional<record_t>> result;
+    for (const auto offsets{m_hashIndex.offset(key)};
+         const auto &offset : offsets)
     {
-        // TODO(lnikon): Consider memory mapping
-        std::fstream segmentStream{get_path(), std::ios::in};
-        segmentStream.seekg(offset.value());
-
-        // TODO(lnikon): Check that offset isn't greater than the stream
-        std::size_t keySz{0};
-        lsmtree::record_t::key_t::storage_type_t keyFromDisk;
-        std::size_t valueSz{0};
-        std::string valueStr;
-        lsmtree::record_t::value_t::underlying_value_type_t value;
-
-        segmentStream >> keySz;
-        segmentStream >> keyFromDisk;
-        segmentStream >> valueSz;
-
-        // TODO(lnikon): Do dynamic dispatch based on the user type of the
-        // value
-        segmentStream >> valueStr;
-        value = valueStr;
-
-        return std::make_optional(
-            record_t{key_t{std::move(keyFromDisk)}, value_t{std::move(value)}});
+        result.emplace_back(record(offset));
     }
 
-    return std::nullopt;
+    return result;
+}
+
+std::optional<record_t> regular_segment_t::record(
+    const hashindex::hashindex_t::offset_t &offset)
+{
+    // TODO(lnikon): Consider memory mapping
+    std::fstream segmentStream{get_path(), std::ios::in};
+    segmentStream.seekg(offset);
+
+    // TODO(lnikon): Check that offset isn't greater than the stream
+    std::size_t keySz{0};
+    lsmtree::record_t::key_t::storage_type_t keyFromDisk;
+    std::size_t valueSz{0};
+    std::string valueStr;
+    lsmtree::record_t::value_t::underlying_value_type_t value;
+
+    segmentStream >> keySz;
+    segmentStream >> keyFromDisk;
+    segmentStream >> valueSz;
+
+    // TODO(lnikon): Do dynamic dispatch based on the user type of the
+    // value
+    segmentStream >> valueStr;
+    value = valueStr;
+
+    return std::make_optional(
+        record_t{key_t{std::move(keyFromDisk)}, value_t{std::move(value)}});
 }
 
 void regular_segment_t::flush()
@@ -71,27 +81,45 @@ void regular_segment_t::flush()
     std::stringstream ss;
     for (const auto &kv : *m_pMemtable)
     {
+        std::size_t ss_before = ss.tellp();
         ss << kv;
-        m_hashIndex.emplace(kv.m_key);
+        m_hashIndex.emplace(kv,
+                            static_cast<std::size_t>(ss.tellp()) - ss_before);
     }
+    ss << std::endl;
 
     // TODO(vahag): Use fadvise() and O_DIRECT
     // TODO(vahag): Async IO?
-    std::fstream stream(get_path(), std::fstream::out | std::fstream::app);
+    boost::iostreams::stream<boost::iostreams::file_descriptor_sink> stream(
+        get_path());
     if (!stream.is_open())
     {
         // TODO(vahag): How to handle situation when it's impossible to
         // flush memtable into disk?
+        std::cerr << "[regular_segment_t::flush]: "
+                  << "unable to open \"" << get_path() << "\"" << std::endl;
         return;
     }
 
+    assert(!ss.str().empty());
     stream << ss.str();
     stream.flush();
-    stream.close();
+    ::fsync(stream->handle());
+
+    std::cout << "[regular_segment_t::flush]: "
+              << "Successfully flushed segment: \"" << get_path() << "\""
+              << std::endl;
 
     // Free the memory occupied by the segment on successful flush
     m_pMemtable.reset();
     m_pMemtable = nullptr;
+}
+
+std::filesystem::file_time_type regular_segment_t::last_write_time()
+{
+    return std::filesystem::exists(get_path())
+               ? std::filesystem::last_write_time(get_path())
+               : std::filesystem::file_time_type::min();
 }
 
 types::name_t regular_segment_t::get_name() const
@@ -120,9 +148,9 @@ void regular_segment_t::restore()
     m_pMemtable.reset();
     m_pMemtable = memtable::make_unique();
 
-    for (const auto &[key, _] : m_hashIndex)
+    for (const auto &[_, offset] : m_hashIndex)
     {
-        if (auto recordOpt{record(key)}; recordOpt.has_value())
+        if (auto recordOpt{record(offset)}; recordOpt.has_value())
         {
             m_pMemtable->emplace(recordOpt.value());
         }

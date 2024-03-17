@@ -13,8 +13,8 @@ target_link_libraries(
   spdlog::spdlog
   fmt::fmt
   ZLIB::ZLIB
-	DB
+  DB
   LSMTree
   MemTable
-	Config
-	HashIndex)
+  Config
+  HashIndex)

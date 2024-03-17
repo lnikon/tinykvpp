@@ -7,8 +7,6 @@
 
 #include <structures/lsmtree/segments/segment_interface.h>
 
-#include <filesystem>
-
 namespace structures::lsmtree::segments::mock_segment
 {
 
@@ -18,8 +16,11 @@ class mock_segment_t final : public interface::segment_interface_t
     explicit mock_segment_t(types::path_t path,
                             memtable::unique_ptr_t pMemtable) noexcept;
 
-    [[nodiscard]] std::optional<lsmtree::record_t> record(
+    [[nodiscard]] std::vector<std::optional<lsmtree::record_t>> record(
         const lsmtree::key_t &key) override;
+
+    [[nodiscard]] std::optional<lsmtree::record_t> record(
+        const hashindex::hashindex_t::offset_t &offset) override;
 
     types::name_t get_name() const override;
     types::path_t get_path() const override;
@@ -28,6 +29,7 @@ class mock_segment_t final : public interface::segment_interface_t
     ~mock_segment_t() noexcept override = default;
     void restore() override;
     memtable::unique_ptr_t memtable() override;
+    std::filesystem::file_time_type last_write_time() override;
 
    private:
     memtable::unique_ptr_t m_pMemtable;

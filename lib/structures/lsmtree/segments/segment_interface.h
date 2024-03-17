@@ -35,11 +35,15 @@ class segment_interface_t
     [[nodiscard]] virtual types::name_t get_name() const = 0;
     [[nodiscard]] virtual types::path_t get_path() const = 0;
 
-    [[nodiscard]] virtual std::optional<lsmtree::record_t> record(
+    [[nodiscard]] virtual std::vector<std::optional<lsmtree::record_t>> record(
         const lsmtree::key_t &key) = 0;
+    [[nodiscard]] virtual std::optional<lsmtree::record_t> record(
+        const hashindex::hashindex_t::offset_t &offset) = 0;
+
     virtual void flush() = 0;
     virtual memtable::unique_ptr_t memtable() = 0;
     virtual void restore() = 0;
+    virtual std::filesystem::file_time_type last_write_time() = 0;
 };
 
 using shared_ptr_t = std::shared_ptr<segment_interface_t>;

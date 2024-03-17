@@ -22,14 +22,18 @@ class regular_segment_t final : public segments::interface::segment_interface_t
 
     virtual ~regular_segment_t() noexcept = default;
 
-    [[nodiscard]] std::optional<lsmtree::record_t> record(
+    [[nodiscard]] std::vector<std::optional<lsmtree::record_t>> record(
         const lsmtree::key_t &key) override;
+
+    [[nodiscard]] std::optional<lsmtree::record_t> record(
+        const hashindex::hashindex_t::offset_t &offset) override;
 
     types::name_t get_name() const override;
     types::path_t get_path() const override;
     memtable::unique_ptr_t memtable() override;
     void restore() override;
     void flush() override;
+    std::filesystem::file_time_type last_write_time() override;
 
    private:
     const types::path_t m_path;
