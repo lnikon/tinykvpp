@@ -26,8 +26,9 @@ struct lsmtree_config_t
      * Determines number of segments after whicqh compaction process should
      * start.
      */
-    const uint64_t DefaultCompactionSegmentCount{16};
-    uint64_t CompactionSegmentCount{DefaultCompactionSegmentCount};
+    const uint64_t DefaultLevelZeroCompactionSegmentCount{4};
+    uint64_t LevelZeroCompactionSegmentCount{
+        DefaultLevelZeroCompactionSegmentCount};
 
     /*
      * Type of the segment that LSMTree should use.
@@ -36,6 +37,10 @@ struct lsmtree_config_t
         lsmtree_segment_type_t::regular_k};
     lsmtree_segment_type_t SegmentType{DefaultSegmentType};
 
+    /*
+     * Name of directory inside the database root dir where segments should be
+     * stored
+     */
     const std::string DefaultSegmentsDirectoryName = "segments";
     std::string SegmentsDirectoryName{DefaultSegmentsDirectoryName};
 };

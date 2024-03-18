@@ -18,7 +18,7 @@ int main(int argc, char *argv[])
     // }
 
     auto pConfig = config::make_shared();
-    pConfig->LSMTreeConfig.DiskFlushThresholdSize = 10;
+    pConfig->LSMTreeConfig.DiskFlushThresholdSize = 16;
     db::db_t db(pConfig);
     if (!db.open())
     {
@@ -37,6 +37,11 @@ int main(int argc, char *argv[])
     }
 
     if (auto recordOpt{db.get(db::lsmtree::key_t{"cccccc"})}; recordOpt)
+    {
+        std::cout << *recordOpt << std::endl;
+    }
+
+    if (auto recordOpt{db.get(db::lsmtree::key_t{"cccccc1"})}; recordOpt)
     {
         std::cout << *recordOpt << std::endl;
     }

@@ -21,8 +21,8 @@ segments::interface::shared_ptr_t level_zero_t::compact() const noexcept
     // 'level_zero_compactation_threshold'
 
     // Number of segments on which level0 should compact itself
-    const auto compactationThreshold{2};
-    if (m_pStorage->size() <= compactationThreshold)
+    if (m_pStorage->size() <=
+        m_pConfig->LSMTreeConfig.LevelZeroCompactionSegmentCount)
     {
         return nullptr;
     }
