@@ -9,30 +9,42 @@
  * TODO(lnikon): Support loading arguments from the command line.
  * TODO(lnikon): Support loading arguments from the JSON config file.
  */
-int main(int argc, char *argv[]) {
-  // TODO(lnikon): This is temp arg handling. Refactor.
-  // if (argc != 2) {
-  //   spdlog::error("Usage: tkvp <path-to-db>");
-  //   return 1;
-  // }
+int main(int argc, char *argv[])
+{
+    // TODO(lnikon): This is temp arg handling. Refactor.
+    // if (argc != 2) {
+    //   spdlog::error("Usage: tkvp <path-to-db>");
+    //   return 1;
+    // }
 
-  auto pConfig = config::make_shared();
-  pConfig->LSMTreeConfig.DiskFlushThresholdSize = 10;
-  db::db_t db(pConfig);
-  if (!db.open()) {
-    std::cerr << "Unable to open the database" << std::endl;
-  }
+    auto pConfig = config::make_shared();
+    pConfig->LSMTreeConfig.DiskFlushThresholdSize = 16;
+    db::db_t db(pConfig);
+    if (!db.open())
+    {
+        std::cerr << "Unable to open the database" << std::endl;
+        return 1;
+    }
 
-  db.put(db::lsmtree::key_t{"aaaaaa"}, db::lsmtree::value_t{"version1"});
-  db.put(db::lsmtree::key_t{"aaaaaa"}, db::lsmtree::value_t{"version2"});
-  db.put(db::lsmtree::key_t{"aaaaaa"}, db::lsmtree::value_t{"version3"});
-  db.put(db::lsmtree::key_t{"cccccc"}, db::lsmtree::value_t{"dddddd"});
+    db.put(db::lsmtree::key_t{"aaaaaa"}, db::lsmtree::value_t{"version1"});
+    db.put(db::lsmtree::key_t{"aaaaaa"}, db::lsmtree::value_t{"version2"});
+    db.put(db::lsmtree::key_t{"aaaaaa"}, db::lsmtree::value_t{"version3"});
+    db.put(db::lsmtree::key_t{"cccccc"}, db::lsmtree::value_t{"dddddd"});
 
-  auto recordOpt{db.get(db::lsmtree::key_t{"aaaaaa"})};
-  if (recordOpt) {
-    const auto record{recordOpt.value()};
-    spdlog::info("key={}", record.m_key.m_key);
-  }
+    if (auto recordOpt{db.get(db::lsmtree::key_t{"aaaaaa"})}; recordOpt)
+    {
+        std::cout << *recordOpt << std::endl;
+    }
 
-  return 0;
+    if (auto recordOpt{db.get(db::lsmtree::key_t{"cccccc"})}; recordOpt)
+    {
+        std::cout << *recordOpt << std::endl;
+    }
+
+    if (auto recordOpt{db.get(db::lsmtree::key_t{"cccccc1"})}; recordOpt)
+    {
+        std::cout << *recordOpt << std::endl;
+    }
+
+    return 0;
 }

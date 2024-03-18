@@ -1,8 +1,8 @@
 FROM debian:latest
 
 # Install necessary packages for development
-RUN apt-get update && \
-    apt-get -y install \
+RUN apt-segment update && \
+    apt-segment -y install \
                 cmake \
                 clang-16 \
                 clangd-16 \

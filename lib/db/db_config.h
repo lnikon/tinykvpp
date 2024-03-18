@@ -4,11 +4,13 @@
 
 #include <filesystem>
 
-namespace db {
+namespace db
+{
 
-struct db_config_t {
-  const std::filesystem::path DefaultDabasePath{"."};
-  std::filesystem::path DatabasePath{DefaultDabasePath};
+struct db_config_t
+{
+    const std::filesystem::path DefaultDabasePath{"."};
+    std::filesystem::path DatabasePath{DefaultDabasePath};
 };
 
-} // namespace db
+}  // namespace db
