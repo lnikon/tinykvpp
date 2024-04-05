@@ -18,11 +18,11 @@ find_package(spdlog REQUIRED)
 find_package(fmt REQUIRED)
 find_package(ZLIB REQUIRED)
 find_package(Protobuf REQUIRED)
-find_package(libsystemd REQUIRED)
+find_package(systemd REQUIRED)
 
 include_directories(lib)
 add_subdirectory(lib)
-add_subdirectory(app)
+#add_subdirectory(app)
 add_subdirectory(grpcapp)
 
 # TODO: Refactor
