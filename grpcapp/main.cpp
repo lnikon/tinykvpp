@@ -63,12 +63,6 @@ void RunServer(db::db_t &db)
 
 int main(int argc, char *argv[])
 {
-    // TODO(lnikon): This is temp arg handling. Refactor.
-    // if (argc != 2) {
-    //   spdlog::error("Usage: tkvp <path-to-db>");
-    //   return 1;
-    // }
-
     auto pConfig = config::make_shared();
     pConfig->LSMTreeConfig.DiskFlushThresholdSize = 10;
     db::db_t db(pConfig);

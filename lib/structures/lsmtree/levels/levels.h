@@ -1,9 +1,4 @@
-//
-// Created by nikon on 3/8/24.
-//
-
-#ifndef STRUCTURES_LSMTREE_LEVELS_LEVELS_T_H
-#define STRUCTURES_LSMTREE_LEVELS_LEVELS_T_H
+#pragma once
 
 #include <config/config.h>
 #include <structures/lsmtree/levels/level_non_zero.h>
@@ -33,5 +28,3 @@ class levels_t
 };
 
 }  // namespace structures::lsmtree::levels
-
-#endif  // STRUCTURES_LSMTREE_LEVELS_LEVELS_T_H

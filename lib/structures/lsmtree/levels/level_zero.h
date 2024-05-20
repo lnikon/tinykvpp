@@ -1,5 +1,4 @@
-#ifndef STRUCTURES_LSMTREE_LEVEL_ZERO_H
-#define STRUCTURES_LSMTREE_LEVEL_ZERO_H
+#pragma once
 
 #include <config/config.h>
 #include <structures/lsmtree/segments/segment_storage.h>
@@ -40,4 +39,3 @@ auto make_shared(Args... args)
 
 }  // namespace structures::lsmtree::level_zero
 
-#endif  // STRUCTURES_LSMTREE_LEVEL_ZERO_H
