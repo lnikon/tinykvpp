@@ -8,11 +8,9 @@
 #include <grpcpp/support/status.h>
 #include <spdlog/spdlog.h>
 
-#include <memory>
-
-#include "TinyKVPP.grpc.pb.h"
-#include "TinyKVPP.pb.h"
-#include "lsmtree_types.h"
+#include "schemas/TinyKVPP.grpc.pb.h"
+#include "schemas/TinyKVPP.pb.h"
+#include <structures/lsmtree/lsmtree_types.h>
 
 class TinyKVPPServiceImpl final : public TinyKVPPService::Service
 {
@@ -81,5 +79,7 @@ int main(int argc, char *argv[])
 
     RunServer(db);
 
+    int* a = nullptr;
+    *a = 4;
     return 0;
 }

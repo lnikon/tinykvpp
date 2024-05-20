@@ -1,5 +1,5 @@
 {
-  description = "A very basic flake";
+  description = "tinykvpp's flake";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable";
@@ -11,6 +11,7 @@
       pkgs = import nixpkgs {
         inherit system;
       };
+      system = "x86_64-linux";
       tinykvpp = (with pkgs; stdenv.mkDerivation {
         name = "tinykvpp";
         src = fetchgit {
