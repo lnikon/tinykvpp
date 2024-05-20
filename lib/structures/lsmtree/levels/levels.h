@@ -29,7 +29,7 @@ class levels_t
     level_zero::level_zero_t m_level_zero;
 
     // TODO: Implement support for non zero levels
-//    level_non_zero::level_non_zero_t m_level_non_zero;
+    // level_non_zero::level_non_zero_t m_level_non_zero;
 };
 
 }  // namespace structures::lsmtree::levels

@@ -7,7 +7,6 @@ set_target_properties(AppMain PROPERTIES CXX_STANDARD 23)
 target_include_directories(AppMain INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(
   AppMain
-  boost::boost
   Catch2::Catch2
   gRPC::grpc
   spdlog::spdlog

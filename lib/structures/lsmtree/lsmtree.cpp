@@ -1,8 +1,6 @@
 #include <structures/lsmtree/lsmtree.h>
 #include <structures/lsmtree/segments/segment_interface.h>
 
-#include <format>
-
 namespace structures::lsmtree
 {
 

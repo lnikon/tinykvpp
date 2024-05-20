@@ -22,6 +22,7 @@ class level_zero_t
 
     //! \brief Compact level0 into a single segment in 'ReadyToFlush' state
     //! \return Compacted segment
+    // TODO(lnikon): Maybe rename to try_compact?
     segments::interface::shared_ptr_t compact() const noexcept;
     
    private:
