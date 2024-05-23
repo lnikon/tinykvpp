@@ -19,10 +19,8 @@ segments::interface::shared_ptr_t level_zero_t::compact() const noexcept
 {
     // TODO: Use 'level_zero_compactation_strategy' and
     // 'level_zero_compactation_threshold'
-
     // Number of segments on which level0 should compact itself
-    if (m_pStorage->size() <=
-        m_pConfig->LSMTreeConfig.LevelZeroCompactionSegmentCount)
+    if (m_pStorage->size() <= m_pConfig->LSMTreeConfig.LevelZeroCompactionSegmentCount)
     {
         return nullptr;
     }
@@ -31,9 +29,7 @@ segments::interface::shared_ptr_t level_zero_t::compact() const noexcept
     auto pMemtable{memtable::make_unique()};
 
     // Restore each segment, then merge it with resulting memtable
-    for (auto begin{m_pStorage->rbegin()}, end{m_pStorage->rend()};
-         begin != end;
-         ++begin)
+    for (auto begin{m_pStorage->rbegin()}, end{m_pStorage->rend()}; begin != end; ++begin)
     {
         begin->get()->restore();
         pMemtable->merge(begin->get()->memtable());
@@ -41,27 +37,22 @@ segments::interface::shared_ptr_t level_zero_t::compact() const noexcept
 
     // Create a new segment from a compacted segment
     auto name{helpers::segment_name() + segments::types::name_t{"_compacted"}};
-    auto path{helpers::segment_path(m_pConfig->datadir_path(), name)};
-    return factories::lsmtree_segment_factory(
-        m_pConfig->LSMTreeConfig.SegmentType,
-        std::move(name),
-        std::move(path),
-        std::move(pMemtable));
+    return factories::lsmtree_segment_factory(m_pConfig->LSMTreeConfig.SegmentType,
+                                              std::move(name),
+                                              helpers::segment_path(m_pConfig->datadir_path(), name),
+                                              std::move(pMemtable));
 }
 
-segments::interface::shared_ptr_t level_zero_t::segment(
-    const lsmtree_segment_type_t type,
-    memtable_unique_ptr_t pMemtable)
+segments::interface::shared_ptr_t level_zero_t::segment(const lsmtree_segment_type_t type,
+                                                        memtable_unique_ptr_t pMemtable)
 {
     // Create a new level0 segment
     const auto name{helpers::segment_name()};
     const auto path{helpers::segment_path(m_pConfig->datadir_path(), name)};
-    auto pSegment{factories::lsmtree_segment_factory(
-        type, name, path, std::move(pMemtable))};
+    auto pSegment{factories::lsmtree_segment_factory(type, name, path, std::move(pMemtable))};
 
     // Store newly created segment into the storage
-    m_pStorage->emplace(pSegment,
-                        segments::storage::last_write_time_comparator_t{});
+    m_pStorage->emplace(pSegment, segments::storage::last_write_time_comparator_t{});
 
     // Flush newly created segment
     pSegment->flush();
@@ -78,15 +69,12 @@ segments::interface::shared_ptr_t level_zero_t::segment(
         levelZeroCompactedSegment->flush();
 
         // Go over the old segments and remove them from disk
-        for (auto begin{m_pStorage->begin()}, end{m_pStorage->end()};
-             begin != end;
-             ++begin)
+        for (auto begin{m_pStorage->begin()}, end{m_pStorage->end()}; begin != end; ++begin)
         {
             if (std::filesystem::exists(begin->get()->get_path()))
             {
                 std::cout << "[level_zero_t::segment]: "
-                          << "Removing old segment \""
-                          << begin->get()->get_path() << "\"" << std::endl;
+                          << "Removing old segment \"" << begin->get()->get_path() << "\"" << std::endl;
                 std::filesystem::remove(begin->get()->get_path());
             }
         }
@@ -95,8 +83,7 @@ segments::interface::shared_ptr_t level_zero_t::segment(
         m_pStorage->clear();
 
         // Add the new segment into the storage
-        m_pStorage->emplace(levelZeroCompactedSegment,
-                            segments::storage::last_write_time_comparator_t{});
+        m_pStorage->emplace(levelZeroCompactedSegment, segments::storage::last_write_time_comparator_t{});
 
         // Compacted segment is the new result
         return levelZeroCompactedSegment;
@@ -104,12 +91,10 @@ segments::interface::shared_ptr_t level_zero_t::segment(
 
     return pSegment;
 }
-std::optional<record_t> level_zero_t::record(const key_t& key) const noexcept
+std::optional<record_t> level_zero_t::record(const key_t &key) const noexcept
 {
     std::vector<std::optional<record_t>> result{};
-    for (auto begin{m_pStorage->cbegin()}, end{m_pStorage->cend()};
-         begin != end;
-         ++begin)
+    for (auto begin{m_pStorage->cbegin()}, end{m_pStorage->cend()}; begin != end; ++begin)
     {
         // TODO: Return latest record by timestamp
         result = begin->get()->record(key);
@@ -121,4 +106,4 @@ std::optional<record_t> level_zero_t::record(const key_t& key) const noexcept
     return std::nullopt;
 }
 
-}  // namespace structures::lsmtree::level_zero
+} // namespace structures::lsmtree::level_zero

@@ -29,16 +29,13 @@ struct last_write_time_comparator_t
 
 class segment_storage_t : public std::enable_shared_from_this<segment_storage_t>
 {
-   public:
+  public:
     using name_t = types::name_t;
     using segment_map_t = std::unordered_map<name_t, segment::shared_ptr_t>;
 
-    using segment_comp_t =
-        std::function<bool(segment::shared_ptr_t, segment::shared_ptr_t)>;
+    using segment_comp_t = std::function<bool(segment::shared_ptr_t, segment::shared_ptr_t)>;
 
-    using storage_t =
-        structures::sorted_vector::sorted_vector_t<segment::shared_ptr_t,
-                                                   segment_comp_t>;
+    using storage_t = structures::sorted_vector::sorted_vector_t<segment::shared_ptr_t, segment_comp_t>;
 
     using iterator = storage_t::iterator;
     using const_iterator = storage_t::const_iterator;
@@ -59,20 +56,19 @@ class segment_storage_t : public std::enable_shared_from_this<segment_storage_t>
     void emplace(segment::shared_ptr_t pSegment, segment_comp_t comp);
     void clear() noexcept;
 
-   private:
-    mutable std::mutex m_mutex;  // TODO: Use clang's mutex borrow checker
+  private:
+    mutable std::mutex m_mutex; // TODO(lnikon): Use clang's mutex borrow checker
     segment_map_t m_segmentsMap;
     storage_t m_segmentsVector;
 };
 
 using shared_ptr_t = std::shared_ptr<segment_storage_t>;
 
-template <typename... Args>
-auto make_shared(Args... args)
+template <typename... Args> auto make_shared(Args... args)
 {
     return std::make_shared<segment_storage_t>(std::forward<Args>(args)...);
 }
 
-}  // namespace structures::lsmtree::segments::storage
+} // namespace structures::lsmtree::segments::storage
 
-#endif  // LSM_TREE_SEGMENT_STORAGE
+#endif // LSM_TREE_SEGMENT_STORAGE

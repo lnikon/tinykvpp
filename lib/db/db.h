@@ -19,7 +19,7 @@ using namespace structures::lsmtree;
 
 class db_t
 {
-   public:
+  public:
     using segstorage_sptr_t = lsmtree::segments::storage::shared_ptr_t;
     using lsmtree_config_t = structures::lsmtree::lsmtree_config_t;
     using lsmtree_t = structures::lsmtree::lsmtree_t;
@@ -28,18 +28,16 @@ class db_t
 
     bool open();
 
-    void put(const structures::lsmtree::key_t &key,
-             const structures::lsmtree::value_t &value);
-
+    void put(const structures::lsmtree::key_t &key, const structures::lsmtree::value_t &value);
     std::optional<record_t> get(const structures::lsmtree::key_t &key) const;
 
-   private:
+  private:
     bool prepare_directory_structure();
 
-   private:
+  private:
     const config::shared_ptr_t m_config;
     segstorage_sptr_t m_pSegmentStorage;
     lsmtree_t m_lsmTree;
 };
 
-}  // namespace db
+} // namespace db

@@ -5,6 +5,7 @@ inline constexpr bool always_false_v = false;
 
 namespace structures::memtable
 {
+
 std::size_t string_size_in_bytes(const std::string &str)
 {
     return sizeof(std::string::value_type) * str.size();
@@ -214,7 +215,8 @@ std::size_t memtable_t::count() const
 void memtable_t::merge(unique_ptr_t pMemtable) noexcept
 {
     // TODO: Use timestamp to compare items
-    for (auto& record: pMemtable->m_data) {
+    for (auto &record : pMemtable->m_data)
+    {
         emplace(record);
     }
 }

@@ -5,15 +5,13 @@
 namespace structures::lsmtree::segments::storage
 {
 
-void segment_storage_t::emplace(segment::shared_ptr_t pSegment,
-                                segment_comp_t comp)
+void segment_storage_t::emplace(segment::shared_ptr_t pSegment, segment_comp_t comp)
 {
     assert(pSegment);
     assert(m_segmentsMap.size() == m_segmentsVector.size());
 
     std::lock_guard lg(m_mutex);
-    if (auto it = m_segmentsMap.find(pSegment->get_name());
-        it == m_segmentsMap.end())
+    if (auto it = m_segmentsMap.find(pSegment->get_name()); it == m_segmentsMap.end())
     {
         m_segmentsMap.emplace(pSegment->get_name(), pSegment);
         m_segmentsVector.emplace(pSegment, comp);
@@ -81,6 +79,6 @@ void segment_storage_t::clear() noexcept
     m_segmentsVector.clear();
 }
 
-}  // namespace structures::lsmtree::segments::storage
+} // namespace structures::lsmtree::segments::storage
 
 // namespace structures::lsmtree::segments::storage

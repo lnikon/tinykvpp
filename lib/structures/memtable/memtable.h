@@ -49,6 +49,7 @@ class memtable_t
             string_k
         };
 
+        // TODO(lnikon): Consider to make this move-only
         struct key_t
         {
             using storage_type_t = std::string;
