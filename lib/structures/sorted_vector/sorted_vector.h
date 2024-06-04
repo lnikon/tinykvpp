@@ -17,6 +17,7 @@ class sorted_vector_t
     using iterator = typename std::vector<Data>::iterator;
     using const_iterator = typename std::vector<Data>::const_iterator;
     using reverse_iterator = typename std::vector<Data>::reverse_iterator;
+    using value_type = typename iterator::value_type;
 
     sorted_vector_t() = default;
     sorted_vector_t(sorted_vector_t &) = default;

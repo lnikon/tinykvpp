@@ -27,18 +27,17 @@ using namespace sorted_vector;
 
 std::size_t string_size_in_bytes(const std::string &str);
 
-class memtable_t;
-using unique_ptr_t = std::unique_ptr<memtable_t>;
-
-template <typename... Args>
-auto make_unique(Args... args)
-{
-    return std::make_unique<memtable_t>(std::forward<args>...);
-}
+// class memtable_t;
+// using unique_ptr_t = std::unique_ptr<memtable_t>;
+//
+// template <typename... Args> auto make_unique(Args... args)
+// {
+//     return std::make_unique<memtable_t>(std::forward<args>...);
+// }
 
 class memtable_t
 {
-   public:
+  public:
     struct record_t
     {
         // TODO(vahag): Introduce 'buffer' type, an uninterpreted array of bytes
@@ -49,7 +48,7 @@ class memtable_t
             string_k
         };
 
-        // TODO(lnikon): Consider to make this move-only
+        // TODO(lnikon): Consider to make this move-onl
         struct key_t
         {
             using storage_type_t = std::string;
@@ -73,8 +72,7 @@ class memtable_t
 
         struct value_t
         {
-            using underlying_value_type_t =
-                std::variant<int64_t, double, std::string>;
+            using underlying_value_type_t = std::variant<int64_t, double, std::string>;
 
             explicit value_t(underlying_value_type_t value);
 
@@ -93,10 +91,13 @@ class memtable_t
 
         record_t(const record_t &other);
         record_t(const key_t &key, const value_t &value);
+        record_t &operator=(const record_t &other);
 
         bool operator<(const record_t &record) const;
         bool operator>(const record_t &record) const;
-        record_t &operator=(const record_t &other);
+        bool operator==(const record_t &record) const;
+
+        friend auto operator<=>(const record_t &, const record_t &);
 
         [[nodiscard]] std::size_t size() const;
 
@@ -107,44 +108,50 @@ class memtable_t
     };
 
     using storage_t = sorted_vector_t<record_t>;
+    using size_type = typename storage_t::size_type;
+    using index_type = typename storage_t::index_type;
+    using iterator = typename storage_t::iterator;
+    using const_iterator = typename storage_t::const_iterator;
+    using reverse_iterator = typename storage_t::reverse_iterator;
+    using value_type = typename storage_t::value_type;
 
     memtable_t() = default;
     memtable_t(const memtable_t &) = delete;
     memtable_t &operator=(const memtable_t &) = delete;
-    memtable_t(memtable_t &&) = delete;
-    memtable_t &operator=(memtable_t &&) = delete;
+    memtable_t(memtable_t &&) = default;
+    memtable_t &operator=(memtable_t &&) = default;
 
     void emplace(const record_t &record);
     std::optional<record_t> find(const record_t::key_t &key);
     [[nodiscard]] std::size_t size() const;
     [[nodiscard]] std::size_t count() const;
 
-    void merge(unique_ptr_t pMemtable) noexcept;
+    void merge(memtable_t pMemtable) noexcept;
 
-    // TODO: Implement iterators to use for dumping
-    // Consider using std::iterator
-    // https://en.cppreference.com/w/cpp/iterator/iterator
-    // Memtable is essentially a key -> value mapping, so
-    // it should provide a universal begin/end iterators
-    // which will point to pair and be available for structural destruction
     typename storage_t::iterator begin();
     typename storage_t::iterator end();
 
     void write(std::stringstream &ss);
 
-   private:
+    [[nodiscard]] std::optional<record_t::key_t> min() const noexcept;
+    [[nodiscard]] std::optional<record_t::key_t> max() const noexcept;
+
+    bool operator<(const memtable_t& other);
+
+  private:
     void update_size(const record_t &record);
 
-   private:
+  private:
     storage_t m_data;
     std::size_t m_size{0};
     std::size_t m_count{0};
 };
 
-}  // namespace structures::memtable
+static_assert(std::ranges::random_access_range<memtable_t>);
 
-template <>
-struct std::hash<structures::memtable::memtable_t::record_t::key_t>
+} // namespace structures::memtable
+
+template <> struct std::hash<structures::memtable::memtable_t::record_t::key_t>
 {
     using S = structures::memtable::memtable_t::record_t::key_t;
     std::size_t operator()(const S &s) const
@@ -153,4 +160,4 @@ struct std::hash<structures::memtable::memtable_t::record_t::key_t>
     }
 };
 
-#endif  // MEMTABLE_H
+#endif // MEMTABLE_H

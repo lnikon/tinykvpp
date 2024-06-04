@@ -13,14 +13,14 @@ namespace structures::lsmtree::segments::factories
 interface::shared_ptr_t lsmtree_segment_factory(const lsmtree_segment_type_t type,
                                                 types::name_t name,
                                                 types::path_t path,
-                                                memtable_unique_ptr_t pMemtable)
+                                                memtable::memtable_t memtable)
 {
     switch (type)
     {
     case lsmtree_segment_type_t::mock_k:
-        return mock_segment::make_shared(std::move(path), std::move(pMemtable));
+        return mock_segment::make_shared(std::move(path), std::move(memtable));
     case lsmtree_segment_type_t::regular_k:
-        return regular_segment::make_shared(std::move(path), std::move(name), std::move(pMemtable));
+        return regular_segment::make_shared(std::move(path), std::move(name), std::move(memtable));
     default:
         assert(false);
         return nullptr;

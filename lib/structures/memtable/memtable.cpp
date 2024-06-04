@@ -1,7 +1,7 @@
 #include "memtable.h"
+#include <optional>
 
-template <class>
-inline constexpr bool always_false_v = false;
+template <class> inline constexpr bool always_false_v = false;
 
 namespace structures::memtable
 {
@@ -16,8 +16,7 @@ memtable_t::record_t::key_t::key_t(std::string key)
 {
 }
 
-void memtable_t::record_t::key_t::swap(memtable_t::record_t::key_t &lhs,
-                                       memtable_t::record_t::key_t &rhs)
+void memtable_t::record_t::key_t::swap(memtable_t::record_t::key_t &lhs, memtable_t::record_t::key_t &rhs)
 {
     using std::swap;
     std::swap(lhs.m_key, rhs.m_key);
@@ -28,20 +27,17 @@ std::size_t memtable_t::record_t::key_t::size() const
     return string_size_in_bytes(m_key);
 }
 
-bool memtable_t::record_t::key_t::operator<(
-    const memtable_t::record_t::key_t &other) const
+bool memtable_t::record_t::key_t::operator<(const memtable_t::record_t::key_t &other) const
 {
     return m_key < other.m_key;
 }
 
-bool memtable_t::record_t::key_t::operator>(
-    const memtable_t::record_t::key_t &other) const
+bool memtable_t::record_t::key_t::operator>(const memtable_t::record_t::key_t &other) const
 {
     return !(*this < other);
 }
 
-bool memtable_t::record_t::key_t::operator==(
-    const memtable_t::record_t::key_t &other) const
+bool memtable_t::record_t::key_t::operator==(const memtable_t::record_t::key_t &other) const
 {
     return m_key == other.m_key;
 }
@@ -51,8 +47,7 @@ void memtable_t::record_t::key_t::write(std::stringstream &os) const
     os << m_key.size() << ' ' << m_key;
 }
 
-memtable_t::record_t::value_t::value_t(
-    memtable_t::record_t::value_t::underlying_value_type_t value)
+memtable_t::record_t::value_t::value_t(memtable_t::record_t::value_t::underlying_value_type_t value)
     : m_value(std::move(value))
 {
 }
@@ -84,14 +79,12 @@ std::size_t memtable_t::record_t::value_t::size() const
         m_value);
 }
 
-bool memtable_t::record_t::value_t::operator==(
-    const memtable_t::record_t::value_t &other) const
+bool memtable_t::record_t::value_t::operator==(const memtable_t::record_t::value_t &other) const
 {
     return m_value == other.m_value;
 }
 
-void memtable_t::record_t::value_t::swap(memtable_t::record_t::value_t &lhs,
-                                         memtable_t::record_t::value_t &rhs)
+void memtable_t::record_t::value_t::swap(memtable_t::record_t::value_t &lhs, memtable_t::record_t::value_t &rhs)
 {
     using std::swap;
     swap(lhs.m_value, rhs.m_value);
@@ -102,29 +95,20 @@ void memtable_t::record_t::value_t::write(std::stringstream &os) const
     std::visit(
         [&os, this](const underlying_value_type_t &value)
         {
-            if (value.index() ==
-                static_cast<std::size_t>(record_value_type_t::integer_k))
+            if (value.index() == static_cast<std::size_t>(record_value_type_t::integer_k))
             {
                 // spdlog::info("record_value_type_t::integer_k");
-                os << ' ' << size() << ' '
-                   << std::get<static_cast<std::size_t>(
-                          record_value_type_t::integer_k)>(value);
+                os << ' ' << size() << ' ' << std::get<static_cast<std::size_t>(record_value_type_t::integer_k)>(value);
             }
-            else if (value.index() ==
-                     static_cast<std::size_t>(record_value_type_t::double_k))
+            else if (value.index() == static_cast<std::size_t>(record_value_type_t::double_k))
             {
                 // spdlog::info("record_value_type_t::double_k");
-                os << ' ' << size() << ' '
-                   << std::get<static_cast<std::size_t>(
-                          record_value_type_t::double_k)>(value);
+                os << ' ' << size() << ' ' << std::get<static_cast<std::size_t>(record_value_type_t::double_k)>(value);
             }
-            else if (value.index() ==
-                     static_cast<std::size_t>(record_value_type_t::string_k))
+            else if (value.index() == static_cast<std::size_t>(record_value_type_t::string_k))
             {
                 // spdlog::info("record_value_type_t::string_k");
-                os << ' ' << size() << ' '
-                   << std::get<static_cast<std::size_t>(
-                          record_value_type_t::string_k)>(value);
+                os << ' ' << size() << ' ' << std::get<static_cast<std::size_t>(record_value_type_t::string_k)>(value);
             }
             else
             {
@@ -133,8 +117,7 @@ void memtable_t::record_t::value_t::write(std::stringstream &os) const
         m_value);
 }
 
-memtable_t::record_t::record_t(const memtable_t::record_t::key_t &key,
-                               const memtable_t::record_t::value_t &value)
+memtable_t::record_t::record_t(const memtable_t::record_t::key_t &key, const memtable_t::record_t::value_t &value)
     : m_key(key),
       m_value(value)
 {
@@ -146,8 +129,7 @@ memtable_t::record_t::record_t(const memtable_t::record_t &other)
 {
 }
 
-memtable_t::record_t &memtable_t::record_t::operator=(
-    const memtable_t::record_t &other)
+memtable_t::record_t &memtable_t::record_t::operator=(const memtable_t::record_t &other)
 {
     if (this == &other)
     {
@@ -169,6 +151,11 @@ bool memtable_t::record_t::operator<(const memtable_t::record_t &record) const
 bool memtable_t::record_t::operator>(const memtable_t::record_t &record) const
 {
     return !(m_key < record.m_key);
+}
+
+bool memtable_t::record_t::operator==(const record_t &record) const
+{
+    return m_key == record.m_key && m_value == record.m_value;
 }
 
 std::size_t memtable_t::record_t::size() const
@@ -193,8 +180,7 @@ void memtable_t::emplace(const memtable_t::record_t &record)
     m_count++;
 }
 
-std::optional<memtable_t::record_t> memtable_t::find(
-    const memtable_t::record_t::key_t &key)
+std::optional<memtable_t::record_t> memtable_t::find(const memtable_t::record_t::key_t &key)
 {
     record_t record{key, record_t::value_t{""}};
 
@@ -212,10 +198,10 @@ std::size_t memtable_t::count() const
     return m_count;
 }
 
-void memtable_t::merge(unique_ptr_t pMemtable) noexcept
+void memtable_t::merge(memtable_t pMemtable) noexcept
 {
     // TODO: Use timestamp to compare items
-    for (auto &record : pMemtable->m_data)
+    for (auto &record : pMemtable.m_data)
     {
         emplace(record);
     }
@@ -248,9 +234,26 @@ void memtable_t::write(std::stringstream &ss)
     }
 }
 
+std::optional<memtable_t::record_t::key_t> memtable_t::min() const noexcept
+{
+    static_assert(std::is_same_v<sorted_vector_t<record_t>, decltype(m_data)>);
+    return m_data.size() > 0 ? std::make_optional(m_data.cbegin()->m_key) : std::nullopt;
+}
+
+std::optional<memtable_t::record_t::key_t> memtable_t::max() const noexcept
+{
+    static_assert(std::is_same_v<sorted_vector_t<record_t>, decltype(m_data)>);
+    return m_data.size() > 0 ? std::make_optional(m_data.cend()->m_key) : std::nullopt;
+}
+
+bool memtable_t::operator<(const memtable_t &other)
+{
+    return max() < other.min();
+}
+
 void memtable_t::update_size(const memtable_t::record_t &record)
 {
     m_size += record.size();
 }
 
-}  // namespace structures::memtable
+} // namespace structures::memtable

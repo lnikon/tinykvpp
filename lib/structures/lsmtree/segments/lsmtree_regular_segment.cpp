@@ -15,27 +15,22 @@
 namespace structures::lsmtree::segments::regular_segment
 {
 
-regular_segment_t::regular_segment_t(std::filesystem::path path, types::name_t name, memtable::unique_ptr_t pMemtable)
+regular_segment_t::regular_segment_t(std::filesystem::path path, types::name_t name, memtable::memtable_t memtable)
     : segment_interface_t{},
       m_path{std::move(path)},
       m_name{std::move(name)},
-      m_pMemtable{std::move(pMemtable)}
+      m_memtable{std::make_optional<memtable_t>(std::move(memtable))}
 {
 }
 
 [[nodiscard]] std::vector<std::optional<record_t>> regular_segment_t::record(const lsmtree::key_t &key)
 {
-    // TODO(lnikon): Check `prepopulate_segment_index`. If set, skip building
-    // the index.
-
     assert(!m_hashIndex.empty());
-
     std::vector<std::optional<record_t>> result;
     for (const auto offsets{m_hashIndex.offset(key)}; const auto &offset : offsets)
     {
         result.emplace_back(record(offset));
     }
-
     return result;
 }
 
@@ -66,14 +61,9 @@ std::optional<record_t> regular_segment_t::record(const hashindex::hashindex_t::
 
 void regular_segment_t::flush()
 {
-    // If m_pMemtable is null, then segment has been flushed
-    if (!m_pMemtable)
-    {
-        return;
-    }
-
+    // TODO(lnikon): If m_pMemtable is null, then segment has been flushed
     std::stringstream ss;
-    for (const auto &kv : *m_pMemtable)
+    for (const auto &kv : m_memtable.value())
     {
         std::size_t ss_before = ss.tellp();
         ss << kv;
@@ -102,14 +92,24 @@ void regular_segment_t::flush()
               << "Successfully flushed segment: \"" << get_path() << "\"" << std::endl;
 
     // Free the memory occupied by the segment on successful flush
-    m_pMemtable.reset();
-    m_pMemtable = nullptr;
+    m_memtable = memtable_t{};
 }
 
 std::filesystem::file_time_type regular_segment_t::last_write_time()
 {
     return std::filesystem::exists(get_path()) ? std::filesystem::last_write_time(get_path())
                                                : std::filesystem::file_time_type::min();
+}
+
+std::optional<record_t::key_t> regular_segment_t::min() const noexcept
+{
+    return m_memtable->min();
+}
+
+std::optional<record_t::key_t> regular_segment_t::max() const noexcept
+{
+
+    return m_memtable->max();
 }
 
 types::name_t regular_segment_t::get_name() const
@@ -122,27 +122,21 @@ types::path_t regular_segment_t::get_path() const
     return m_path;
 }
 
-memtable::unique_ptr_t regular_segment_t::memtable()
+std::optional<memtable::memtable_t> regular_segment_t::memtable()
 {
-    return std::move(m_pMemtable);
+    return std::move(m_memtable);
 }
 
 void regular_segment_t::restore()
 {
     // TODO: Check that the segment is in appropriate state to be restored
-    if (m_pMemtable)
-    {
-        return;
-    }
 
-    m_pMemtable.reset();
-    m_pMemtable = memtable::make_unique();
-
+    m_memtable = memtable::memtable_t{};
     for (const auto &[_, offset] : m_hashIndex)
     {
         if (auto recordOpt{record(offset)}; recordOpt.has_value())
         {
-            m_pMemtable->emplace(recordOpt.value());
+            m_memtable->emplace(recordOpt.value());
         }
     }
 }

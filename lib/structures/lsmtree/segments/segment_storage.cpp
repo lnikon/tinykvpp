@@ -63,12 +63,12 @@ segment_storage_t::const_iterator segment_storage_t::cend() const noexcept
     return m_segmentsVector.cend();
 }
 
-segment_storage_t::reverse_iteartor segment_storage_t::rbegin() noexcept
+segment_storage_t::reverse_iterator segment_storage_t::rbegin() noexcept
 {
     return m_segmentsVector.rbegin();
 }
 
-segment_storage_t::reverse_iteartor segment_storage_t::rend() noexcept
+segment_storage_t::reverse_iterator segment_storage_t::rend() noexcept
 {
     return m_segmentsVector.rend();
 }

@@ -6,11 +6,8 @@
 namespace po = boost::program_options;
 
 po::options_description constructOptionsDescription();
-po::variables_map parseCommandLine(po::options_description descriptions,
-                                   int argc,
-                                   char **argv);
-structures::lsmtree::lsmtree_config_t constructLSMTreeConfig(
-    po::variables_map vm);
+po::variables_map parseCommandLine(po::options_description descriptions, int argc, char **argv);
+structures::lsmtree::lsmtree_config_t constructLSMTreeConfig(po::variables_map vm);
 
 void sayHello()
 {
@@ -44,16 +41,12 @@ po::options_description constructOptionsDescription()
 {
     po::options_description descriptions;
     descriptions.add_options()("help", "show help message")(
-        "diskFlushThresholdSize",
-        po::value<uint64_t>(),
-        "specify memtable size to write into sstable");
+        "diskFlushThresholdSize", po::value<uint64_t>(), "specify memtable size to write into sstable");
 
     return descriptions;
 }
 
-po::variables_map parseCommandLine(po::options_description descriptions,
-                                   int argc,
-                                   char **argv)
+po::variables_map parseCommandLine(po::options_description descriptions, int argc, char **argv)
 {
     po::variables_map vm;
     po::store(po::parse_command_line(argc, argv, descriptions), vm);
@@ -62,14 +55,12 @@ po::variables_map parseCommandLine(po::options_description descriptions,
     return vm;
 }
 
-structures::lsmtree::lsmtree_config_t constructLSMTreeConfig(
-    po::variables_map vm)
+structures::lsmtree::lsmtree_config_t constructLSMTreeConfig(po::variables_map vm)
 {
     structures::lsmtree::lsmtree_config_t lsmTreeConfig;
     if (vm.count("diskFlushThresholdSize"))
     {
-        lsmTreeConfig.DiskFlushThresholdSize =
-            vm["diskFlushThresholdSize"].as<uint64_t>();
+        lsmTreeConfig.DiskFlushThresholdSize = vm["diskFlushThresholdSize"].as<uint64_t>();
     }
 
     return lsmTreeConfig;

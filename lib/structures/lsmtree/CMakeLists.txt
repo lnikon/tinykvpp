@@ -12,8 +12,7 @@ add_library(
         "segments/helpers.cpp"
         "segments/types.h"
         "levels/levels.cpp"
-        "levels/level_zero.cpp"
-        "levels/level_non_zero.cpp"
+        "levels/level.cpp"
         "compactation/level_zero_compactation.cpp")
 
 set_target_properties(LSMTree PROPERTIES CXX_STANDARD 23)

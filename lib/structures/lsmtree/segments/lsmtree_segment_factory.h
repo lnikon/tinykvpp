@@ -18,7 +18,7 @@ interface::shared_ptr_t lsmtree_segment_factory(
     const lsmtree_segment_type_t type,
     types::name_t name,
     types::path_t path,
-    memtable_unique_ptr_t pMemtable);
+    memtable::memtable_t memtable);
 }  // namespace structures::lsmtree::segments::factories
 
 #endif  // ZKV_LSMTREESEGMENTFACTORY_H

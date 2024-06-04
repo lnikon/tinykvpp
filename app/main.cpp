@@ -30,6 +30,14 @@ int main(int argc, char *argv[])
     db.put(db::lsmtree::key_t{"aaaaaa"}, db::lsmtree::value_t{"version2"});
     db.put(db::lsmtree::key_t{"aaaaaa"}, db::lsmtree::value_t{"version3"});
     db.put(db::lsmtree::key_t{"cccccc"}, db::lsmtree::value_t{"dddddd"});
+    db.put(db::lsmtree::key_t{"aaaaaa"}, db::lsmtree::value_t{"version1"});
+    db.put(db::lsmtree::key_t{"aaaaaa"}, db::lsmtree::value_t{"version2"});
+    db.put(db::lsmtree::key_t{"aaaaaa"}, db::lsmtree::value_t{"version3"});
+    db.put(db::lsmtree::key_t{"cccccc"}, db::lsmtree::value_t{"dddddd"});
+    db.put(db::lsmtree::key_t{"aaaaaa"}, db::lsmtree::value_t{"version1"});
+    db.put(db::lsmtree::key_t{"aaaaaa"}, db::lsmtree::value_t{"version2"});
+    db.put(db::lsmtree::key_t{"aaaaaa"}, db::lsmtree::value_t{"version3"});
+    db.put(db::lsmtree::key_t{"cccccc"}, db::lsmtree::value_t{"dddddd"});
 
     if (auto recordOpt{db.get(db::lsmtree::key_t{"aaaaaa"})}; recordOpt)
     {
