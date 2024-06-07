@@ -41,6 +41,13 @@ class levels_t
      */
     [[maybe_unused]] level::shared_ptr_t level() noexcept;
 
+   /**
+    * @brief 
+    *
+    * @param idx 
+    */
+   [[maybe_unused]] level::shared_ptr_t level(const std::size_t idx) noexcept;
+
   private:
     const config::shared_ptr_t m_pConfig;
     levels_storage_t m_levels;

@@ -69,6 +69,10 @@ segments::interface::shared_ptr_t levels_t::segment(const structures::lsmtree::l
                 std::cout << "# of levels: " << m_levels.size() << std::endl;
                 std::cout << "...done" << std::endl;
             }
+            else
+            {
+                nextLevel = level(idx + 1);
+            }
 
             // Remove old segments from memory and disk
             std::cout << "purging current level..." << std::endl;
@@ -96,6 +100,17 @@ segments::interface::shared_ptr_t levels_t::segment(const structures::lsmtree::l
 level::shared_ptr_t levels_t::level() noexcept
 {
     return m_levels.emplace_back(level::make_shared(m_pConfig));
+}
+
+/**
+ * @brief
+ *
+ * @param idx
+ */
+[[maybe_unused]] level::shared_ptr_t levels_t::level(const std::size_t idx) noexcept
+{
+    assert(idx < m_levels.size());
+    return m_levels[idx];
 }
 
 std::optional<record_t> levels_t::record(const key_t &key) const noexcept

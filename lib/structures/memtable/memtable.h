@@ -15,6 +15,7 @@
 #include <string>
 #include <utility>
 #include <variant>
+#include <chrono>
 
 namespace structures::memtable
 {
@@ -40,6 +41,10 @@ class memtable_t
   public:
     struct record_t
     {
+        // Used to differentiate between keys with the same timestamp
+        using clock_t = std::chrono::high_resolution_clock;
+        using timestamp_t = std::chrono::time_point<clock_t>;
+
         // TODO(vahag): Introduce 'buffer' type, an uninterpreted array of bytes
         enum class record_value_type_t
         {
@@ -105,6 +110,7 @@ class memtable_t
 
         key_t m_key;
         value_t m_value;
+        timestamp_t m_timestamp{clock_t::now()};
     };
 
     using storage_t = sorted_vector_t<record_t>;
@@ -136,7 +142,7 @@ class memtable_t
     [[nodiscard]] std::optional<record_t::key_t> min() const noexcept;
     [[nodiscard]] std::optional<record_t::key_t> max() const noexcept;
 
-    bool operator<(const memtable_t& other);
+    bool operator<(const memtable_t &other);
 
   private:
     void update_size(const record_t &record);

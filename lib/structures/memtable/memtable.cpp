@@ -145,7 +145,7 @@ memtable_t::record_t &memtable_t::record_t::operator=(const memtable_t::record_t
 
 bool memtable_t::record_t::operator<(const memtable_t::record_t &record) const
 {
-    return m_key < record.m_key;
+    return m_key < record.m_key && m_timestamp < record.m_timestamp;
 }
 
 bool memtable_t::record_t::operator>(const memtable_t::record_t &record) const
@@ -155,7 +155,7 @@ bool memtable_t::record_t::operator>(const memtable_t::record_t &record) const
 
 bool memtable_t::record_t::operator==(const record_t &record) const
 {
-    return m_key == record.m_key && m_value == record.m_value;
+    return m_key == record.m_key;
 }
 
 std::size_t memtable_t::record_t::size() const
