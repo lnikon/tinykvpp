@@ -1,27 +1,26 @@
-## tinykvpp
+# tinykvpp
 
-## Dependencies
-Make sure that you've installed:
+## Build
+tinykvpp uses Conan2 as it's package manager. CMake is the preferred tool for the project generation.
 
-* Conan >= 2.0.7
+### Dependencies
+Currently, tinykvpp depends on following C++ libraries:
+* catch2/3.5.3
+* spdlog/1.13.0
+* fmt/10.2.1
 
-* CMake >= 3.23
-
-## Content
-The following is included:
-
-* conanfile.txt - dependencies for package manager
-
-* CMakeLists.txt - minimal CMake config which creates static libs, tests, drivers, and links against dependencies
-
-## Build 
-First, install and build missing dependencies using Conan:
+### Build 
+Innstall and build missing dependencies using Conan2. Following command will use a `default` profile. If you are considering to develop and debug the project, consider using `debug` profile. Note that Conan2 doesn't ship with `debug` profile by default, so you may need to write your own. 
 
 `conan install . --output-folder=build --build=missing --profile=default`
 
 Then generate a build config for conan-release preset.
 
 `cmake --preset conan-release`
+
+and then build the project:
+
+`cmake --build ./build`
 
 ## Resources
 
