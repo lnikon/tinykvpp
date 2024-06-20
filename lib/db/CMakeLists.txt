@@ -13,7 +13,6 @@ target_link_libraries(
         Catch2::Catch2WithMain
         spdlog::spdlog
         fmt::fmt
-        ZLIB::ZLIB
         LSMTree
         MemTable
         DB

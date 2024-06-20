@@ -17,7 +17,7 @@ add_library(
 
 set_target_properties(LSMTree PROPERTIES CXX_STANDARD 23)
 target_include_directories(LSMTree INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(LSMTree PUBLIC Boost::iostreams)
+target_link_libraries(LSMTree PRIVATE spdlog::spdlog)
 
 add_executable(LSMTreeTest "lsmtree_test.cpp")
 set_target_properties(LSMTreeTest PROPERTIES CXX_STANDARD 23)
@@ -25,10 +25,8 @@ target_link_libraries(
         LSMTreeTest
         PRIVATE
         Catch2::Catch2WithMain
-        gRPC::grpc
         spdlog::spdlog
         fmt::fmt
-        ZLIB::ZLIB
         LSMTree
         MemTable
         Config

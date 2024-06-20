@@ -14,7 +14,7 @@ lsmtree_t::lsmtree_t(const config::shared_ptr_t pConfig) noexcept
 
 void lsmtree_t::put(const structures::lsmtree::key_t &key, const structures::lsmtree::value_t &value) noexcept
 {
-    assert(m_pTable);
+    assert(m_table);
     assert(m_pConfig);
 
     // Add record into memtable
@@ -32,7 +32,7 @@ void lsmtree_t::put(const structures::lsmtree::key_t &key, const structures::lsm
 
 std::optional<record_t> lsmtree_t::get(const key_t &key) noexcept
 {
-    assert(m_pTable);
+    assert(m_table);
 
     // TODO(lnikon): Skip searching if record doesn't exist
     //    const auto recordExists{m_bloom.exists(key)};

@@ -41,17 +41,20 @@ int main(int argc, char *argv[])
 
     if (auto recordOpt{db.get(db::lsmtree::key_t{"aaaaaa"})}; recordOpt)
     {
-        std::cout << *recordOpt << std::endl;
+        recordOpt->write(std::cout);
+        std::cout << std::endl;
     }
 
     if (auto recordOpt{db.get(db::lsmtree::key_t{"cccccc"})}; recordOpt)
     {
-        std::cout << *recordOpt << std::endl;
+        recordOpt->write(std::cout);
+        std::cout << std::endl;
     }
 
     if (auto recordOpt{db.get(db::lsmtree::key_t{"cccccc1"})}; recordOpt)
     {
-        std::cout << *recordOpt << std::endl;
+        recordOpt->write(std::cout);
+        std::cout << std::endl;
     }
 
     return 0;

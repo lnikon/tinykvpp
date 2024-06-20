@@ -29,10 +29,10 @@ std::optional<record_t> mock_segment_t::record(const hashindex::hashindex_t::off
 void mock_segment_t::flush()
 {
     assert(m_pMemtable);
+    std::stringstream ss;
     for (const auto &kv : *m_pMemtable)
     {
-        std::stringstream ss;
-        ss << kv;
+        // kv.write(ss);
     }
 }
 

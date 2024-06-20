@@ -9,9 +9,6 @@
 #include <fstream>
 #include <optional>
 
-#include <boost/iostreams/stream.hpp>
-#include <boost/iostreams/device/file_descriptor.hpp>
-
 namespace structures::lsmtree::segments::regular_segment
 {
 
@@ -36,48 +33,38 @@ regular_segment_t::regular_segment_t(std::filesystem::path path, types::name_t n
 
 std::optional<record_t> regular_segment_t::record(const hashindex::hashindex_t::offset_t &offset)
 {
-    // TODO(lnikon): Consider memory mapping
-    std::fstream segmentStream{get_path(), std::ios::in};
-    segmentStream.seekg(offset);
+    std::fstream ss{get_path(), std::ios::in};
+    ss.seekg(offset);
 
-    // TODO(lnikon): Check that offset isn't greater than the stream
-    std::size_t keySz{0};
-    lsmtree::record_t::key_t::storage_type_t keyFromDisk;
-    std::size_t valueSz{0};
-    std::string valueStr;
-    lsmtree::record_t::value_t::underlying_value_type_t value;
+    memtable_t::record_t record;
+    record.read(ss);
 
-    segmentStream >> keySz;
-    segmentStream >> keyFromDisk;
-    segmentStream >> valueSz;
-
-    // TODO(lnikon): Do dynamic dispatch based on the user type of the
-    // value
-    segmentStream >> valueStr;
-    value = valueStr;
-
-    return std::make_optional(record_t{key_t{std::move(keyFromDisk)}, value_t{std::move(value)}});
+    return std::make_optional(std::move(record));
 }
 
 void regular_segment_t::flush()
 {
-    // TODO(lnikon): If m_pMemtable is null, then segment has been flushed
+    // Skip execution if for some reason the memtable is emptu
+    if (m_memtable->empty())
+    {
+        std::cerr << "can not flush empty memtable" << std::endl;
+        return;
+    }
+
+    // Serialize into stringstream and build hash index
     std::stringstream ss;
     for (const auto &kv : m_memtable.value())
     {
         std::size_t ss_before = ss.tellp();
-        ss << kv;
+        kv.write(ss);
         m_hashIndex.emplace(kv, static_cast<std::size_t>(ss.tellp()) - ss_before);
     }
     ss << std::endl;
 
-    // TODO(vahag): Use fadvise() and O_DIRECT
-    // TODO(vahag): Async IO?
-    boost::iostreams::stream<boost::iostreams::file_descriptor_sink> stream(get_path());
+    // Flush the segment onto the disk
+    std::fstream stream(get_path(), std::fstream::trunc | std::fstream::out);
     if (!stream.is_open())
     {
-        // TODO(vahag): How to handle situation when it's impossible to
-        // flush memtable into disk?
         std::cerr << "[regular_segment_t::flush]: "
                   << "unable to open \"" << get_path() << "\"" << std::endl;
         return;
@@ -86,13 +73,12 @@ void regular_segment_t::flush()
     assert(!ss.str().empty());
     stream << ss.str();
     stream.flush();
-    ::fsync(stream->handle());
 
     std::cout << "[regular_segment_t::flush]: "
               << "Successfully flushed segment: \"" << get_path() << "\"" << std::endl;
 
     // Free the memory occupied by the segment on successful flush
-    m_memtable = memtable_t{};
+    // m_memtable = memtable_t{};
 }
 
 std::filesystem::file_time_type regular_segment_t::last_write_time()
@@ -129,8 +115,6 @@ std::optional<memtable::memtable_t> regular_segment_t::memtable()
 
 void regular_segment_t::restore()
 {
-    // TODO: Check that the segment is in appropriate state to be restored
-
     m_memtable = memtable::memtable_t{};
     for (const auto &[_, offset] : m_hashIndex)
     {

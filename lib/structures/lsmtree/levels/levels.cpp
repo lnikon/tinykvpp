@@ -4,11 +4,42 @@
 
 #include "levels.h"
 
-#include <iterator>
+#include <spdlog/spdlog.h>
 
 namespace structures::lsmtree::levels
 {
 
+// ====================
+// compaction_trigger_t
+// ====================
+struct compaction_trigger_t
+{
+    /**
+     * @brief
+     *
+     * @param pLevel
+     */
+    compaction_trigger_t(level::shared_ptr_t pLevel);
+
+    /**
+     * @brief
+     *
+     * @return
+     */
+    virtual bool trigger() const noexcept = 0;
+
+  private:
+    level::shared_ptr_t m_pLevel{nullptr};
+};
+
+compaction_trigger_t::compaction_trigger_t(level::shared_ptr_t pLevel)
+    : m_pLevel{pLevel}
+{
+}
+
+// ========
+// levels_t
+// ========
 levels_t::levels_t(const config::shared_ptr_t pConfig) noexcept
     : m_pConfig{pConfig}
 {
@@ -17,8 +48,6 @@ levels_t::levels_t(const config::shared_ptr_t pConfig) noexcept
 segments::interface::shared_ptr_t levels_t::segment(const structures::lsmtree::lsmtree_segment_type_t type,
                                                     memtable::memtable_t memtable)
 {
-    assert(pMemtable);
-
     // Create level zero if it doesn't exist
     if (m_levels.empty())
     {
@@ -31,53 +60,49 @@ segments::interface::shared_ptr_t levels_t::segment(const structures::lsmtree::l
     assert(pSegment);
 
     segments::interface::shared_ptr_t compactedCurrentLevelSegment{nullptr};
-    std::cout << "# of levels: " << m_levels.size() << std::endl;
-    for (std::size_t idx{0}; idx < m_levels.size(); ++idx)
+    for (std::size_t idx{0}; idx < m_levels.size(); idx++)
     {
         auto currentLevel{m_levels[idx]};
         assert(currentLevel);
 
         // Try to compact the @currentLevel
-        std::cout << "trying to compact current level..." << std::endl;
         compactedCurrentLevelSegment = currentLevel->compact();
-        std::cout << "...done" << std::endl;
 
         // If 0th level is not ready for the compactation, then skip the other levels
-        // TODO(lnikon): Add level_idx property to level
-        if (!compactedCurrentLevelSegment && idx == 0)
+        if (!compactedCurrentLevelSegment)
         {
-            std::cout << "skipping compactation of levels >= 1" << std::endl;
-            break;
+            if (currentLevel->index() == 0)
+            {
+                std::cout << "skipping compactation of levels >= 1" << std::endl;
+                break;
+            }
+
+            std::cout << "skipping compactation of level = " << currentLevel->index() << std::endl;
+            continue;
         }
 
-        assert(compactedSegment);
+        assert(compactedCurrentLevelSegment);
 
         // If current level is compacted, we can merge it with the nextLevel
         if (compactedCurrentLevelSegment)
         {
             // If compactation succeeded, then flush the compacted segment into disk
-            std::cout << "compacted level flushed" << std::endl;
             compactedCurrentLevelSegment->flush();
 
             // Create next level if it doesn't exist
             level::shared_ptr_t nextLevel{nullptr};
-            if (idx + 1 == m_levels.size())
+            if (currentLevel->index() + 1 == m_levels.size())
             {
-                std::cout << "dynamically creating level..." << std::endl;
                 nextLevel = level();
                 assert(nextLevel);
-                std::cout << "# of levels: " << m_levels.size() << std::endl;
-                std::cout << "...done" << std::endl;
             }
             else
             {
-                nextLevel = level(idx + 1);
+                nextLevel = level(currentLevel->index() + 1);
             }
 
             // Remove old segments from memory and disk
-            std::cout << "purging current level..." << std::endl;
             currentLevel->purge();
-            std::cout << "...done" << std::endl;
 
             // Add the new segment into the storage
             // Is it necessary to temporaryly store the segment on its level despite we're in the process of the
@@ -85,13 +110,9 @@ segments::interface::shared_ptr_t levels_t::segment(const structures::lsmtree::l
             currentLevel->emplace(compactedCurrentLevelSegment);
 
             // Merge compacted @currentLevel into the @nextLevel
-            std::cout << "merging current level with previous one..." << std::endl;
             nextLevel->merge(compactedCurrentLevelSegment);
-            std::cout << "...done" << std::endl;
         }
     }
-
-    std::cout << "finished compactations" << std::endl;
 
     // If compactation happened, then return the resulting segment
     return compactedCurrentLevelSegment ? compactedCurrentLevelSegment : pSegment;
@@ -99,7 +120,7 @@ segments::interface::shared_ptr_t levels_t::segment(const structures::lsmtree::l
 
 level::shared_ptr_t levels_t::level() noexcept
 {
-    return m_levels.emplace_back(level::make_shared(m_pConfig));
+    return m_levels.emplace_back(level::make_shared(m_levels.size(), m_pConfig));
 }
 
 /**
@@ -120,9 +141,10 @@ std::optional<record_t> levels_t::record(const key_t &key) const noexcept
     {
         assert(level);
         result = level->record(key);
-        if (!result)
+        if (result)
         {
-            continue;
+            spdlog::info("Found key {} at level {}", key.m_key, level->index());
+            break;
         }
     }
     return result;

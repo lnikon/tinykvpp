@@ -9,12 +9,14 @@ namespace structures::lsmtree::level
 class level_t
 {
   public:
+    using level_index_type_t = std::size_t;
+
     /**
      * @brief
      *
      * @param pConfig
      */
-    explicit level_t(const config::shared_ptr_t pConfig) noexcept;
+    explicit level_t(const level_index_type_t levelIndex, const config::shared_ptr_t pConfig) noexcept;
 
     /**
      * @brief
@@ -24,10 +26,13 @@ class level_t
     void emplace(lsmtree::segments::interface::shared_ptr_t pSegment) noexcept;
 
     /**
-     * @brief
+     * @brief Create an immutable segment of a given type for the @pMemtable. 
+     *        The newly created segments is emplaced into the underlying storage
+     *        of the level, and fluhed onto the disk.
      *
      * @param type
      * @param pMemtable
+     * @return owning pointer to the newly created segment
      */
     [[maybe_unused]] segments::interface::shared_ptr_t segment(const lsmtree_segment_type_t type,
                                                                memtable::memtable_t pMemtable);
@@ -58,12 +63,20 @@ class level_t
      */
     void purge() const noexcept;
 
+    /**
+     * @brief Return index of the level.
+     *
+     * @return An unsigned integer
+     */
+    level_index_type_t index() const noexcept;
+
   private:
     void purge(segments::storage::segment_storage_t& m_pStorage) const noexcept;
     void purge(segments::interface::shared_ptr_t pSegment) const noexcept;
 
   private:
     const config::shared_ptr_t m_pConfig;
+    const level_index_type_t m_levelIndex;
     segments::storage::shared_ptr_t m_pStorage;
 };
 

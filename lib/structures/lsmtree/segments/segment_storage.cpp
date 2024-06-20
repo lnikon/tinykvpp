@@ -1,3 +1,4 @@
+#include <spdlog/spdlog.h>
 #include <structures/lsmtree/segments/segment_storage.h>
 
 #include <cassert>
@@ -79,6 +80,19 @@ void segment_storage_t::clear() noexcept
     m_segmentsVector.clear();
 }
 
+void segment_storage_t::remove(segment::shared_ptr_t pSegment)
+{
+    const auto oldSize = m_segmentsVector.size();
+    m_segmentsVector.erase(std::remove(std::begin(m_segmentsVector), std::end(m_segmentsVector), pSegment),
+                           std::end(m_segmentsVector));
+    m_segmentsMap.erase(pSegment->get_name());
+    const auto newSize = m_segmentsVector.size();
+    spdlog::info("({}): Removed {}, old size {}, new size {}",
+                 "segment_storage_t::remove",
+                 pSegment->get_name(),
+                 oldSize,
+                 newSize);
+}
 } // namespace structures::lsmtree::segments::storage
 
 // namespace structures::lsmtree::segments::storage

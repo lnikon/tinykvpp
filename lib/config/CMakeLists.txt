@@ -8,5 +8,5 @@ target_include_directories(Config INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 
 # add_executable(ConfigTest "db_test.cpp") set_target_properties(ConfigTest
 # PROPERTIES CXX_STANDARD 23) target_link_libraries( ConfigTest boost::boost
-# Catch2::Catch2 gRPC::grpc spdlog::spdlog fmt::fmt ZLIB::ZLIB LSMTree MemTable
+# Catch2::Catch2 spdlog::spdlog fmt::fmt LSMTree MemTable
 # Config)

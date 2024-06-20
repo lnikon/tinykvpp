@@ -35,9 +35,10 @@ class levels_t
     [[maybe_unused]] segments::interface::shared_ptr_t segment(const lsmtree_segment_type_t type,
                                                                memtable::memtable_t memtable);
     /**
-     * @brief
+     * @brief Appends an additional level to the levels storage.
+     *        If the table has #L levels, this new level will act as an #L+1th level.
      *
-     * @return
+     * @return owning pointer to the newly created level
      */
     [[maybe_unused]] level::shared_ptr_t level() noexcept;
 
@@ -51,6 +52,7 @@ class levels_t
   private:
     const config::shared_ptr_t m_pConfig;
     levels_storage_t m_levels;
+
 };
 
 } // namespace structures::lsmtree::levels

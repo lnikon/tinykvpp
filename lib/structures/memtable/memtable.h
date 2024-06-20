@@ -9,42 +9,24 @@
 
 #include <boost/date_time.hpp>
 
-#include <mutex>
 #include <optional>
-#include <sstream>
 #include <string>
-#include <utility>
+#include <sys/types.h>
 #include <variant>
 #include <chrono>
 
 namespace structures::memtable
 {
-using namespace sorted_vector;
-// TODO: Maybe instead of supporting any K/V type, we can support fixed set of
-// types?
-// TODO: Use `concepts` to describe interface of template parameters.
-// TODO: MemTable should be safe for concurrent access and *scalable*. Consider
-// to use SkipList! template <template<typename> class StorageType>
+
+template <class> inline constexpr bool always_false_v = false;
 
 std::size_t string_size_in_bytes(const std::string &str);
-
-// class memtable_t;
-// using unique_ptr_t = std::unique_ptr<memtable_t>;
-//
-// template <typename... Args> auto make_unique(Args... args)
-// {
-//     return std::make_unique<memtable_t>(std::forward<args>...);
-// }
 
 class memtable_t
 {
   public:
     struct record_t
     {
-        // Used to differentiate between keys with the same timestamp
-        using clock_t = std::chrono::high_resolution_clock;
-        using timestamp_t = std::chrono::time_point<clock_t>;
-
         // TODO(vahag): Introduce 'buffer' type, an uninterpreted array of bytes
         enum class record_value_type_t
         {
@@ -53,13 +35,13 @@ class memtable_t
             string_k
         };
 
-        // TODO(lnikon): Consider to make this move-onl
         struct key_t
         {
             using storage_type_t = std::string;
 
             explicit key_t(std::string key);
 
+            key_t() = default;
             key_t(const key_t &other) = default;
             key_t &operator=(const key_t &other) = default;
 
@@ -67,7 +49,9 @@ class memtable_t
             bool operator>(const key_t &other) const;
             bool operator==(const key_t &other) const;
 
-            void write(std::stringstream &os) const;
+            template <typename stream_gt> void write(stream_gt &os) const;
+            template <typename stream_gt> void read(stream_gt &os);
+
             [[nodiscard]] std::size_t size() const;
 
             static void swap(key_t &lhs, key_t &rhs);
@@ -81,12 +65,15 @@ class memtable_t
 
             explicit value_t(underlying_value_type_t value);
 
+            value_t() = default;
             value_t(const value_t &other) = default;
             value_t &operator=(const value_t &other) = default;
 
             bool operator==(const value_t &other) const;
 
-            void write(std::stringstream &os) const;
+            template <typename stream_gt> void write(stream_gt &os) const;
+            template <typename stream_gt> void read(stream_gt &os);
+
             [[nodiscard]] std::size_t size() const;
 
             static void swap(value_t &lhs, value_t &rhs);
@@ -94,6 +81,23 @@ class memtable_t
             underlying_value_type_t m_value;
         };
 
+        struct timestamp_t
+        {
+            // Used to differentiate between keys with the same timestamp
+            using clock_t = std::chrono::high_resolution_clock;
+            using underlying_value_type_t = std::chrono::time_point<clock_t>;
+
+            timestamp_t();
+
+            template <typename stream_gt> void write(stream_gt &os) const;
+            template <typename stream_gt> void read(stream_gt &os);
+
+            bool operator<(const timestamp_t &other) const;
+
+            underlying_value_type_t m_value;
+        };
+
+        record_t() = default;
         record_t(const record_t &other);
         record_t(const key_t &key, const value_t &value);
         record_t &operator=(const record_t &other);
@@ -102,18 +106,17 @@ class memtable_t
         bool operator>(const record_t &record) const;
         bool operator==(const record_t &record) const;
 
-        friend auto operator<=>(const record_t &, const record_t &);
-
         [[nodiscard]] std::size_t size() const;
 
-        friend std::ostream &operator<<(std::ostream &out, const record_t &r);
+        template <typename stream_gt> void write(stream_gt &os) const;
+        template <typename stream_gt> void read(stream_gt &os);
 
         key_t m_key;
         value_t m_value;
-        timestamp_t m_timestamp{clock_t::now()};
+        timestamp_t m_timestamp;
     };
 
-    using storage_t = sorted_vector_t<record_t>;
+    using storage_t = typename sorted_vector::sorted_vector_t<record_t>;
     using size_type = typename storage_t::size_type;
     using index_type = typename storage_t::index_type;
     using iterator = typename storage_t::iterator;
@@ -127,24 +130,79 @@ class memtable_t
     memtable_t(memtable_t &&) = default;
     memtable_t &operator=(memtable_t &&) = default;
 
+    /**
+     * @brief
+     *
+     * @param record
+     */
     void emplace(const record_t &record);
+
+    /**
+     * @brief
+     *
+     * @param key
+     */
     std::optional<record_t> find(const record_t::key_t &key);
+
+    /**
+     * @brief
+     */
     [[nodiscard]] std::size_t size() const;
+
+    /**
+     * @brief
+     */
     [[nodiscard]] std::size_t count() const;
 
+    /**
+     * @brief
+     */
+    [[nodiscard]] bool empty() const;
+
+    /**
+     * @brief
+     *
+     * @param pMemtable
+     */
     void merge(memtable_t pMemtable) noexcept;
 
-    typename storage_t::iterator begin();
-    typename storage_t::iterator end();
+    /**
+     * @brief
+     */
+    typename storage_t::const_iterator begin() const;
 
-    void write(std::stringstream &ss);
+    /**
+     * @brief
+     */
+    typename storage_t::const_iterator end() const;
 
+    /**
+     * @brief
+     */
     [[nodiscard]] std::optional<record_t::key_t> min() const noexcept;
+
+    /**
+     * @brief
+     */
     [[nodiscard]] std::optional<record_t::key_t> max() const noexcept;
 
+    /**
+     * @brief
+     *
+     * @param other
+     * @return
+     */
     bool operator<(const memtable_t &other);
 
+    template <typename stream_gt> void write(stream_gt &os) const;
+    template <typename stream_gt> void read(stream_gt &os);
+
   private:
+    /**
+     * @brief
+     *
+     * @param record
+     */
     void update_size(const record_t &record);
 
   private:
@@ -154,6 +212,116 @@ class memtable_t
 };
 
 static_assert(std::ranges::random_access_range<memtable_t>);
+
+template <typename stream_gt> void memtable_t::record_t::key_t::write(stream_gt &os) const
+{
+    os << m_key.size() << ' ' << m_key << ' ';
+}
+
+template <typename stream_gt> void memtable_t::record_t::key_t::read(stream_gt &os)
+{
+    std::size_t size{0};
+    os >> size;
+    m_key.resize(size);
+    os >> m_key;
+}
+
+template <typename stream_gt> void memtable_t::record_t::value_t::write(stream_gt &os) const
+{
+    std::visit(
+        [&os, this](auto &&value)
+        {
+            using T = std::decay_t<decltype(value)>;
+            if constexpr (std::is_same_v<T, int64_t>)
+            {
+                os << std::to_underlying(record_t::record_value_type_t::integer_k) << ' ' << value << ' ';
+            }
+            else if constexpr (std::is_same_v<T, double>)
+            {
+                os << std::to_underlying(record_t::record_value_type_t::double_k) << ' ' << value << ' ';
+            }
+            else if constexpr (std::is_same_v<T, std::string>)
+            {
+                os << std::to_underlying(record_t::record_value_type_t::string_k) << ' ' << size() << ' ' << value
+                   << ' ';
+            }
+            else
+            {
+                static_assert(always_false_v<T>, "non-exhaustive visitor");
+            }
+        },
+        m_value);
+}
+
+template <typename stream_gt> void memtable_t::record_t::value_t::read(stream_gt &os)
+{
+    std::size_t tag;
+    os >> tag;
+
+    if (tag == std::to_underlying(record_t::record_value_type_t::integer_k))
+    {
+        std::int64_t value;
+        os >> value;
+        m_value.emplace<std::int64_t>(value);
+    }
+    else if (tag == std::to_underlying(record_t::record_value_type_t::double_k))
+    {
+        double value;
+        os >> value;
+        m_value.emplace<double>(value);
+    }
+    else if (tag == std::to_underlying(record_t::record_value_type_t::string_k))
+    {
+        std::size_t size{0};
+        os >> size;
+        std::string value;
+        value.resize(size);
+        os >> value;
+        m_value.emplace<std::string>(std::move(value));
+    }
+    else
+    {
+        assert("non-exhaustive if");
+    }
+}
+
+template <typename stream_gt> void memtable_t::record_t::timestamp_t::write(stream_gt &os) const
+{
+    os << m_value.time_since_epoch().count() << ' ';
+}
+
+template <typename stream_gt> void memtable_t::record_t::timestamp_t::read(stream_gt &os)
+{
+    clock_t::rep count;
+    os >> count;
+    m_value = clock_t::time_point{clock_t::duration{count}};
+}
+
+template <typename stream_gt> void memtable_t::record_t::write(stream_gt &os) const
+{
+    m_key.write(os);
+    m_value.write(os);
+    m_timestamp.write(os);
+}
+
+template <typename stream_gt> void memtable_t::record_t::read(stream_gt &os)
+{
+    m_key.read(os);
+    m_value.read(os);
+    m_timestamp.read(os);
+}
+
+template <typename stream_gt> void memtable_t::write(stream_gt &os) const
+{
+    for (auto record : *this)
+    {
+        record.write(os);
+    }
+}
+
+template <typename stream_gt> void memtable_t::read(stream_gt &os)
+{
+}
 
 } // namespace structures::memtable
 

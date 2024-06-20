@@ -12,12 +12,9 @@ target_include_directories(HashIndex INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 # set_target_properties(HashIndexTest PROPERTIES CXX_STANDARD 23)
 # target_link_libraries(
 #   HashIndexTest
-#   boost::boost
 #   Catch2::Catch2
-#   gRPC::grpc
 #   spdlog::spdlog
 #   fmt::fmt
-#   ZLIB::ZLIB
 # 	LSMTree
 #   HashIndex
 #   MemTable

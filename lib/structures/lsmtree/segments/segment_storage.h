@@ -27,6 +27,24 @@ struct last_write_time_comparator_t
     }
 };
 
+/**
+ * @class key_range_comparator_t
+ * @brief 
+ *
+ */
+struct key_range_comparator_t
+{
+    bool operator()(segment::shared_ptr_t lhs, segment::shared_ptr_t rhs)
+    {
+        return lhs->max() < rhs->min();
+    }
+};
+
+/**
+ * @class segment_storage_t
+ * @brief 
+ *
+ */
 class segment_storage_t : public std::enable_shared_from_this<segment_storage_t>
 {
   public:
@@ -52,6 +70,7 @@ class segment_storage_t : public std::enable_shared_from_this<segment_storage_t>
 
     void emplace(segment::shared_ptr_t pSegment, segment_comp_t comp);
     void clear() noexcept;
+    void remove(segment::shared_ptr_t pSegment);
 
   private:
     mutable std::mutex m_mutex; // TODO(lnikon): Use clang's mutex borrow checker

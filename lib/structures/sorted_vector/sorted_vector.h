@@ -37,6 +37,9 @@ class sorted_vector_t
     iterator begin();
     iterator end();
 
+    iterator begin() const;
+    iterator end() const;
+
     reverse_iterator rbegin();
     reverse_iterator rend();
 
@@ -69,11 +72,10 @@ template <typename Data, typename Comparator>
 std::pair<bool, typename sorted_vector_t<Data, Comparator>::index_type>
 sorted_vector_t<Data, Comparator>::find(Data data, Comparator comparator) const
 {
-    auto it = std::lower_bound(
-        std::begin(m_data), std::end(m_data), data, comparator);
-    return std::make_pair(
-        (!(std::begin(m_data) == std::end(m_data)) && !(comparator(data, *it))),
-        std::distance(std::begin(m_data), it));
+    auto it = std::lower_bound(m_data.begin(), m_data.end(), data, comparator);
+    bool found = (it != m_data.end()) && !comparator(data, *it);
+    auto index = std::distance(m_data.begin(), it);
+    return std::make_pair(found, index);
 }
 
 template <typename Data, typename Comparator>
@@ -100,6 +102,20 @@ sorted_vector_t<Data, Comparator>::begin()
 template <typename Data, typename Comparator>
 typename sorted_vector_t<Data, Comparator>::iterator
 sorted_vector_t<Data, Comparator>::end()
+{
+    return m_data.end();
+}
+
+template <typename Data, typename Comparator>
+typename sorted_vector_t<Data, Comparator>::iterator
+sorted_vector_t<Data, Comparator>::begin() const
+{
+    return m_data.begin();
+}
+
+template <typename Data, typename Comparator>
+typename sorted_vector_t<Data, Comparator>::iterator
+sorted_vector_t<Data, Comparator>::end() const
 {
     return m_data.end();
 }
