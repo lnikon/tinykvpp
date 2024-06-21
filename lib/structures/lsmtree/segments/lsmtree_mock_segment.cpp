@@ -56,6 +56,11 @@ std::filesystem::file_time_type mock_segment_t::last_write_time()
     return std::filesystem::file_time_type::min();
 }
 
+void mock_segment_t::purge()
+{
+
+}
+
 void mock_segment_t::restore()
 {
 }

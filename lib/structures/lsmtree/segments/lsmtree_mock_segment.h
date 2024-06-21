@@ -28,6 +28,8 @@ class mock_segment_t final : public interface::segment_interface_t
     std::optional<memtable::memtable_t> memtable() override;
     std::filesystem::file_time_type last_write_time() override;
 
+    void purge() override;
+
     /**
      * @brief
      */

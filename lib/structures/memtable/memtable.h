@@ -116,7 +116,15 @@ class memtable_t
         timestamp_t m_timestamp;
     };
 
-    using storage_t = typename sorted_vector::sorted_vector_t<record_t>;
+    struct record_comparator_by_key_t
+    {
+        bool operator()(const record_t &lhs, const record_t &rhs)
+        {
+            return lhs.m_key < rhs.m_key;
+        }
+    };
+
+    using storage_t = typename sorted_vector::sorted_vector_t<record_t, record_comparator_by_key_t>;
     using size_type = typename storage_t::size_type;
     using index_type = typename storage_t::index_type;
     using iterator = typename storage_t::iterator;
@@ -316,6 +324,7 @@ template <typename stream_gt> void memtable_t::write(stream_gt &os) const
     for (auto record : *this)
     {
         record.write(os);
+        os << std::endl;
     }
 }
 

@@ -69,6 +69,11 @@ class regular_segment_t final : public segments::interface::segment_interface_t
      */
     void flush() override;
 
+        /**
+     * @brief
+     */
+    void purge() override;
+
     /**
      * @brief
      */

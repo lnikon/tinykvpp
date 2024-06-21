@@ -94,6 +94,11 @@ class segment_interface_t
     /**
      * @brief 
      */
+    virtual void purge() = 0;
+
+    /**
+     * @brief 
+     */
     virtual std::optional<memtable::memtable_t> memtable() = 0;
 
     /**

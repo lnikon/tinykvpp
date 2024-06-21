@@ -48,11 +48,19 @@ class sorted_vector_t
 
     iterator erase(iterator begin, iterator end);
 
+    Data back() const noexcept;
+
     void clear() noexcept;
 
    private:
     std::vector<Data> m_data;
 };
+
+template <typename Data, typename Comparator>
+Data sorted_vector_t<Data, Comparator>::back() const noexcept
+{
+    return m_data.back();
+}
 
 template <typename Data, typename Comparator>
 void sorted_vector_t<Data, Comparator>::clear() noexcept

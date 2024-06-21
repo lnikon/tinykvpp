@@ -1,7 +1,3 @@
-//
-// Created by nikon on 2/6/22.
-//
-
 #include <structures/lsmtree/lsmtree_types.h>
 #include <structures/lsmtree/segments/lsmtree_regular_segment.h>
 
@@ -44,7 +40,7 @@ std::optional<record_t> regular_segment_t::record(const hashindex::hashindex_t::
 
 void regular_segment_t::flush()
 {
-    // Skip execution if for some reason the memtable is emptu
+    // Skip execution if for some reason the memtable is empty
     if (m_memtable->empty())
     {
         std::cerr << "can not flush empty memtable" << std::endl;
@@ -81,6 +77,16 @@ void regular_segment_t::flush()
     // m_memtable = memtable_t{};
 }
 
+void regular_segment_t::purge()
+{
+    if (std::filesystem::exists(get_path()))
+    {
+        std::filesystem::remove(get_path());
+    }
+
+    // TODO(lnikon): Remove in-memory components as well?
+}
+
 std::filesystem::file_time_type regular_segment_t::last_write_time()
 {
     return std::filesystem::exists(get_path()) ? std::filesystem::last_write_time(get_path())
@@ -115,6 +121,11 @@ std::optional<memtable::memtable_t> regular_segment_t::memtable()
 
 void regular_segment_t::restore()
 {
+    if (!m_memtable->empty())
+    {
+        return;
+    }
+
     m_memtable = memtable::memtable_t{};
     for (const auto &[_, offset] : m_hashIndex)
     {

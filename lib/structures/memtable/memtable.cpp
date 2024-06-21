@@ -12,7 +12,7 @@ std::size_t string_size_in_bytes(const std::string &str)
 }
 
 // ----------------------------------------------
-// Implementation for memtable_t::record_t::key_t
+// memtable_t::record_t::key_t
 // ----------------------------------------------------
 memtable_t::record_t::key_t::key_t(std::string key)
     : m_key(std::move(key))
@@ -46,7 +46,7 @@ bool memtable_t::record_t::key_t::operator==(const memtable_t::record_t::key_t &
 }
 
 // ------------------------------------------------
-// Implementation for memtable_t::record_t::value_t
+// memtable_t::record_t::value_t
 // ------------------------------------------------
 memtable_t::record_t::value_t::value_t(memtable_t::record_t::value_t::underlying_value_type_t value)
     : m_value(std::move(value))
@@ -92,7 +92,7 @@ void memtable_t::record_t::value_t::swap(memtable_t::record_t::value_t &lhs, mem
 }
 
 // ----------------------------------------------------
-// Implementation for memtable_t::record_t::timestamp_t
+// memtable_t::record_t::timestamp_t
 // ----------------------------------------------------
 memtable_t::record_t::timestamp_t::timestamp_t()
     : m_value{clock_t::now()}
@@ -105,7 +105,7 @@ bool memtable_t::record_t::timestamp_t::operator<(const timestamp_t &other) cons
 }
 
 // ---------------------------------------
-// Implementation for memtable_t::record_t
+// memtable_t::record_t
 // ---------------------------------------
 memtable_t::record_t::record_t(const memtable_t::record_t::key_t &key, const memtable_t::record_t::value_t &value)
     : m_key(key),
@@ -135,7 +135,8 @@ memtable_t::record_t &memtable_t::record_t::operator=(const memtable_t::record_t
 
 bool memtable_t::record_t::operator<(const memtable_t::record_t &record) const
 {
-    return m_key < record.m_key && m_timestamp < record.m_timestamp;
+    // return m_key < record.m_key && m_timestamp < record.m_timestamp;
+    return (m_key != record.m_key) ? m_key < record.m_key : !(m_timestamp < record.m_timestamp);
 }
 
 bool memtable_t::record_t::operator>(const memtable_t::record_t &record) const
@@ -154,7 +155,7 @@ std::size_t memtable_t::record_t::size() const
 }
 
 // -----------------------------
-// Implementation for memtable_t
+// memtable_t
 // -----------------------------
 void memtable_t::emplace(const memtable_t::record_t &record)
 {
@@ -208,14 +209,14 @@ typename memtable_t::storage_t::const_iterator memtable_t::end() const
 
 std::optional<memtable_t::record_t::key_t> memtable_t::min() const noexcept
 {
-    static_assert(std::is_same_v<structures::sorted_vector::sorted_vector_t<record_t>, decltype(m_data)>);
+    static_assert(std::is_same_v<structures::sorted_vector::sorted_vector_t<record_t, record_comparator_by_key_t>, decltype(m_data)>);
     return m_data.size() > 0 ? std::make_optional(m_data.cbegin()->m_key) : std::nullopt;
 }
 
 std::optional<memtable_t::record_t::key_t> memtable_t::max() const noexcept
 {
-    static_assert(std::is_same_v<structures::sorted_vector::sorted_vector_t<record_t>, decltype(m_data)>);
-    return m_data.size() > 0 ? std::make_optional(m_data.cend()->m_key) : std::nullopt;
+    static_assert(std::is_same_v<structures::sorted_vector::sorted_vector_t<record_t, record_comparator_by_key_t>, decltype(m_data)>);
+    return m_data.size() > 0 ? std::make_optional(m_data.back().m_key) : std::nullopt;
 }
 
 bool memtable_t::operator<(const memtable_t &other)

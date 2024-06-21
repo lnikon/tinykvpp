@@ -101,16 +101,13 @@ segments::interface::shared_ptr_t levels_t::segment(const structures::lsmtree::l
                 nextLevel = level(currentLevel->index() + 1);
             }
 
-            // Remove old segments from memory and disk
-            currentLevel->purge();
-
-            // Add the new segment into the storage
-            // Is it necessary to temporaryly store the segment on its level despite we're in the process of the
-            // compactation
-            currentLevel->emplace(compactedCurrentLevelSegment);
-
             // Merge compacted @currentLevel into the @nextLevel
             nextLevel->merge(compactedCurrentLevelSegment);
+
+            // After merging current level into the next level purge it
+            // Purge the segment representing the compacted level as well
+            compactedCurrentLevelSegment->purge();
+            currentLevel->purge();
         }
     }
 
