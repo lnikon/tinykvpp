@@ -94,6 +94,8 @@ class memtable_t
 
             bool operator<(const timestamp_t &other) const;
 
+            static void swap(timestamp_t &lhs, timestamp_t &rhs);
+
             underlying_value_type_t m_value;
         };
 

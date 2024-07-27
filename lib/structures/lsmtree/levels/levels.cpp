@@ -3,7 +3,7 @@
 //
 
 #include "levels.h"
-#include <db/manifest.h>
+#include <db/manifest/manifest.h>
 
 #include <spdlog/spdlog.h>
 

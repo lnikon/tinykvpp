@@ -89,8 +89,9 @@ TEST_CASE("Flush regular segment", std::string(componentName))
         auto pStorage{lsmtree::segments::storage::make_shared()};
 
         auto manifest{db::manifest::make_shared("")};
-        auto lsmTree{structures::lsmtree::lsmtree_t{pConfig, manifest}};
-        lsmtree::lsmtree_t lsmt(pConfig, manifest);
+        auto wal{db::wal::make_shared("")};
+        auto lsmTree{structures::lsmtree::lsmtree_t{pConfig, manifest, wal}};
+        lsmtree::lsmtree_t lsmt(pConfig, manifest, wal);
         for (const auto &kv : randomKeys)
         {
             lsmt.put(lsmtree::key_t{kv.first}, lsmtree::value_t{kv.second});
@@ -111,7 +112,8 @@ TEST_CASE("Flush regular segment", std::string(componentName))
         auto pStorage{lsmtree::segments::storage::make_shared()};
 
         auto manifest{db::manifest::make_shared("")};
-        lsmtree::lsmtree_t lsmt(pConfig, manifest);
+        auto wal{db::wal::make_shared("")};
+        lsmtree::lsmtree_t lsmt(pConfig, manifest, wal);
         for (const auto &kv : randomKeys)
         {
             lsmt.put(lsmtree::key_t{kv.first}, lsmtree::value_t{kv.second});

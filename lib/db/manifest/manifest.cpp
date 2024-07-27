@@ -1,4 +1,4 @@
-#include <db/manifest.h>
+#include <db/manifest/manifest.h>
 #include <stdexcept>
 
 namespace db::manifest

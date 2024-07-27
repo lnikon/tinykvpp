@@ -1,5 +1,5 @@
 #include "db.h"
-#include "db/manifest.h"
+
 #include <spdlog/spdlog.h>
 
 namespace db
@@ -11,7 +11,8 @@ namespace db
 db_t::db_t(const config::shared_ptr_t config)
     : m_config{config},
       m_manifest{manifest::make_shared(config->DatabaseConfig.DatabasePath / "manifest")}, // TODO: use helper function
-      m_lsmTree{config, m_manifest}
+      m_wal{wal::make_shared(config->DatabaseConfig.DatabasePath / "wal")},                // TODO: use helper function
+      m_lsmTree{config, m_manifest, m_wal}
 {
 }
 
@@ -30,7 +31,7 @@ bool db_t::open()
         return false;
     }
 
-    // Restore lsmtree based on manifest
+    // Restore lsmtree based on manifest and WAL
     m_lsmTree.restore();
 
     return true;

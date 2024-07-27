@@ -104,6 +104,12 @@ bool memtable_t::record_t::timestamp_t::operator<(const timestamp_t &other) cons
     return m_value < other.m_value;
 }
 
+void memtable_t::record_t::timestamp_t::swap(timestamp_t &lhs, timestamp_t &rhs)
+{
+    using std::swap;
+    swap(lhs.m_value, rhs.m_value);
+}
+
 // ---------------------------------------
 // memtable_t::record_t
 // ---------------------------------------
@@ -129,6 +135,7 @@ memtable_t::record_t &memtable_t::record_t::operator=(const memtable_t::record_t
     record_t tmp(other);
     record_t::key_t::swap(m_key, tmp.m_key);
     record_t::value_t::swap(m_value, tmp.m_value);
+    record_t::timestamp_t::swap(m_timestamp, tmp.m_timestamp);
 
     return *this;
 }
@@ -209,13 +216,15 @@ typename memtable_t::storage_t::const_iterator memtable_t::end() const
 
 std::optional<memtable_t::record_t::key_t> memtable_t::min() const noexcept
 {
-    static_assert(std::is_same_v<structures::sorted_vector::sorted_vector_t<record_t, record_comparator_by_key_t>, decltype(m_data)>);
+    static_assert(std::is_same_v<structures::sorted_vector::sorted_vector_t<record_t, record_comparator_by_key_t>,
+                                 decltype(m_data)>);
     return m_data.size() > 0 ? std::make_optional(m_data.cbegin()->m_key) : std::nullopt;
 }
 
 std::optional<memtable_t::record_t::key_t> memtable_t::max() const noexcept
 {
-    static_assert(std::is_same_v<structures::sorted_vector::sorted_vector_t<record_t, record_comparator_by_key_t>, decltype(m_data)>);
+    static_assert(std::is_same_v<structures::sorted_vector::sorted_vector_t<record_t, record_comparator_by_key_t>,
+                                 decltype(m_data)>);
     return m_data.size() > 0 ? std::make_optional(m_data.back().m_key) : std::nullopt;
 }
 

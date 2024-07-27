@@ -1,12 +1,12 @@
-#include <ios>
-#include <stdexcept>
-#include <string>
 #include <structures/lsmtree/lsmtree_types.h>
 #include <structures/lsmtree/segments/lsmtree_regular_segment.h>
 
 #include <cassert>
 #include <fstream>
 #include <optional>
+#include <ios>
+#include <stdexcept>
+#include <string>
 
 namespace structures::lsmtree::segments::regular_segment
 {
@@ -54,7 +54,6 @@ void regular_segment_t::flush()
 
     // Serialize memtable into stringstream and build hash index
     std::stringstream ss;
-    const auto dataBlockOffset{ss.tellp()};
     for (const auto &kv : m_memtable.value())
     {
         std::size_t ss_before = ss.tellp();
@@ -173,6 +172,7 @@ void regular_segment_t::restore()
     }
 }
 
+// TODO(lnikon): Add validations on file size. Need 'RandomAccessFile'.
 void regular_segment_t::restore_index()
 {
     std::fstream sst(m_path);
@@ -212,8 +212,6 @@ void regular_segment_t::restore_index()
 
         m_hashIndex.emplace(structures::lsmtree::record_t{key_t{key}, value_t{}}, offset);
     }
-
-    int a = 4;
 }
 
 } // namespace structures::lsmtree::segments::regular_segment

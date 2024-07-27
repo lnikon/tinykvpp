@@ -1,4 +1,5 @@
-#include <db/manifest.h>
+#include "db/wal/wal.h"
+#include <db/manifest/manifest.h>
 #include <structures/lsmtree/lsmtree_types.h>
 #include <structures/lsmtree/segments/helpers.h>
 #include <structures/lsmtree/lsmtree.h>
@@ -17,10 +18,13 @@ namespace structures::lsmtree
 using level_operation_k = db::manifest::manifest_t::level_record_t::operation_k;
 using segment_operation_k = db::manifest::manifest_t::segment_record_t::operation_k;
 
-lsmtree_t::lsmtree_t(const config::shared_ptr_t pConfig, db::manifest::shared_ptr_t manifest) noexcept
+lsmtree_t::lsmtree_t(const config::shared_ptr_t pConfig,
+                     db::manifest::shared_ptr_t manifest,
+                     db::wal::shared_ptr_t wal) noexcept
     : m_pConfig{pConfig},
       m_table{std::make_optional<memtable::memtable_t>()},
       m_manifest{manifest},
+      m_wal{wal},
       m_levels{pConfig, m_manifest}
 {
 }
@@ -30,8 +34,10 @@ void lsmtree_t::put(const structures::lsmtree::key_t &key, const structures::lsm
     assert(m_table);
     assert(m_pConfig);
 
-    // Add record into memtable
-    m_table->emplace(record_t{key, value});
+    // Record addition of the new key into the WAL and add record into memtable
+    auto record{record_t{key, value}};
+    m_wal->add(db::wal::wal_t::operation_k::add_k, record);
+    m_table->emplace(record);
 
     // Check whether after addition size of the memtable increased above the
     // threashold. If so flush the memtable
@@ -40,6 +46,7 @@ void lsmtree_t::put(const structures::lsmtree::key_t &key, const structures::lsm
     {
         m_levels.segment(m_pConfig->LSMTreeConfig.SegmentType, std::move(m_table.value()));
         m_table = std::make_optional<memtable::memtable_t>();
+        m_wal->reset();
     }
 }
 
@@ -78,6 +85,20 @@ bool lsmtree_t::restore() noexcept
     // existing information
     m_manifest->disable();
 
+    // Restore lsmtree structure from the manifest file
+    restore_manifest();
+
+    // Restore memtable from WAL
+    restore_wal();
+
+    // Enable updates to manifest after recovery is finished
+    m_manifest->enable();
+
+    return false;
+}
+
+bool lsmtree_t::restore_manifest() noexcept
+{
     const auto &records{m_manifest->records()};
     for (const auto &record : records)
     {
@@ -148,10 +169,9 @@ bool lsmtree_t::restore() noexcept
             record);
     }
 
-    // Enable updates to manifest after recovery is finished
-    m_manifest->enable();
-
-    // A little bit of printbugging
+    // A little bit of printbugging :)
+    // Now is that all modifications are applied to the segments storage it is time to restore segments.
+    // This will repopulate indices
     spdlog::info("recovery finished");
     const auto level_count{m_levels.size()};
     std::size_t current_level_idx{0};
@@ -168,7 +188,36 @@ bool lsmtree_t::restore() noexcept
         current_level_idx++;
     }
 
-    return false;
+    return true;
+}
+
+bool lsmtree_t::restore_wal() noexcept
+{
+    const auto &records{m_wal->records()};
+    for (const auto &record : records)
+    {
+        switch (record.op)
+        {
+        case db::wal::wal_t::operation_k::add_k:
+        {
+            spdlog::info("add_k kv into memtable during WAL recovery");
+            m_table->emplace(record.kv);
+            break;
+        }
+        case db::wal::wal_t::operation_k::delete_k:
+        {
+            spdlog::info("delete_k is not supported yet");
+            break;
+        }
+        default:
+        {
+            spdlog::error("unkown WAL operation {}", static_cast<std::int32_t>(record.op));
+            break;
+        }
+        };
+    }
+
+    return true;
 }
 
 } // namespace structures::lsmtree

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <db/manifest.h>
+#include <db/manifest/manifest.h>
 #include <config/config.h>
 #include <structures/lsmtree/segments/segment_storage.h>
 

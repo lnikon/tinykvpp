@@ -19,6 +19,7 @@ struct append_only_file_t
     explicit append_only_file_t(const path_t path);
     ~append_only_file_t() noexcept;
 
+    bool open() noexcept;
     bool is_open() noexcept;
 
     /**
@@ -52,6 +53,12 @@ inline append_only_file_t::append_only_file_t(const path_t path)
 inline append_only_file_t::~append_only_file_t() noexcept
 {
     close();
+}
+
+inline bool append_only_file_t::open() noexcept
+{
+    m_out = std::fstream{m_path, m_out.app | m_out.ate | m_out.out};
+    return m_out.is_open();
 }
 
 inline bool append_only_file_t::is_open() noexcept

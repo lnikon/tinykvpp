@@ -1,6 +1,6 @@
 #pragma once
 
-#include "db/manifest.h"
+#include "db/manifest/manifest.h"
 #include <structures/lsmtree/levels/level.h>
 #include <config/config.h>
 

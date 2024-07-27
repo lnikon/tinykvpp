@@ -1,9 +1,10 @@
 #pragma once
 
+#include "wal/wal.h"
 #include <config/config.h>
 #include <db/db_config.h>
 #include <structures/lsmtree/lsmtree.h>
-#include <db/manifest.h>
+#include <db/manifest/manifest.h>
 #include <fs/append_only_file.h>
 
 namespace db
@@ -35,6 +36,7 @@ class db_t
   private:
     const config::shared_ptr_t m_config;
     manifest::shared_ptr_t m_manifest;
+    wal::shared_ptr_t m_wal;
     structures::lsmtree::lsmtree_t m_lsmTree;
 };
 
