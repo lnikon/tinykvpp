@@ -69,7 +69,7 @@ class regular_segment_t final : public segments::interface::segment_interface_t
      */
     void flush() override;
 
-        /**
+    /**
      * @brief
      */
     void purge() override;
@@ -88,6 +88,9 @@ class regular_segment_t final : public segments::interface::segment_interface_t
      * @brief
      */
     [[nodiscard]] virtual std::optional<record_t::key_t> max() const noexcept override;
+
+  private:
+    void restore_index();
 
   private:
     const types::path_t m_path;

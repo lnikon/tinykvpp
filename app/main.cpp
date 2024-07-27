@@ -18,7 +18,7 @@ int main(int argc, char *argv[])
     // }
 
     auto pConfig = config::make_shared();
-    pConfig->LSMTreeConfig.DiskFlushThresholdSize = 16;
+    pConfig->LSMTreeConfig.DiskFlushThresholdSize = 128;
     db::db_t db(pConfig);
     if (!db.open())
     {
@@ -26,30 +26,33 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    db.put(db::lsmtree::key_t{"aaaaaa"}, db::lsmtree::value_t{"version1"});
-    db.put(db::lsmtree::key_t{"aaaaaa"}, db::lsmtree::value_t{"version2"});
-    db.put(db::lsmtree::key_t{"aaaaaa"}, db::lsmtree::value_t{"version3"});
-    db.put(db::lsmtree::key_t{"cccccc"}, db::lsmtree::value_t{"aaaa"});
-    db.put(db::lsmtree::key_t{"aaaaaa"}, db::lsmtree::value_t{"version4"});
-    db.put(db::lsmtree::key_t{"aaaaaa"}, db::lsmtree::value_t{"version5"});
-    db.put(db::lsmtree::key_t{"aaaaaa"}, db::lsmtree::value_t{"version6"});
-    db.put(db::lsmtree::key_t{"cccccc"}, db::lsmtree::value_t{"bbbb"});
-    db.put(db::lsmtree::key_t{"aaaaaa"}, db::lsmtree::value_t{"version7"});
-    db.put(db::lsmtree::key_t{"aaaaaa"}, db::lsmtree::value_t{"version8"});
-    db.put(db::lsmtree::key_t{"ddddd"}, db::lsmtree::value_t{"version1"});
-    db.put(db::lsmtree::key_t{"cccccc"}, db::lsmtree::value_t{"dddd"});
-    db.put(db::lsmtree::key_t{"aaaaaa"}, db::lsmtree::value_t{"version9"});
-    db.put(db::lsmtree::key_t{"aaaaaa"}, db::lsmtree::value_t{"version10"});
-    db.put(db::lsmtree::key_t{"aaaaaa"}, db::lsmtree::value_t{"version11"});
-    db.put(db::lsmtree::key_t{"cccccc1"}, db::lsmtree::value_t{"aaaa1"});
-    db.put(db::lsmtree::key_t{"aaaaaa"}, db::lsmtree::value_t{"version12"});
-    db.put(db::lsmtree::key_t{"aaaaaa2"}, db::lsmtree::value_t{"version13"});
-    db.put(db::lsmtree::key_t{"aaaaaa"}, db::lsmtree::value_t{"version13"});
-    db.put(db::lsmtree::key_t{"cccccc"}, db::lsmtree::value_t{"bbbb2"});
-    db.put(db::lsmtree::key_t{"aaaaaa"}, db::lsmtree::value_t{"version14"});
-    db.put(db::lsmtree::key_t{"aaaaaa4"}, db::lsmtree::value_t{"version15"});
-    db.put(db::lsmtree::key_t{"ddddd2"}, db::lsmtree::value_t{"version2"});
-    db.put(db::lsmtree::key_t{"cccccc5"}, db::lsmtree::value_t{"dddd3"});
+    // for (int i = 0; i < 3; i++)
+    // {
+    //     db.put(db::lsmtree::key_t{"aaaaaa"}, db::lsmtree::value_t{"version1"});
+    //     db.put(db::lsmtree::key_t{"aaaaaa"}, db::lsmtree::value_t{"version2"});
+    //     db.put(db::lsmtree::key_t{"aaaaaa"}, db::lsmtree::value_t{"version3"});
+    //     db.put(db::lsmtree::key_t{"cccccc"}, db::lsmtree::value_t{"aaaa"});
+    //     db.put(db::lsmtree::key_t{"aaaaaa"}, db::lsmtree::value_t{"version4"});
+    //     db.put(db::lsmtree::key_t{"aaaaaa"}, db::lsmtree::value_t{"version5"});
+    //     db.put(db::lsmtree::key_t{"aaaaaa"}, db::lsmtree::value_t{"version6"});
+    //     db.put(db::lsmtree::key_t{"cccccc"}, db::lsmtree::value_t{"bbbb"});
+    //     db.put(db::lsmtree::key_t{"aaaaaa"}, db::lsmtree::value_t{"version7"});
+    //     db.put(db::lsmtree::key_t{"aaaaaa"}, db::lsmtree::value_t{"version8"});
+    //     db.put(db::lsmtree::key_t{"ddddd"}, db::lsmtree::value_t{"version1"});
+    //     db.put(db::lsmtree::key_t{"cccccc"}, db::lsmtree::value_t{"dddd"});
+    //     db.put(db::lsmtree::key_t{"aaaaaa"}, db::lsmtree::value_t{"version9"});
+    //     db.put(db::lsmtree::key_t{"aaaaaa"}, db::lsmtree::value_t{"version10"});
+    //     db.put(db::lsmtree::key_t{"aaaaaa"}, db::lsmtree::value_t{"version11"});
+    //     db.put(db::lsmtree::key_t{"cccccc1"}, db::lsmtree::value_t{"aaaa1"});
+    //     db.put(db::lsmtree::key_t{"aaaaaa"}, db::lsmtree::value_t{"version12"});
+    //     db.put(db::lsmtree::key_t{"aaaaaa2"}, db::lsmtree::value_t{"version13"});
+    //     db.put(db::lsmtree::key_t{"aaaaaa"}, db::lsmtree::value_t{"version13"});
+    //     db.put(db::lsmtree::key_t{"cccccc"}, db::lsmtree::value_t{"bbbb2"});
+    //     db.put(db::lsmtree::key_t{"aaaaaa"}, db::lsmtree::value_t{"version14"});
+    //     db.put(db::lsmtree::key_t{"aaaaaa4"}, db::lsmtree::value_t{"version15"});
+    //     db.put(db::lsmtree::key_t{"ddddd2"}, db::lsmtree::value_t{"version2"});
+    //     db.put(db::lsmtree::key_t{"cccccc5"}, db::lsmtree::value_t{"dddd3"});
+    // }
 
     if (auto recordOpt{db.get(db::lsmtree::key_t{"aaaaaa"})}; recordOpt)
     {
@@ -68,7 +71,7 @@ int main(int argc, char *argv[])
         recordOpt->write(std::cout);
         std::cout << std::endl;
     }
-    
+
     if (auto recordOpt{db.get(db::lsmtree::key_t{"cccccc1"})}; recordOpt)
     {
         recordOpt->write(std::cout);

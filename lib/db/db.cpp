@@ -1,4 +1,6 @@
 #include "db.h"
+#include "db/manifest.h"
+#include <spdlog/spdlog.h>
 
 namespace db
 {
@@ -8,7 +10,8 @@ namespace db
  */
 db_t::db_t(const config::shared_ptr_t config)
     : m_config{config},
-      m_lsmTree{config}
+      m_manifest{manifest::make_shared(config->DatabaseConfig.DatabasePath / "manifest")}, // TODO: use helper function
+      m_lsmTree{config, m_manifest}
 {
 }
 
@@ -18,6 +21,17 @@ bool db_t::open()
     {
         return false;
     }
+
+    // Read on-disk components of lsmtree
+    if (!m_manifest->recover())
+    {
+        // TODO(lnikon): Maybe use error codes?
+        spdlog::error("unable to recover manifest file. path={}", m_manifest->path().string());
+        return false;
+    }
+
+    // Restore lsmtree based on manifest
+    m_lsmTree.restore();
 
     return true;
 }

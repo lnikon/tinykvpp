@@ -1,23 +1,30 @@
 #pragma once
 
-#include <optional>
+#include "db/manifest.h"
 #include <structures/lsmtree/levels/level.h>
 #include <config/config.h>
+
+#include <optional>
 
 namespace structures::lsmtree::levels
 {
 
+/**
+ * @class levels_t
+ * @brief
+ *
+ */
 class levels_t
 {
   public:
-    using levels_storage_t = std::vector<level::shared_ptr_t>;
+    using levels_storage_t = std::vector<structures::lsmtree::level::shared_ptr_t>;
 
     /**
      * @brief
      *
      * @param pConfig
      */
-    explicit levels_t(const config::shared_ptr_t pConfig) noexcept;
+    explicit levels_t(const config::shared_ptr_t pConfig, db::manifest::shared_ptr_t manifest) noexcept;
 
     /**
      * @brief
@@ -42,17 +49,19 @@ class levels_t
      */
     [[maybe_unused]] level::shared_ptr_t level() noexcept;
 
-   /**
-    * @brief 
-    *
-    * @param idx 
-    */
-   [[maybe_unused]] level::shared_ptr_t level(const std::size_t idx) noexcept;
+    /**
+     * @brief
+     *
+     * @param idx
+     */
+    [[maybe_unused]] level::shared_ptr_t level(const std::size_t idx) noexcept;
+
+    levels_storage_t::size_type size() const noexcept;
 
   private:
     const config::shared_ptr_t m_pConfig;
     levels_storage_t m_levels;
-
+    db::manifest::shared_ptr_t m_manifest;
 };
 
 } // namespace structures::lsmtree::levels

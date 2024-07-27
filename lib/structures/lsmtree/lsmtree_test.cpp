@@ -8,9 +8,8 @@
 namespace
 {
 template <typename TNumber>
-TNumber generateRandomNumber(
-    const TNumber min = std::numeric_limits<TNumber>::min(),
-    const TNumber max = std::numeric_limits<TNumber>::max()) noexcept
+TNumber generateRandomNumber(const TNumber min = std::numeric_limits<TNumber>::min(),
+                             const TNumber max = std::numeric_limits<TNumber>::max()) noexcept
 {
     std::mt19937 rg{std::random_device{}()};
     if constexpr (std::is_same_v<int, TNumber>)
@@ -38,50 +37,44 @@ TNumber generateRandomNumber(
 
 std::string generateRandomString(std::size_t length) noexcept
 {
-    static auto &alphabet =
-        "0123456789"
-        "abcdefghijklmnopqrstuvwxyz"
-        "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    static auto &alphabet = "0123456789"
+                            "abcdefghijklmnopqrstuvwxyz"
+                            "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
     std::string result;
     result.reserve(length);
     while (length--)
     {
-        result += alphabet[generateRandomNumber<std::size_t>(
-            0, sizeof(alphabet) - 2)];
+        result += alphabet[generateRandomNumber<std::size_t>(0, sizeof(alphabet) - 2)];
     }
 
     return result;
 }
 
-std::vector<std::string> generateRandomStringVector(
-    const std::size_t length) noexcept
+std::vector<std::string> generateRandomStringVector(const std::size_t length) noexcept
 {
     std::vector<std::string> result;
     result.reserve(length);
     for (std::string::size_type size = 0; size < length; size++)
     {
-        result.emplace_back(
-            generateRandomString(generateRandomNumber<std::size_t>(4, 64)));
+        result.emplace_back(generateRandomString(generateRandomNumber<std::size_t>(4, 64)));
     }
     return result;
 }
 
-std::vector<std::pair<std::string, std::string>> generateRandomStringPairVector(
-    const std::size_t length) noexcept
+std::vector<std::pair<std::string, std::string>> generateRandomStringPairVector(const std::size_t length) noexcept
 {
     std::vector<std::pair<std::string, std::string>> result;
     result.reserve(length);
     for (std::string::size_type size = 0; size < length; size++)
     {
-        result.emplace_back(
-            generateRandomString(generateRandomNumber<std::size_t>(4, 64)),
-            generateRandomString(generateRandomNumber<std::size_t>(4, 64)));
+        result.emplace_back(generateRandomString(generateRandomNumber<std::size_t>(4, 64)),
+                            generateRandomString(generateRandomNumber<std::size_t>(4, 64)));
     }
     return result;
 }
 
 inline constexpr std::string_view componentName = "[LSMTree]";
-}  // namespace
+} // namespace
 
 TEST_CASE("Flush regular segment", std::string(componentName))
 {
@@ -92,11 +85,12 @@ TEST_CASE("Flush regular segment", std::string(componentName))
     SECTION("Put and Get")
     {
         auto pConfig{config::make_shared()};
-        pConfig->LSMTreeConfig.SegmentType =
-            lsmtree::lsmtree_segment_type_t::mock_k;
+        pConfig->LSMTreeConfig.SegmentType = lsmtree::lsmtree_segment_type_t::mock_k;
         auto pStorage{lsmtree::segments::storage::make_shared()};
 
-        lsmtree::lsmtree_t lsmt(pConfig);
+        auto manifest{db::manifest::make_shared("")};
+        auto lsmTree{structures::lsmtree::lsmtree_t{pConfig, manifest}};
+        lsmtree::lsmtree_t lsmt(pConfig, manifest);
         for (const auto &kv : randomKeys)
         {
             lsmt.put(lsmtree::key_t{kv.first}, lsmtree::value_t{kv.second});
@@ -104,10 +98,8 @@ TEST_CASE("Flush regular segment", std::string(componentName))
 
         for (const auto &kv : randomKeys)
         {
-            REQUIRE(lsmt.get(lsmtree::key_t{kv.first}).value().m_key ==
-                    lsmtree::key_t{kv.first});
-            REQUIRE(lsmt.get(lsmtree::key_t{kv.first}).value().m_value ==
-                    lsmtree::value_t{kv.second});
+            REQUIRE(lsmt.get(lsmtree::key_t{kv.first}).value().m_key == lsmtree::key_t{kv.first});
+            REQUIRE(lsmt.get(lsmtree::key_t{kv.first}).value().m_value == lsmtree::value_t{kv.second});
         }
     }
 
@@ -115,11 +107,11 @@ TEST_CASE("Flush regular segment", std::string(componentName))
     {
         config::shared_ptr_t pConfig{config::make_shared()};
         pConfig->LSMTreeConfig.DiskFlushThresholdSize = 2048;
-        pConfig->LSMTreeConfig.SegmentType =
-            lsmtree::lsmtree_segment_type_t::regular_k;
+        pConfig->LSMTreeConfig.SegmentType = lsmtree::lsmtree_segment_type_t::regular_k;
         auto pStorage{lsmtree::segments::storage::make_shared()};
 
-        lsmtree::lsmtree_t lsmt(pConfig);
+        auto manifest{db::manifest::make_shared("")};
+        lsmtree::lsmtree_t lsmt(pConfig, manifest);
         for (const auto &kv : randomKeys)
         {
             lsmt.put(lsmtree::key_t{kv.first}, lsmtree::value_t{kv.second});

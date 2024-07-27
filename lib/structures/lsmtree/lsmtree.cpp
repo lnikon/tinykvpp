@@ -1,14 +1,27 @@
-#include <optional>
+#include <db/manifest.h>
+#include <structures/lsmtree/lsmtree_types.h>
+#include <structures/lsmtree/segments/helpers.h>
 #include <structures/lsmtree/lsmtree.h>
 #include <structures/lsmtree/segments/segment_interface.h>
+#include <structures/lsmtree/segments/lsmtree_segment_factory.h>
+
+#include <cstdint>
+#include <optional>
+#include <type_traits>
+
+#include <spdlog/spdlog.h>
 
 namespace structures::lsmtree
 {
 
-lsmtree_t::lsmtree_t(const config::shared_ptr_t pConfig) noexcept
+using level_operation_k = db::manifest::manifest_t::level_record_t::operation_k;
+using segment_operation_k = db::manifest::manifest_t::segment_record_t::operation_k;
+
+lsmtree_t::lsmtree_t(const config::shared_ptr_t pConfig, db::manifest::shared_ptr_t manifest) noexcept
     : m_pConfig{pConfig},
       m_table{std::make_optional<memtable::memtable_t>()},
-      m_levels{pConfig}
+      m_manifest{manifest},
+      m_levels{pConfig, m_manifest}
 {
 }
 
@@ -58,6 +71,103 @@ std::optional<record_t> lsmtree_t::get(const key_t &key) noexcept
 bool lsmtree_t::restore() noexcept
 {
     assert(m_pConfig);
+    assert(m_manifest);
+
+    // Disable all updates to manifest in recovery phase
+    // because nothing new is happening, lsmtree is re-using already
+    // existing information
+    m_manifest->disable();
+
+    const auto &records{m_manifest->records()};
+    for (const auto &record : records)
+    {
+        std::visit(
+            [this](auto &&record)
+            {
+                using T = std::decay_t<decltype(record)>;
+                if constexpr (std::is_same_v<T, db::manifest::manifest_t::segment_record_t>)
+                {
+                    switch (record.op)
+                    {
+                    case segment_operation_k::add_segment_k:
+                    {
+                        m_levels.level(record.level)
+                            ->emplace(segments::factories::lsmtree_segment_factory(
+                                lsmtree_segment_type_t::regular_k,
+                                record.name,
+                                segments::helpers::segment_path(m_pConfig->datadir_path(), record.name),
+                                std::move(memtable_t{})));
+                        spdlog::info("add segment {} into level {} during recovery", record.name, record.level);
+                        break;
+                    }
+                    case segment_operation_k::remove_segment_k:
+                    {
+                        m_levels.level(record.level)->purge(record.name);
+                        spdlog::info("remove segment {} from level {} during recovery", record.name, record.level);
+                        break;
+                    }
+                    default:
+                    {
+                        spdlog::error("unkown segment operation={}", static_cast<std::int32_t>(record.op));
+                        break;
+                    }
+                    }
+                }
+                else if constexpr (std::is_same_v<T, db::manifest::manifest_t::level_record_t>)
+                {
+                    switch (record.op)
+                    {
+                    case level_operation_k::add_level_k:
+                    {
+                        m_levels.level();
+                        spdlog::info("create level {} during recovery", record.level);
+                        break;
+                    }
+                    case level_operation_k::compact_level_k:
+                    {
+                        spdlog::info("ignoring compact_level_k during recovery");
+                        break;
+                    }
+                    case level_operation_k::purge_level_k:
+                    {
+                        spdlog::info("ignoring purge_level_k during recovery");
+                        break;
+                    }
+                    default:
+                    {
+                        spdlog::error("unkown level operation={}", static_cast<std::int32_t>(record.op));
+                        break;
+                    }
+                    }
+                }
+                else
+                {
+                    spdlog::error("unkown manifest record type");
+                }
+            },
+            record);
+    }
+
+    // Enable updates to manifest after recovery is finished
+    m_manifest->enable();
+
+    // A little bit of printbugging
+    spdlog::info("recovery finished");
+    const auto level_count{m_levels.size()};
+    std::size_t current_level_idx{0};
+    while (current_level_idx != level_count)
+    {
+        spdlog::info("level {} has following segments...", current_level_idx);
+        auto storage{m_levels.level(current_level_idx)->storage()};
+        for (auto pSegment : *storage)
+        {
+            pSegment->restore();
+            spdlog::info("segment {}", pSegment->get_name());
+        }
+
+        current_level_idx++;
+    }
+
     return false;
 }
 
