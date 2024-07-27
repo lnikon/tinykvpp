@@ -206,7 +206,7 @@ bool lsmtree_t::restore_wal() noexcept
         }
         case db::wal::wal_t::operation_k::delete_k:
         {
-            spdlog::info("delete_k is not supported yet");
+            spdlog::info("delete_k is not supported yet in WAL recovery");
             break;
         }
         default:

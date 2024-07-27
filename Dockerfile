@@ -10,7 +10,7 @@ RUN apt-get update && \
 
 # Start preparing the workspace
 WORKDIR /workspaces
-COPY . .
+# COPY . .
 
 # Create venv for the conan
 ENV VIRTUAL_ENV=/opt/venv
@@ -19,10 +19,18 @@ ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 RUN python3 -m pip install conan
 
 # Setup conan profiles
+COPY conanfile.txt conanfile.txt
 RUN conan profile detect
 
 # Install and/or build dependencies
-RUN conan install . --output-folder=build --build=missing --profile=default
+RUN conan install . --output-folder=build --build=missing
+
+RUN cp -f ./build/CMakePresets.json .
+COPY CMakeLists.txt CMakeLists.txt
+COPY lib lib
+COPY src src
+COPY app app
+COPY grpcapp grpcapp
 
 # Generate the project
 RUN cmake --preset conan-release
