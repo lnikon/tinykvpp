@@ -5,6 +5,7 @@
 #include "levels.h"
 #include <db/manifest/manifest.h>
 
+#include <iostream>
 #include <spdlog/spdlog.h>
 
 namespace structures::lsmtree::levels

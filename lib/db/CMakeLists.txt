@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.27)
+cmake_minimum_required(VERSION 3.25)
 project(zkv)
 
 add_library(DB "db.cpp" "manifest/manifest.cpp" "wal/wal.cpp")

@@ -5,13 +5,13 @@
 #ifndef MEMTABLE_H
 #define MEMTABLE_H
 
+#include <cassert>
 #include <structures/sorted_vector/sorted_vector.h>
-
-#include <boost/date_time.hpp>
 
 #include <optional>
 #include <string>
 #include <sys/types.h>
+#include <utility>
 #include <variant>
 #include <chrono>
 

@@ -1,3 +1,4 @@
+#include <iostream>
 #include <structures/lsmtree/lsmtree_types.h>
 #include <structures/lsmtree/segments/lsmtree_regular_segment.h>
 

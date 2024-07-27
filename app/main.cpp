@@ -1,5 +1,6 @@
 #include <config/config.h>
 #include <db/db.h>
+#include <iostream>
 #include <spdlog/common.h>
 
 /**

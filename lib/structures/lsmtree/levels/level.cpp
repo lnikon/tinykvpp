@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <iostream>
 #include <iterator>
 #include <optional>
 #include <queue>
