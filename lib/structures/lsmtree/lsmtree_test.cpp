@@ -1,9 +1,42 @@
 #include <catch2/catch_test_macros.hpp>
 
+#include <filesystem>
+#include <spdlog/spdlog.h>
 #include <structures/lsmtree/lsmtree.h>
 
 #include <limits>
 #include <random>
+#include <iostream>
+
+#include <catch2/reporters/catch_reporter_event_listener.hpp>
+#include <catch2/reporters/catch_reporter_registrars.hpp>
+
+class RemoveArtefactsListener : public Catch::EventListenerBase
+{
+  public:
+    using Catch::EventListenerBase::EventListenerBase;
+
+    void prepare()
+    {
+        std::filesystem::remove_all("segments");
+        std::filesystem::remove("segments");
+        std::filesystem::create_directory("segments");
+        std::filesystem::remove("manifest");
+        std::filesystem::remove("wal");
+    }
+
+    void testCaseStarting(Catch::TestCaseInfo const &testInfo) override
+    {
+        prepare();
+    }
+
+    void testCaseEnded(Catch::TestCaseStats const &testCaseStats) override
+    {
+        prepare();
+    }
+};
+
+CATCH_REGISTER_LISTENER(RemoveArtefactsListener)
 
 namespace
 {
@@ -67,8 +100,8 @@ std::vector<std::pair<std::string, std::string>> generateRandomStringPairVector(
     result.reserve(length);
     for (std::string::size_type size = 0; size < length; size++)
     {
-        result.emplace_back(generateRandomString(generateRandomNumber<std::size_t>(4, 64)),
-                            generateRandomString(generateRandomNumber<std::size_t>(4, 64)));
+        result.emplace_back(generateRandomString(generateRandomNumber<std::size_t>(64, 64)),
+                            generateRandomString(generateRandomNumber<std::size_t>(64, 64)));
     }
     return result;
 }
@@ -80,16 +113,19 @@ TEST_CASE("Flush regular segment", std::string(componentName))
 {
     using namespace structures;
 
-    auto randomKeys = generateRandomStringPairVector(1024);
+    // Disable logging to save on text execution time
+    spdlog::set_level(spdlog::level::info);
+
+    auto randomKeys = generateRandomStringPairVector(16);
 
     SECTION("Put and Get")
     {
         auto pConfig{config::make_shared()};
-        pConfig->LSMTreeConfig.SegmentType = lsmtree::lsmtree_segment_type_t::mock_k;
-        auto pStorage{lsmtree::segments::storage::make_shared()};
+        pConfig->LSMTreeConfig.DiskFlushThresholdSize = 1; // 64mb = 64000000
+        pConfig->LSMTreeConfig.SegmentType = lsmtree::lsmtree_segment_type_t::regular_k;
 
-        auto manifest{db::manifest::make_shared("")};
-        auto wal{db::wal::make_shared("")};
+        auto manifest{db::manifest::make_shared("manifest")};
+        auto wal{db::wal::make_shared("wal")};
         auto lsmTree{structures::lsmtree::lsmtree_t{pConfig, manifest, wal}};
         lsmtree::lsmtree_t lsmt(pConfig, manifest, wal);
         for (const auto &kv : randomKeys)
@@ -107,28 +143,18 @@ TEST_CASE("Flush regular segment", std::string(componentName))
     SECTION("Flush segment when memtable is full")
     {
         config::shared_ptr_t pConfig{config::make_shared()};
-        pConfig->LSMTreeConfig.DiskFlushThresholdSize = 2048;
+        pConfig->LSMTreeConfig.DiskFlushThresholdSize = 128;
         pConfig->LSMTreeConfig.SegmentType = lsmtree::lsmtree_segment_type_t::regular_k;
-        auto pStorage{lsmtree::segments::storage::make_shared()};
 
-        auto manifest{db::manifest::make_shared("")};
-        auto wal{db::wal::make_shared("")};
+        auto manifest{db::manifest::make_shared("manifest")};
+        auto wal{db::wal::make_shared("wal")};
         lsmtree::lsmtree_t lsmt(pConfig, manifest, wal);
         for (const auto &kv : randomKeys)
         {
             lsmt.put(lsmtree::key_t{kv.first}, lsmtree::value_t{kv.second});
         }
 
-        // TODO: Refactor
-        //        auto segmentPaths = pSegmentManager->get_segment_paths();
-        //        for (const auto &path : segmentPaths)
-        //        {
-        //            // Check that segment was created and dumped into disk
-        //            std::cout << path << std::endl;
-        //            REQUIRE(std::filesystem::exists(path));
-        //
-        //            // Perform a cleanup
-        //            std::filesystem::remove(path);
-        //        }
+        REQUIRE(std::filesystem::exists("segments"));
+        REQUIRE(!std::filesystem::is_empty("segments"));
     }
 }

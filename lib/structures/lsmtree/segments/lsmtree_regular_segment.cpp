@@ -49,7 +49,7 @@ void regular_segment_t::flush()
     // Skip execution if for some reason the memtable is empty
     if (m_memtable->empty())
     {
-        std::cerr << "can not flush empty memtable" << std::endl;
+        // std::cerr << "can not flush empty memtable" << std::endl;
         return;
     }
 
@@ -90,8 +90,9 @@ void regular_segment_t::flush()
     std::fstream stream(get_path(), std::fstream::trunc | std::fstream::out);
     if (!stream.is_open())
     {
-        std::cerr << "[regular_segment_t::flush]: "
-                  << "unable to open \"" << get_path() << "\"" << std::endl;
+        // std::cerr << "[regular_segment_t::flush]: "
+        //           << "unable to open \"" << get_path() << "\"" << std::endl;
+        throw std::runtime_error("unable to flush segment for path " + m_path.string());
         return;
     }
 
@@ -99,8 +100,8 @@ void regular_segment_t::flush()
     stream << ss.str();
     stream.flush();
 
-    std::cout << "[regular_segment_t::flush]: "
-              << "Successfully flushed segment: \"" << get_path() << "\"" << std::endl;
+    // std::cout << "[regular_segment_t::flush]: "
+    //   << "Successfully flushed segment: \"" << get_path() << "\"" << std::endl;
 
     // Free the memory occupied by the segment on successful flush
     // m_memtable = memtable_t{};

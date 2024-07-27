@@ -222,10 +222,10 @@ segments::interface::shared_ptr_t level_t::merge(segments::interface::shared_ptr
     std::ranges::for_each(overlappingSegmentsView, [this](auto pSegment) { this->purge(pSegment); });
 
     // Flush new segments
-    std::cout << "# of new segments " << newSegments.size() << std::endl;
+    // std::cout << "# of new segments " << newSegments.size() << std::endl;
     for (const auto &pNewCurrentLevelSegment : newSegments)
     {
-        std::cout << "flushing merge result " << pNewCurrentLevelSegment->get_path() << std::endl;
+        // std::cout << "flushing merge result " << pNewCurrentLevelSegment->get_path() << std::endl;
         pNewCurrentLevelSegment->flush();
         emplace(pNewCurrentLevelSegment);
     }

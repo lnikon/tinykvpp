@@ -312,6 +312,7 @@ template <typename stream_gt> void memtable_t::record_t::write(stream_gt &os) co
     m_key.write(os);
     m_value.write(os);
     m_timestamp.write(os);
+    os << std::endl;
 }
 
 template <typename stream_gt> void memtable_t::record_t::read(stream_gt &os)

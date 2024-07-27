@@ -2,6 +2,7 @@
 #include <db/db.h>
 #include <iostream>
 #include <spdlog/common.h>
+#include <spdlog/spdlog.h>
 
 /**
  * TODO(lnikon): Add following arguments.
@@ -26,7 +27,7 @@ int main(int argc, char *argv[])
     db::db_t db(pConfig);
     if (!db.open())
     {
-        std::cerr << "Unable to open the database" << std::endl;
+        spdlog::error("Unable to open the database");
         return 1;
     }
 

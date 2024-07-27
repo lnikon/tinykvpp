@@ -84,11 +84,11 @@ segments::interface::shared_ptr_t levels_t::segment(const structures::lsmtree::l
         {
             if (currentLevel->index() == 0)
             {
-                std::cout << "skipping compactation of levels >= 1" << std::endl;
+                // std::cout << "skipping compactation of levels >= 1" << std::endl;
                 break;
             }
 
-            std::cout << "skipping compactation of level = " << currentLevel->index() << std::endl;
+            // std::cout << "skipping compactation of level = " << currentLevel->index() << std::endl;
             continue;
         }
 
