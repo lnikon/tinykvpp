@@ -4,6 +4,7 @@
 
 #include <spdlog/spdlog.h>
 #include <vector>
+#include <variant>
 
 namespace db::manifest
 {

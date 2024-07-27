@@ -1,4 +1,5 @@
-FROM gcc:14.1
+ARG TARGET=gcc:latest
+FROM ${TARGET}
 
 # Install necessary packages for development
 RUN apt-get update && \

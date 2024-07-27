@@ -2,17 +2,21 @@ name: Docker Image CI
 
 on:
   push:
-    branches: [ "master" ]
+    branches: ["master"]
   pull_request:
-    branches: [ "master" ]
+    branches: ["master"]
 
 jobs:
-
-  build:
-
+  build-clang:
     runs-on: ubuntu-latest
-
     steps:
-    - uses: actions/checkout@v4
-    - name: Build the Docker image
-      run: docker build . --file Dockerfile --tag tinykvpp:$(date +%s)
+      - uses: actions/checkout@v4
+      - name: Build the Docker image
+        run: docker build --build-arg "TARGET=jetbrains/qodana-clang:2024.2-eap-clang18" . --file Dockerfile --tag tinykvpp-clang:$(date +%s)
+
+  build-gcc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the Docker image
+        run: docker build --build-arg "TARGET=gcc" . --file Dockerfile --tag tinykvpp-gcc:$(date +%s)

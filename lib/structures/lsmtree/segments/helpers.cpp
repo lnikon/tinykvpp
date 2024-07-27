@@ -3,12 +3,12 @@
 //
 
 #include <structures/lsmtree/segments/helpers.h>
-#include <format>
 
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/random_generator.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/uuid/uuid_io.hpp>
+#include <fmt/core.h>
 
 namespace structures::lsmtree::segments::helpers
 {
@@ -23,7 +23,7 @@ auto unix_timestamp()
 types::name_t segment_name()
 {
     boost::uuids::random_generator gen;
-    return types::name_t{std::format("segment_{}", boost::lexical_cast<std::string>(gen()))};
+    return types::name_t{fmt::format("segment_{}", boost::lexical_cast<std::string>(gen()))};
 }
 
 std::filesystem::path segment_path(const std::filesystem::path datadir, const types::name_t &name)
