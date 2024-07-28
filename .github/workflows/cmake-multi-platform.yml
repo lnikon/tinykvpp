@@ -70,14 +70,14 @@ jobs:
       run: |
         conan install . --output-folder=${{ steps.strings.outputs.build-output-dir }} --build=missing --profile:host=${{ github.workspace }}/conan/profiles/release-${{ matrix.c_compiler }} --profile:build=${{ github.workspace }}/conan/profiles/release-${{ matrix.c_compiler }}
         cp -f ${{ github.workspace }}/build/CMakePresets.json ${{ github.workspace }}
+        pwd
         ls ${{ github.workspace }}
 
     - name: Configure CMake
       # Configure CMake in a 'build' subdirectory. `CMAKE_BUILD_TYPE` is only required if you are using a single-configuration generator such as make.
       # See https://cmake.org/cmake/help/latest/variable/CMAKE_BUILD_TYPE.html?highlight=cmake_build_type
       run: |
-        cd ${{ github.workspace }}
-        cmake -B ${{ steps.strings.outputs.build-output-dir }} -DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }} -DCMAKE_C_COMPILER=${{ matrix.c_compiler }} -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} --preset conan-release -S ${{ github.workspace }}
+        cmake -B ${{ steps.strings.outputs.build-output-dir }} -DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }} -DCMAKE_C_COMPILER=${{ matrix.c_compiler }} -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} --preset conan-release -S .
 
     - name: Build
       # Build your program with the given configuration. Note that --config is needed because the default Windows generator is a multi-config generator (Visual Studio generator).
