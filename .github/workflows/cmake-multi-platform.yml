@@ -53,7 +53,9 @@ jobs:
       with:
         packages: |
           conan
-
+    - name: cat profile
+      run: cat ${{ github.workspace }}/conan/profiles/release-${{ matrix.c_compiler }}
+      
     - name: Install dependencies via Conan
       run: >
         conan install . --output-folder=${{ steps.strings.outputs.build-output-dir }} --build=missing --profile:host=${{ github.workspace }}/conan/profiles/release-${{ matrix.c_compiler }}
