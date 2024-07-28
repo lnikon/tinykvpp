@@ -124,7 +124,7 @@ TEST_CASE("Flush regular segment", std::string(componentName))
         pConfig->LSMTreeConfig.DiskFlushThresholdSize = 1; // 64mb = 64000000
         pConfig->LSMTreeConfig.SegmentType = lsmtree::lsmtree_segment_type_t::regular_k;
 
-        auto manifest{db::manifest::make_shared("manifest")};
+        auto manifest{db::manifest::make_shared(pConfig)};
         auto wal{db::wal::make_shared("wal")};
         auto lsmTree{structures::lsmtree::lsmtree_t{pConfig, manifest, wal}};
         lsmtree::lsmtree_t lsmt(pConfig, manifest, wal);
@@ -146,7 +146,7 @@ TEST_CASE("Flush regular segment", std::string(componentName))
         pConfig->LSMTreeConfig.DiskFlushThresholdSize = 128;
         pConfig->LSMTreeConfig.SegmentType = lsmtree::lsmtree_segment_type_t::regular_k;
 
-        auto manifest{db::manifest::make_shared("manifest")};
+        auto manifest{db::manifest::make_shared(pConfig)};
         auto wal{db::wal::make_shared("wal")};
         lsmtree::lsmtree_t lsmt(pConfig, manifest, wal);
         for (const auto &kv : randomKeys)

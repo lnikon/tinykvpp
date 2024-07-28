@@ -1,5 +1,6 @@
 #pragma once
 
+#include "config/config.h"
 #include <fs/append_only_file.h>
 
 #include <spdlog/spdlog.h>
@@ -9,8 +10,6 @@
 
 namespace db::manifest
 {
-
-std::string manifest_filename();
 
 /**
  * @class manifest_t
@@ -159,7 +158,7 @@ struct manifest_t
 
     using record_t = std::variant<segment_record_t, level_record_t>;
 
-    explicit manifest_t(const fs::path_t path);
+    explicit manifest_t(const config::shared_ptr_t config);
 
     void add(record_t info)
     {
@@ -285,7 +284,8 @@ struct manifest_t
     }
 
   private:
-    const fs::path_t m_path;
+    std::string m_name;
+    fs::path_t m_path;
     std::vector<record_t> m_records;
     fs::append_only_file_t m_log;
     bool m_enabled{true};

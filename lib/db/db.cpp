@@ -11,7 +11,7 @@ namespace db
  */
 db_t::db_t(const config::shared_ptr_t config)
     : m_config{config},
-      m_manifest{manifest::make_shared(config->DatabaseConfig.DatabasePath / manifest::manifest_filename())},
+      m_manifest{manifest::make_shared(config)},
       m_wal{wal::make_shared(config->DatabaseConfig.DatabasePath / wal::wal_filename())},
       m_lsmTree{config, m_manifest, m_wal}
 {

@@ -106,7 +106,7 @@ int main(int argc, char *argv[])
         std::cout << std::endl;
     }
 
-    if (auto recordOpt{db.get(mem_key_t{"ddddd"})}; recordOpt)
+    if (auto recordOpt{db.get(mem_key_t{"ddddd1"})}; recordOpt)
     {
         recordOpt->write(std::cout);
         std::cout << std::endl;
