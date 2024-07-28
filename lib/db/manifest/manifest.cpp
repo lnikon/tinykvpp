@@ -4,13 +4,12 @@
 #include <filesystem>
 #include <fmt/format.h>
 #include <fstream>
-#include <memory>
 #include <stdexcept>
 
 namespace db::manifest
 {
 
-constexpr const std::string current_filename("current");
+const std::string current_filename("current");
 
 // Manifest file will be periodically rotated to we need a unique filename every time
 std::string manifest_filename()
