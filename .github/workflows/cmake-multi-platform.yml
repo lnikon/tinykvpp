@@ -36,6 +36,15 @@ jobs:
             c_compiler: clang
             cpp_compiler: clang++
             container: "jetbrains/qodana-clang:2024.2-eap-clang18"
+        exclude:
+          - os: ubuntu-latest
+            c_compiler: gcc
+            cpp_compiler: g++
+            container: "jetbrains/qodana-clang:2024.2-eap-clang18"
+          - os: ubuntu-latest
+            c_compiler: clang
+            cpp_compiler: clang++
+            container: "gcc:14"
 
     steps:
     - uses: actions/checkout@v4
