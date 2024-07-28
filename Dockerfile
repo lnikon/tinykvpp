@@ -1,5 +1,5 @@
 ARG TARGET=gcc:latest
-FROM ${TARGET}
+FROM ${TARGET} as build
 
 # Install necessary packages for development
 RUN apt-get update && \
@@ -39,3 +39,12 @@ RUN cmake --preset conan-release
 
 # Build the project
 RUN cmake --build ./build
+
+# Run tests
+FROM build as test
+WORKDIR /workspaces
+COPY --from=build /workspaces/build/DBTest build/DBTest
+COPY --from=build /workspaces/build/LSMTreeTest build/LSMTreeTest
+COPY --from=build /workspaces/build/MemTableTest build/MemTableTest
+COPY run_tests.sh run_tests.sh
+RUN /workspaces/run_tests.sh
