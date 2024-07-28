@@ -1,3 +1,6 @@
+![Docker Image Builds](https://github.com/OWNER/REPOSITORY/actions/workflows/docker-image/badge.svg)
+![Multi-platform Builds](https://github.com/OWNER/REPOSITORY/actions/workflows/cmake-multi-platform/badge.svg)
+
 # tinykvpp
 
 ## Build
