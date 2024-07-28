@@ -1,5 +1,5 @@
-![Docker Image Builds](https://github.com/lnikon/tinykvpp/actions/workflows/docker-image/badge.svg)
-![Multi-platform Builds](https://github.com/lnikon/tinykvpp/actions/workflows/cmake-multi-platform/badge.svg)
+![Docker Image Builds](https://github.com/lnikon/tinykvpp/actions/workflows/docker-image.yml/badge.svg)
+![Multi-platform Builds](https://github.com/lnikon/tinykvpp/actions/workflows/cmake-multi-platform.yml/badge.svg)
 
 # tinykvpp
 
