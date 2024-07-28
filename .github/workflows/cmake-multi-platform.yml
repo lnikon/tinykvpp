@@ -11,7 +11,7 @@ on:
 jobs:
   build:
     runs-on: ${{ matrix.os }}
-
+    container: ${{ matrix.container }}
     strategy:
       # Set fail-fast to false to ensure that feedback is delivered for all matrix combinations. Consider changing this to true when your workflow is stable.
       fail-fast: false
@@ -26,13 +26,16 @@ jobs:
         os: [ubuntu-latest]
         build_type: [Release]
         c_compiler: [gcc, clang]
+        container: [gcc:14, jetbrains/qodana-clang:2024.2-eap-clang18]
         include:
           - os: ubuntu-latest
             c_compiler: gcc
             cpp_compiler: g++
+            container: gcc:14
           - os: ubuntu-latest
             c_compiler: clang
             cpp_compiler: clang++
+            container: jetbrains/qodana-clang:2024.2-eap-clang18
 
     steps:
     - uses: actions/checkout@v4
@@ -43,12 +46,6 @@ jobs:
       shell: bash
       run: |
         echo "build-output-dir=${{ github.workspace }}/build" >> "$GITHUB_OUTPUT"
-
-    - name: Install compiler
-      id: install_cc
-      uses: rlalik/setup-cpp-compiler@master
-      with:
-        compiler: ${{ matrix.c_compiler }}
 
     - name: Install Conan
       id: conan
