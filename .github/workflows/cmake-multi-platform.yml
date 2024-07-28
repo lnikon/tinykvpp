@@ -58,8 +58,8 @@ jobs:
 
     - name: Install CMake
       run: |
-        sudo apt-get update
-        sudo apt-get install cmake
+        apt-get update
+        apt-get install cmake
 
     - uses: actions/setup-python@v4
       with:
