@@ -9,6 +9,8 @@ on:
 jobs:
   build:
     runs-on: ${{ matrix.os }}
+    env:
+      DEBIAN_FRONTEND: noninteractive
     container:
       image: ${{ matrix.container }}
       options: --user root
@@ -58,8 +60,7 @@ jobs:
 
     - name: Install CMake
       run: |
-        apt-get update
-        apt-get install cmake
+        apt update && apt install -y cmake && rm -rf /var/lib/apt/lists/*
 
     - uses: actions/setup-python@v4
       with:
