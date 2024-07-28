@@ -62,6 +62,7 @@ jobs:
 
     - name: Install dependencies via Conan
       run: >
+        conan profile detect
         conan install . --output-folder=${{ steps.strings.outputs.build-output-dir }} --build=missing
 
     - name: Configure CMake
