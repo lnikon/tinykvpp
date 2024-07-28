@@ -49,11 +49,11 @@ jobs:
       run: |
         echo "build-output-dir=${{ github.workspace }}/build" >> "$GITHUB_OUTPUT"
 
-    - name: Install gcc14
-      run: |
-        sudo add-apt-repository "deb http://archive.ubuntu.com/ubuntu $(lsb_release -sc) universe"
-        sudo apt-get update
-        sudo apt-get install gcc-13
+    # - name: Install gcc14
+    #   run: |
+    #     sudo add-apt-repository "deb http://archive.ubuntu.com/ubuntu $(lsb_release -sc) universe"
+    #     sudo apt-get update
+    #     sudo apt-get install gcc-13
 
     - uses: actions/setup-python@v4
       with:
