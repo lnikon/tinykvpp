@@ -9,6 +9,8 @@ on:
 jobs:
   build:
     runs-on: ${{ matrix.os }}
+    env:
+      DEBIAN_FRONTEND: noninteractive
     container:
       image: ${{ matrix.container }}
       options: --user root
@@ -55,6 +57,10 @@ jobs:
     #     sudo add-apt-repository "deb http://archive.ubuntu.com/ubuntu $(lsb_release -sc) universe"
     #     sudo apt-get update
     #     sudo apt-get install gcc-13
+
+    - name: Install CMake
+      run: |
+        apt update && apt install -y cmake && rm -rf /var/lib/apt/lists/*
 
     - uses: actions/setup-python@v4
       with:
