@@ -57,11 +57,17 @@ jobs:
     - name: Setup Python
       uses: actions/setup-python@v1
 
-    - name: Install Conan
-      id: conan
-      uses: turtlebrowser/get-conan@main
+    - name: Install Conan via Pip
+      uses: insightsengineering/pip-action@v2
       with:
-        version: 2.2.2
+        packages: |
+          conan
+
+    # - name: Install Conan
+    #   id: conan
+    #   uses: turtlebrowser/get-conan@main
+    #   with:
+    #     version: 2.2.2
 
     - name: Create Conan profile
       run: conan profile detect
