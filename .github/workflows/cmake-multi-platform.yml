@@ -67,8 +67,7 @@ jobs:
       
     - name: Install dependencies via Conan
       run: |
-        conan install . --output-folder=${{ steps.strings.outputs.build-output-dir }} --build=missing --profile:host=${{ github.workspace }}/conan/profiles/release-${{ matrix.c_compiler }}
-        --profile:build=${{ github.workspace }}/conan/profiles/release-${{ matrix.c_compiler }}
+        conan install . --output-folder=${{ steps.strings.outputs.build-output-dir }} --build=missing --profile:host=${{ github.workspace }}/conan/profiles/release-${{ matrix.c_compiler }} --profile:build=${{ github.workspace }}/conan/profiles/release-${{ matrix.c_compiler }}
         cp -f ${{ github.workspace }}/build/CMakePresets.json ${{ github.workspace }}
 
     - name: Configure CMake
