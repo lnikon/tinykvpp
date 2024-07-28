@@ -1,6 +1,6 @@
 [buildenv]
-CC=/usr/bin/gcc
-CXX=/usr/bin/g++
+CC=/usr/local/bin/gcc
+CXX=/usr/local/bin/g++
 
 [settings]
 arch=x86_64
