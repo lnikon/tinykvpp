@@ -14,6 +14,7 @@
 #include <utility>
 #include <variant>
 #include <chrono>
+#include <iostream>
 
 namespace structures::memtable
 {

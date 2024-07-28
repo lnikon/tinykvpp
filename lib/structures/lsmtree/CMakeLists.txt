@@ -15,8 +15,8 @@ add_library(
         "compactation/level_zero_compactation.cpp")
 
 set_target_properties(LSMTree PROPERTIES CXX_STANDARD 23)
-target_include_directories(LSMTree INTERFACE ${CMAKE_CURRENT_SOURCE_DIR} ${Boost_INCLUDE_DIRS})
-target_link_libraries(LSMTree PRIVATE Boost::boost spdlog::spdlog)
+target_include_directories(LSMTree INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(LSMTree PRIVATE spdlog::spdlog)
 
 add_executable(LSMTreeTest "lsmtree_test.cpp")
 set_target_properties(LSMTreeTest PROPERTIES CXX_STANDARD 23)
