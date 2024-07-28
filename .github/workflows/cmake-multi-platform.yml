@@ -50,7 +50,7 @@ jobs:
       run: |
         sudo add-apt-repository "deb http://archive.ubuntu.com/ubuntu $(lsb_release -sc) universe"
         sudo apt-get update
-        sudo apt-get install gcc
+        sudo apt-get install gcc-13
 
     - uses: actions/setup-python@v4
       with:
