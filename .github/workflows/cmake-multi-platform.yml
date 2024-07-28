@@ -54,6 +54,9 @@ jobs:
       run: |
         echo "build-output-dir=${{ github.workspace }}/build" >> "$GITHUB_OUTPUT"
 
+    - name: Setup Python
+      uses: actions/setup-python@v1
+
     - name: Install Conan
       id: conan
       uses: turtlebrowser/get-conan@main
