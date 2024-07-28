@@ -19,7 +19,7 @@ auto unix_timestamp()
         .count();
 }
 
-std::string generateUUID()
+std::string uuid()
 {
     // Step 1: Generate 16 random bytes
     std::random_device rd;
@@ -53,7 +53,7 @@ std::string generateUUID()
 
 types::name_t segment_name()
 {
-    return types::name_t{fmt::format("segment_{}", generateUUID())};
+    return types::name_t{fmt::format("segment_{}", uuid())};
 }
 
 std::filesystem::path segment_path(const std::filesystem::path datadir, const types::name_t &name)

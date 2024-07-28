@@ -1,4 +1,5 @@
 #include "db.h"
+#include "db/manifest/manifest.h"
 
 #include <spdlog/spdlog.h>
 
@@ -10,8 +11,8 @@ namespace db
  */
 db_t::db_t(const config::shared_ptr_t config)
     : m_config{config},
-      m_manifest{manifest::make_shared(config->DatabaseConfig.DatabasePath / "manifest")}, // TODO: use helper function
-      m_wal{wal::make_shared(config->DatabaseConfig.DatabasePath / "wal")},                // TODO: use helper function
+      m_manifest{manifest::make_shared(config->DatabaseConfig.DatabasePath / manifest::manifest_filename())},
+      m_wal{wal::make_shared(config->DatabaseConfig.DatabasePath / wal::wal_filename())},
       m_lsmTree{config, m_manifest, m_wal}
 {
 }
@@ -43,7 +44,7 @@ void db_t::put(const structures::lsmtree::key_t &key, const structures::lsmtree:
     m_lsmTree.put(key, value);
 }
 
-std::optional<record_t> db_t::get(const structures::lsmtree::key_t &key)
+std::optional<structures::memtable::memtable_t::record_t> db_t::get(const structures::lsmtree::key_t &key)
 {
     return m_lsmTree.get(key);
 }

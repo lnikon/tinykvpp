@@ -12,6 +12,9 @@
 namespace db::wal
 {
 
+// WAL gets cleaned-up everytime memtable is flushed so its save to reuse the same name
+std::string wal_filename();
+
 class wal_t
 {
   public:

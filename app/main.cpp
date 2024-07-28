@@ -1,8 +1,12 @@
+#include "memtable.h"
 #include <config/config.h>
 #include <db/db.h>
 #include <iostream>
 #include <spdlog/common.h>
 #include <spdlog/spdlog.h>
+
+using mem_key_t = structures::memtable::memtable_t::record_t::key_t;
+using mem_value_t = structures::memtable::memtable_t::record_t::value_t;
 
 /**
  * TODO(lnikon): Add following arguments.
@@ -33,81 +37,76 @@ int main(int argc, char *argv[])
 
     // for (int i = 0; i < 3; i++)
     // {
-    db.put(db::lsmtree::key_t{"aaaaaa"}, db::lsmtree::value_t{"version1"});
-    db.put(db::lsmtree::key_t{"aaaaaa"}, db::lsmtree::value_t{"version2"});
-    db.put(db::lsmtree::key_t{"aaaaaa"}, db::lsmtree::value_t{"version3"});
-    db.put(db::lsmtree::key_t{"cccccc"}, db::lsmtree::value_t{"aaaa"});
-    db.put(db::lsmtree::key_t{"aaaaaa"}, db::lsmtree::value_t{"version4"});
-    db.put(db::lsmtree::key_t{"aaaaaa"}, db::lsmtree::value_t{"version5"});
-    db.put(db::lsmtree::key_t{"aaaaaa"}, db::lsmtree::value_t{"version6"});
-    db.put(db::lsmtree::key_t{"cccccc"}, db::lsmtree::value_t{"bbbb"});
-    db.put(db::lsmtree::key_t{"aaaaaa"}, db::lsmtree::value_t{"version7"});
-    db.put(db::lsmtree::key_t{"aaaaaa"}, db::lsmtree::value_t{"version8"});
-    db.put(db::lsmtree::key_t{"ddddd"}, db::lsmtree::value_t{"version1"});
-    db.put(db::lsmtree::key_t{"cccccc"}, db::lsmtree::value_t{"dddd"});
-    //     db.put(db::lsmtree::key_t{"aaaaaa"}, db::lsmtree::value_t{"version9"});
-    //     db.put(db::lsmtree::key_t{"aaaaaa"}, db::lsmtree::value_t{"version10"});
-    //     db.put(db::lsmtree::key_t{"aaaaaa"}, db::lsmtree::value_t{"version11"});
-    //     db.put(db::lsmtree::key_t{"cccccc1"}, db::lsmtree::value_t{"aaaa1"});
-    //     db.put(db::lsmtree::key_t{"aaaaaa"}, db::lsmtree::value_t{"version12"});
-    //     db.put(db::lsmtree::key_t{"aaaaaa2"}, db::lsmtree::value_t{"version13"});
-    //     db.put(db::lsmtree::key_t{"aaaaaa"}, db::lsmtree::value_t{"version13"});
-    //     db.put(db::lsmtree::key_t{"cccccc"}, db::lsmtree::value_t{"bbbb2"});
-    //     db.put(db::lsmtree::key_t{"aaaaaa"}, db::lsmtree::value_t{"version14"});
-    //     db.put(db::lsmtree::key_t{"aaaaaa4"}, db::lsmtree::value_t{"version15"});
-    //     db.put(db::lsmtree::key_t{"ddddd2"}, db::lsmtree::value_t{"version2"});
-    //     db.put(db::lsmtree::key_t{"cccccc5"}, db::lsmtree::value_t{"dddd3"});
+    db.put(mem_key_t{"aaaaaa"}, mem_value_t{"version1"});
+    db.put(mem_key_t{"aaaaaa"}, mem_value_t{"version2"});
+    db.put(mem_key_t{"aaaaaa"}, mem_value_t{"version3"});
+    db.put(mem_key_t{"cccccc"}, mem_value_t{"aaaa"});
+    db.put(mem_key_t{"aaaaaa"}, mem_value_t{"version4"});
+    db.put(mem_key_t{"aaaaaa"}, mem_value_t{"version5"});
+    db.put(mem_key_t{"aaaaaa"}, mem_value_t{"version6"});
+    db.put(mem_key_t{"cccccc"}, mem_value_t{"bbbb"});
+    db.put(mem_key_t{"aaaaaa"}, mem_value_t{"version7"});
+    db.put(mem_key_t{"aaaaaa"}, mem_value_t{"version8"});
+    db.put(mem_key_t{"ddddd"}, mem_value_t{"version1"});
+    db.put(mem_key_t{"cccccc"}, mem_value_t{"dddd"});
+    db.put(mem_key_t{"aaaaaa"}, mem_value_t{"version9"});
+    db.put(mem_key_t{"aaaaaa"}, mem_value_t{"version10"});
+    db.put(mem_key_t{"aaaaaa"}, mem_value_t{"version11"});
+    db.put(mem_key_t{"cccccc1"}, mem_value_t{"aaaa1"});
+    db.put(mem_key_t{"aaaaaa"}, mem_value_t{"version12"});
+    db.put(mem_key_t{"aaaaaa2"}, mem_value_t{"version13"});
+    db.put(mem_key_t{"aaaaaa"}, mem_value_t{"version13"});
     // }
 
-    if (auto recordOpt{db.get(db::lsmtree::key_t{"aaaaaa"})}; recordOpt)
+    if (auto recordOpt{db.get(mem_key_t{"aaaaaa"})}; recordOpt)
     {
         recordOpt->write(std::cout);
         std::cout << std::endl;
     }
 
-    if (auto recordOpt{db.get(db::lsmtree::key_t{"cccccc"})}; recordOpt)
+    if (auto recordOpt{db.get(mem_key_t{"cccccc"})}; recordOpt)
     {
         recordOpt->write(std::cout);
         std::cout << std::endl;
     }
 
-    if (auto recordOpt{db.get(db::lsmtree::key_t{"ddddd"})}; recordOpt)
+    if (auto recordOpt{db.get(mem_key_t{"ddddd"})}; recordOpt)
     {
         recordOpt->write(std::cout);
         std::cout << std::endl;
     }
 
-    if (auto recordOpt{db.get(db::lsmtree::key_t{"cccccc1"})}; recordOpt)
+    if (auto recordOpt{db.get(mem_key_t{"cccccc1"})}; recordOpt)
     {
         recordOpt->write(std::cout);
         std::cout << std::endl;
     }
 
-    if (auto recordOpt{db.get(db::lsmtree::key_t{"aaaaaa2"})}; recordOpt)
+    if (auto recordOpt{db.get(mem_key_t{"aaaaaa2"})}; recordOpt)
     {
         recordOpt->write(std::cout);
         std::cout << std::endl;
     }
 
-    if (auto recordOpt{db.get(db::lsmtree::key_t{"aaaaaa4"})}; recordOpt)
+    if (auto recordOpt{db.get(mem_key_t{"aaaaaa4"})}; recordOpt)
     {
         recordOpt->write(std::cout);
         std::cout << std::endl;
     }
 
-    if (auto recordOpt{db.get(db::lsmtree::key_t{"ddddd2"})}; recordOpt)
+    if (auto recordOpt{db.get(mem_key_t{"ddddd2"})}; recordOpt)
     {
         recordOpt->write(std::cout);
         std::cout << std::endl;
     }
 
-    if (auto recordOpt{db.get(db::lsmtree::key_t{"cccccc5"})}; recordOpt)
+    if (auto recordOpt{db.get(mem_key_t{"cccccc5"})}; recordOpt)
     {
         recordOpt->write(std::cout);
         std::cout << std::endl;
     }
 
-    if (auto recordOpt{db.get(db::lsmtree::key_t{"ddddd"})}; recordOpt)
+    if (auto recordOpt{db.get(mem_key_t{"ddddd"})}; recordOpt)
     {
         recordOpt->write(std::cout);
         std::cout << std::endl;

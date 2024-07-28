@@ -9,7 +9,7 @@
 TEST_CASE("db interface validation", "[db]")
 {
     config::shared_ptr_t pConfig{config::make_shared()};
-    auto pSegmentStorage{db::lsmtree::segments::storage::make_shared()};
+    auto pSegmentStorage{structures::lsmtree::segments::storage::make_shared()};
     auto manifest{db::manifest::make_shared("manifest")};
     auto wal{db::wal::make_shared("wal")};
     auto lsmTree{structures::lsmtree::lsmtree_t{pConfig, manifest, wal}};

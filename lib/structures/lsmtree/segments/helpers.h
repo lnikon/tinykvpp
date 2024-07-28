@@ -13,14 +13,14 @@
 namespace structures::lsmtree::segments::helpers
 {
 
+std::string uuid();
+
 [[nodiscard]] auto unix_timestamp();
 
 [[nodiscard]] types::name_t segment_name();
 
-[[nodiscard]] std::filesystem::path segment_path(
-    const std::filesystem::path datadir,
-    const types::name_t& name);
+[[nodiscard]] std::filesystem::path segment_path(const std::filesystem::path datadir, const types::name_t &name);
 
-}  // namespace structures::lsmtree::segments::helpers
+} // namespace structures::lsmtree::segments::helpers
 
-#endif  // ZKV_HELPERS_H
+#endif // ZKV_HELPERS_H

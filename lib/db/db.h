@@ -1,5 +1,6 @@
 #pragma once
 
+#include "structures/memtable/memtable.h"
 #include "wal/wal.h"
 #include <config/config.h>
 #include <db/db_config.h>
@@ -10,16 +11,6 @@
 namespace db
 {
 
-using namespace structures::lsmtree;
-
-// Directory structure:
-// -- dbroot
-//  -- segments
-//		-- segment_1.sst
-//		-- segment_2.sst
-//		-- ...
-//		-- segment_N.sst
-
 class db_t
 {
   public:
@@ -28,7 +19,7 @@ class db_t
     [[nodiscard]] bool open();
 
     void put(const structures::lsmtree::key_t &key, const structures::lsmtree::value_t &value);
-    std::optional<record_t> get(const structures::lsmtree::key_t &key);
+    std::optional<structures::memtable::memtable_t::record_t> get(const structures::lsmtree::key_t &key);
 
   private:
     bool prepare_directory_structure();

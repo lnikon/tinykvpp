@@ -10,6 +10,8 @@
 namespace db::manifest
 {
 
+std::string manifest_filename();
+
 /**
  * @class manifest_t
  * @brief Manipulate disk-level manifest file
