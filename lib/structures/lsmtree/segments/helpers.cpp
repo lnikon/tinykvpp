@@ -5,6 +5,7 @@
 #include <structures/lsmtree/segments/helpers.h>
 
 #include <random>
+#include <array>
 
 #include <fmt/core.h>
 
