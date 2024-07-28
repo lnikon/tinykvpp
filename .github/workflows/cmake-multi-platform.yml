@@ -46,6 +46,11 @@ jobs:
       run: |
         echo "build-output-dir=${{ github.workspace }}/build" >> "$GITHUB_OUTPUT"
 
+    - name: Install gcc14
+      run: |
+        sudo add-apt-repository universe
+        sudo apt-get install gcc-14
+
     - uses: actions/setup-python@v4
       with:
         python-version: '3.12' 
