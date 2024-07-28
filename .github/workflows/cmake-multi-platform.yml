@@ -9,7 +9,10 @@ on:
 jobs:
   build:
     runs-on: ${{ matrix.os }}
-    # container: ${{ matrix.container }}
+    container:
+      image: ${{ matrix.container }}
+      volumes:
+        - ${{ github.workspace }}:${{ github.workspace }}
     strategy:
       # Set fail-fast to false to ensure that feedback is delivered for all matrix combinations. Consider changing this to true when your workflow is stable.
       fail-fast: false
@@ -23,18 +26,18 @@ jobs:
           - os: ubuntu-latest
             c_compiler: gcc
             cpp_compiler: g++
-            # container: "gcc:14"
+            container: "gcc:14"
           - os: ubuntu-latest
             c_compiler: clang
             cpp_compiler: clang++
-            # container: "jetbrains/qodana-clang:2024.2-eap-clang18"
-        # exclude:
-        #   - os: ubuntu-latest
-        #     c_compiler: gcc
-        #     container: "jetbrains/qodana-clang:2024.2-eap-clang18"
-        #   - os: ubuntu-latest
-        #     c_compiler: clang
-        #     container: "gcc:14"
+            container: "jetbrains/qodana-clang:2024.2-eap-clang18"
+        exclude:
+          - os: ubuntu-latest
+            c_compiler: gcc
+            container: "jetbrains/qodana-clang:2024.2-eap-clang18"
+          - os: ubuntu-latest
+            c_compiler: clang
+            container: "gcc:14"
 
     steps:
     - uses: actions/checkout@v4
