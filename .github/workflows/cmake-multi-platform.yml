@@ -26,16 +26,16 @@ jobs:
         os: [ubuntu-latest]
         build_type: [Release]
         c_compiler: [gcc, clang]
-        container: [gcc:14, jetbrains/qodana-clang:2024.2-eap-clang18]
+        container: ["gcc:14", "jetbrains/qodana-clang:2024.2-eap-clang18"]
         include:
           - os: ubuntu-latest
             c_compiler: gcc
             cpp_compiler: g++
-            container: gcc:14
+            container: "gcc:14"
           - os: ubuntu-latest
             c_compiler: clang
             cpp_compiler: clang++
-            container: jetbrains/qodana-clang:2024.2-eap-clang18
+            container: "jetbrains/qodana-clang:2024.2-eap-clang18"
 
     steps:
     - uses: actions/checkout@v4
