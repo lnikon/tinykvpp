@@ -3,8 +3,6 @@ cmake_minimum_required(VERSION 3.25)
 add_library(
         LSMTree
         "lsmtree.cpp"
-        "segments/segment_interface.cpp"
-        "segments/lsmtree_mock_segment.cpp"
         "segments/lsmtree_regular_segment.cpp"
         "segments/lsmtree_segment_factory.cpp"
         "segments/segment_storage.cpp"

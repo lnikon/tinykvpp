@@ -3,28 +3,16 @@
 //
 
 #include <structures/lsmtree/lsmtree_types.h>
-#include <structures/lsmtree/segments/lsmtree_mock_segment.h>
 #include <structures/lsmtree/segments/lsmtree_regular_segment.h>
 #include <structures/lsmtree/segments/lsmtree_segment_factory.h>
 
 namespace structures::lsmtree::segments::factories
 {
 
-interface::shared_ptr_t lsmtree_segment_factory(const lsmtree_segment_type_t type,
-                                                types::name_t name,
-                                                types::path_t path,
-                                                memtable::memtable_t memtable)
+lsmtree::segments::regular_segment::shared_ptr_t
+lsmtree_segment_factory(types::name_t name, types::path_t path, memtable::memtable_t memtable)
 {
-    switch (type)
-    {
-    case lsmtree_segment_type_t::mock_k:
-        return mock_segment::make_shared(std::move(path), std::move(memtable));
-    case lsmtree_segment_type_t::regular_k:
-        return regular_segment::make_shared(std::move(path), std::move(name), std::move(memtable));
-    default:
-        assert(false);
-        return nullptr;
-    }
+    return regular_segment::make_shared(std::move(path), std::move(name), std::move(memtable));
 }
 
 } // namespace structures::lsmtree::segments::factories

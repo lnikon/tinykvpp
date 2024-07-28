@@ -5,7 +5,6 @@
 #include "levels.h"
 #include <db/manifest/manifest.h>
 
-#include <iostream>
 #include <spdlog/spdlog.h>
 
 namespace structures::lsmtree::levels
@@ -51,8 +50,8 @@ levels_t::levels_t(const config::shared_ptr_t pConfig, db::manifest::shared_ptr_
 {
 }
 
-segments::interface::shared_ptr_t levels_t::segment(const structures::lsmtree::lsmtree_segment_type_t type,
-                                                    memtable::memtable_t memtable)
+segments::regular_segment::shared_ptr_t levels_t::segment(const structures::lsmtree::lsmtree_segment_type_t type,
+                                                          memtable::memtable_t memtable)
 {
     // Create level zero if it doesn't exist
     if (m_levels.empty())
@@ -70,7 +69,7 @@ segments::interface::shared_ptr_t levels_t::segment(const structures::lsmtree::l
     m_manifest->add(db::manifest::manifest_t::segment_record_t{
         .op = segment_operation_k::add_segment_k, .name = pSegment->get_name(), .level = 0});
 
-    segments::interface::shared_ptr_t compactedCurrentLevelSegment{nullptr};
+    segments::regular_segment::shared_ptr_t compactedCurrentLevelSegment{nullptr};
     for (std::size_t idx{0}; idx < m_levels.size(); idx++)
     {
         auto currentLevel{m_levels[idx]};

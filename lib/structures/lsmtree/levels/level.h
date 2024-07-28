@@ -1,5 +1,6 @@
 #pragma once
 
+#include "structures/lsmtree/segments/lsmtree_regular_segment.h"
 #include <db/manifest/manifest.h>
 #include <config/config.h>
 #include <structures/lsmtree/segments/segment_storage.h>
@@ -26,7 +27,7 @@ class level_t
      *
      * @param pSegment
      */
-    void emplace(lsmtree::segments::interface::shared_ptr_t pSegment) noexcept;
+    void emplace(segments::regular_segment::shared_ptr_t pSegment) noexcept;
 
     /**
      * @brief Create an immutable segment of a given type for the @pMemtable.
@@ -37,27 +38,27 @@ class level_t
      * @param pMemtable
      * @return owning pointer to the newly created segment
      */
-    [[maybe_unused]] segments::interface::shared_ptr_t segment(const lsmtree_segment_type_t type,
-                                                               memtable::memtable_t pMemtable);
+    [[maybe_unused]] segments::regular_segment::shared_ptr_t segment(const lsmtree_segment_type_t type,
+                                                                     memtable::memtable_t pMemtable);
 
     /**
      * @brief
      *
      * @param key
      */
-    [[nodiscard]] std::optional<record_t> record(const key_t &key) const noexcept;
+    [[nodiscard]] std::optional<memtable::memtable_t::record_t> record(const key_t &key) const noexcept;
 
     /**
      * @brief Compact level0 into a single segment in 'ReadyToFlush' state
      */
-    segments::interface::shared_ptr_t compact() const noexcept;
+    segments::regular_segment::shared_ptr_t compact() const noexcept;
 
     /**
      * @brief
      *
      * @param pSegment
      */
-    segments::interface::shared_ptr_t merge(segments::interface::shared_ptr_t pSegment) noexcept;
+    segments::regular_segment::shared_ptr_t merge(segments::regular_segment::shared_ptr_t pSegment) noexcept;
 
     /**
      * @brief Purge segments from memory and disk
@@ -87,7 +88,7 @@ class level_t
 
   private:
     void purge(segments::storage::segment_storage_t &m_pStorage) const noexcept;
-    void purge(segments::interface::shared_ptr_t pSegment) const noexcept;
+    void purge(segments::regular_segment::shared_ptr_t pSegment) const noexcept;
 
   private:
     const config::shared_ptr_t m_pConfig;

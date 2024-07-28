@@ -3,12 +3,9 @@
 #include <structures/lsmtree/lsmtree_types.h>
 #include <structures/lsmtree/segments/helpers.h>
 #include <structures/lsmtree/lsmtree.h>
-#include <structures/lsmtree/segments/segment_interface.h>
 #include <structures/lsmtree/segments/lsmtree_segment_factory.h>
 
-#include <cstdint>
 #include <optional>
-#include <type_traits>
 
 #include <spdlog/spdlog.h>
 
@@ -114,7 +111,6 @@ bool lsmtree_t::restore_manifest() noexcept
                     {
                         m_levels.level(record.level)
                             ->emplace(segments::factories::lsmtree_segment_factory(
-                                lsmtree_segment_type_t::regular_k,
                                 record.name,
                                 segments::helpers::segment_path(m_pConfig->datadir_path(), record.name),
                                 std::move(memtable_t{})));

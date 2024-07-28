@@ -1,13 +1,12 @@
 #include "level.h"
 #include "structures/lsmtree/lsmtree_types.h"
+#include "structures/lsmtree/segments/lsmtree_segment_factory.h"
 #include "structures/lsmtree/segments/segment_storage.h"
 #include "structures/lsmtree/segments/helpers.h"
-#include "structures/lsmtree/segments/lsmtree_segment_factory.h"
 #include "structures/memtable/memtable.h"
 
 #include <algorithm>
 #include <cassert>
-#include <iostream>
 #include <iterator>
 #include <optional>
 #include <queue>
@@ -18,7 +17,6 @@
 namespace structures::lsmtree::level
 {
 
-namespace factories = segments::factories;
 namespace helpers = segments::helpers;
 
 using segment_operation_k = db::manifest::manifest_t::segment_record_t::operation_k;
@@ -33,7 +31,7 @@ level_t::level_t(const level_index_type_t levelIndex,
 {
 }
 
-void level_t::emplace(lsmtree::segments::interface::shared_ptr_t pSegment) noexcept
+void level_t::emplace(lsmtree::segments::regular_segment::shared_ptr_t pSegment) noexcept
 {
     assert(pSegment);
     spdlog::info("Adding segment {} into level {}", pSegment->get_name(), index());
@@ -50,14 +48,15 @@ void level_t::emplace(lsmtree::segments::interface::shared_ptr_t pSegment) noexc
         .op = segment_operation_k::add_segment_k, .name = pSegment->get_name(), .level = index()});
 }
 
-segments::interface::shared_ptr_t level_t::segment(const lsmtree_segment_type_t type, memtable::memtable_t pMemtable)
+segments::regular_segment::shared_ptr_t level_t::segment(const lsmtree_segment_type_t type,
+                                                         memtable::memtable_t pMemtable)
 {
     // Generate name for the segment
     const auto name{helpers::segment_name()};
 
     // Generate a path for the segment, including its name, then based on @type and @pMemtable create a segment
-    auto pSegment{factories::lsmtree_segment_factory(
-        type, name, helpers::segment_path(m_pConfig->datadir_path(), name), std::move(pMemtable))};
+    auto pSegment{segments::factories::lsmtree_segment_factory(
+        name, helpers::segment_path(m_pConfig->datadir_path(), name), std::move(pMemtable))};
 
     // Store newly created segment into the storage
     emplace(pSegment);
@@ -68,7 +67,7 @@ segments::interface::shared_ptr_t level_t::segment(const lsmtree_segment_type_t 
     return pSegment;
 }
 
-std::optional<record_t> level_t::record(const key_t &key) const noexcept
+std::optional<memtable::memtable_t::record_t> level_t::record(const key_t &key) const noexcept
 {
     std::vector<std::optional<record_t>> result{};
     for (auto begin{m_pStorage->cbegin()}, end{m_pStorage->cend()}; begin != end; ++begin)
@@ -93,7 +92,7 @@ template <typename T, typename U = T> struct IteratorCompare
     }
 };
 
-segments::interface::shared_ptr_t level_t::compact() const noexcept
+segments::regular_segment::shared_ptr_t level_t::compact() const noexcept
 {
     // If level size hasn't reached the size limit then skip the compactation
     if (m_pStorage->size() <= m_pConfig->LSMTreeConfig.LevelZeroCompactionSegmentCount)
@@ -130,7 +129,7 @@ segments::interface::shared_ptr_t level_t::compact() const noexcept
     }
 
     auto memtable{memtable::memtable_t{}};
-    auto lastKey{memtable_t::record_t::key_t{}};
+    auto lastKey{memtable::memtable_t::record_t::key_t{}};
     while (!minHeap.empty())
     {
         auto current = minHeap.top();
@@ -160,13 +159,11 @@ segments::interface::shared_ptr_t level_t::compact() const noexcept
     // Create a new segment from the compacted segment.
     // The postfix "_compacted" signals that the segment is an intermediate result
     auto name{helpers::segment_name() + segments::types::name_t{"_compacted"}};
-    return factories::lsmtree_segment_factory(m_pConfig->LSMTreeConfig.SegmentType,
-                                              std::move(name),
-                                              helpers::segment_path(m_pConfig->datadir_path(), name),
-                                              std::move(memtable));
+    return segments::factories::lsmtree_segment_factory(
+        name, helpers::segment_path(m_pConfig->datadir_path(), name), std::move(memtable));
 }
 
-segments::interface::shared_ptr_t level_t::merge(segments::interface::shared_ptr_t pSegment) noexcept
+segments::regular_segment::shared_ptr_t level_t::merge(segments::regular_segment::shared_ptr_t pSegment) noexcept
 {
     // Input memtable to merge with
     auto inMemtableView = pSegment->memtable().value() | std::views::all;
@@ -198,10 +195,8 @@ segments::interface::shared_ptr_t level_t::merge(segments::interface::shared_ptr
         {
             auto name = helpers::segment_name();
             newSegments.emplace(
-                factories::lsmtree_segment_factory(m_pConfig->LSMTreeConfig.SegmentType,
-                                                   name,
-                                                   helpers::segment_path(m_pConfig->datadir_path(), name),
-                                                   std::move(newMemtable)),
+                segments::factories::lsmtree_segment_factory(
+                    name, helpers::segment_path(m_pConfig->datadir_path(), name), std::move(newMemtable)),
                 segments::storage::key_range_comparator_t{});
             newMemtable = memtable::memtable_t{};
         }
@@ -211,10 +206,8 @@ segments::interface::shared_ptr_t level_t::merge(segments::interface::shared_ptr
     if (!newMemtable.empty())
     {
         auto name = helpers::segment_name();
-        newSegments.emplace(factories::lsmtree_segment_factory(m_pConfig->LSMTreeConfig.SegmentType,
-                                                               name,
-                                                               helpers::segment_path(m_pConfig->datadir_path(), name),
-                                                               std::move(newMemtable)),
+        newSegments.emplace(segments::factories::lsmtree_segment_factory(
+                                name, helpers::segment_path(m_pConfig->datadir_path(), name), std::move(newMemtable)),
                             segments::storage::key_range_comparator_t{});
     }
 
@@ -255,7 +248,7 @@ void level_t::purge(const segments::types::name_t &segment_name) const noexcept
 void level_t::purge(segments::storage::segment_storage_t &storage) const noexcept
 {
     // Go over the old segments and remove them from disk
-    std::vector<segments::interface::shared_ptr_t> segments;
+    std::vector<segments::regular_segment::shared_ptr_t> segments;
     for (auto segment : storage)
     {
         segments.push_back(segment);
@@ -272,7 +265,7 @@ void level_t::purge(segments::storage::segment_storage_t &storage) const noexcep
     storage.clear();
 }
 
-void level_t::purge(segments::interface::shared_ptr_t pSegment) const noexcept
+void level_t::purge(segments::regular_segment::shared_ptr_t pSegment) const noexcept
 {
     assert(pSegment);
 

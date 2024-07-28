@@ -39,8 +39,8 @@ class levels_t
      * @param type
      * @param pMemtable
      */
-    [[maybe_unused]] segments::interface::shared_ptr_t segment(const lsmtree_segment_type_t type,
-                                                               memtable::memtable_t memtable);
+    [[maybe_unused]] segments::regular_segment::shared_ptr_t segment(const lsmtree_segment_type_t type,
+                                                                     memtable::memtable_t memtable);
     /**
      * @brief Appends an additional level to the levels storage.
      *        If the table has #L levels, this new level will act as an #L+1th level.

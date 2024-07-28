@@ -6,7 +6,7 @@
 namespace structures::lsmtree::segments::storage
 {
 
-void segment_storage_t::emplace(segment::shared_ptr_t pSegment, segment_comp_t comp)
+void segment_storage_t::emplace(regular_segment::shared_ptr_t pSegment, segment_comp_t comp)
 {
     assert(pSegment);
     assert(m_segmentsMap.size() == m_segmentsVector.size());
@@ -80,7 +80,7 @@ void segment_storage_t::clear() noexcept
     m_segmentsVector.clear();
 }
 
-void segment_storage_t::remove(segment::shared_ptr_t pSegment)
+void segment_storage_t::remove(regular_segment::shared_ptr_t pSegment)
 {
     const auto oldSize = m_segmentsVector.size();
     m_segmentsVector.erase(std::remove(std::begin(m_segmentsVector), std::end(m_segmentsVector), pSegment),

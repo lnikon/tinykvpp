@@ -1,3 +1,4 @@
+#include "fs/append_only_file.h"
 #include <iostream>
 #include <structures/lsmtree/lsmtree_types.h>
 #include <structures/lsmtree/segments/lsmtree_regular_segment.h>
@@ -14,9 +15,8 @@ namespace structures::lsmtree::segments::regular_segment
 
 const auto footerSize{128}; // bytes
 
-regular_segment_t::regular_segment_t(std::filesystem::path path, types::name_t name, memtable::memtable_t memtable)
-    : segment_interface_t{},
-      m_path{std::move(path)},
+regular_segment_t::regular_segment_t(fs::path_t path, types::name_t name, memtable::memtable_t memtable)
+    : m_path{std::move(path)},
       m_name{std::move(name)},
       m_memtable{std::make_optional<memtable_t>(std::move(memtable))}
 {
@@ -90,8 +90,6 @@ void regular_segment_t::flush()
     std::fstream stream(get_path(), std::fstream::trunc | std::fstream::out);
     if (!stream.is_open())
     {
-        // std::cerr << "[regular_segment_t::flush]: "
-        //           << "unable to open \"" << get_path() << "\"" << std::endl;
         throw std::runtime_error("unable to flush segment for path " + m_path.string());
         return;
     }

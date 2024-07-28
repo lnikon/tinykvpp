@@ -5,7 +5,9 @@
 #ifndef ZKV_LSMTREEREGULARSEGMENT_H
 #define ZKV_LSMTREEREGULARSEGMENT_H
 
-#include <structures/lsmtree/segments/segment_interface.h>
+#include "fs/append_only_file.h"
+#include "structures/memtable/memtable.h"
+#include "structures/hashindex/hashindex.h"
 #include <structures/lsmtree/segments/types.h>
 
 namespace structures::lsmtree::segments::regular_segment
@@ -13,7 +15,7 @@ namespace structures::lsmtree::segments::regular_segment
 
 namespace types = lsmtree::segments::types;
 
-class regular_segment_t final : public segments::interface::segment_interface_t
+class regular_segment_t final
 {
   public:
     /**
@@ -23,7 +25,7 @@ class regular_segment_t final : public segments::interface::segment_interface_t
      * @param name
      * @param memtable
      */
-    regular_segment_t(types::path_t path, types::name_t name, memtable::memtable_t memtable);
+    regular_segment_t(fs::path_t path, types::name_t name, memtable::memtable_t memtable);
 
     /**
      * @brief
@@ -35,66 +37,67 @@ class regular_segment_t final : public segments::interface::segment_interface_t
      *
      * @param key
      */
-    [[nodiscard]] std::vector<std::optional<lsmtree::record_t>> record(const lsmtree::key_t &key) override;
+    [[nodiscard]] std::vector<std::optional<memtable::memtable_t::record_t>> record(const lsmtree::key_t &key);
 
     /**
      * @brief
      *
      * @param offset
      */
-    [[nodiscard]] std::optional<lsmtree::record_t> record(const hashindex::hashindex_t::offset_t &offset) override;
+    [[nodiscard]] std::optional<memtable::memtable_t::record_t> record(const hashindex::hashindex_t::offset_t &offset);
 
     /**
      * @brief
      */
-    types::name_t get_name() const override;
+    types::name_t get_name() const;
 
     /**
      * @brief
      */
-    types::path_t get_path() const override;
+    types::path_t get_path() const;
 
     /**
      * @brief
      */
-    std::optional<memtable::memtable_t> memtable() override;
+    std::optional<memtable::memtable_t> memtable();
 
     /**
      * @brief
      */
-    void restore() override;
+    void restore();
 
     /**
      * @brief
      */
-    void flush() override;
+    void flush();
 
     /**
      * @brief
      */
-    void purge() override;
+    void purge();
 
     /**
      * @brief
      */
-    std::filesystem::file_time_type last_write_time() override;
+    std::filesystem::file_time_type last_write_time();
 
     /**
      * @brief
      */
-    [[nodiscard]] virtual std::optional<record_t::key_t> min() const noexcept override;
+    [[nodiscard]] virtual std::optional<memtable::memtable_t::record_t::key_t> min() const noexcept;
 
     /**
      * @brief
      */
-    [[nodiscard]] virtual std::optional<record_t::key_t> max() const noexcept override;
+    [[nodiscard]] virtual std::optional<memtable::memtable_t::record_t::key_t> max() const noexcept;
 
   private:
     void restore_index();
 
   private:
-    const types::path_t m_path;
+    const fs::path_t m_path;
     const types::name_t m_name;
+
     hashindex::hashindex_t m_hashIndex;
     std::optional<memtable::memtable_t> m_memtable;
 
