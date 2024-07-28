@@ -2,17 +2,17 @@
 
 #include <structures/lsmtree/lsmtree_types.h>
 
-#include <cstdint>        // std::uint64_t
+#include <cstdint>
 #include <map>
 
 namespace structures::hashindex
 {
 
-// TODO(lnikon): Benchmarks with flat_*maps to understand the
+// TODO(lnikon): Benchmark with flat_*maps to understand the
 // performance.
 class hashindex_t
 {
-   public:
+  public:
     using offset_t = std::uint64_t;
     using cursor_t = std::uint64_t;
     using storage_t = std::multimap<structures::lsmtree::key_t, offset_t>;
@@ -30,12 +30,11 @@ class hashindex_t
     void emplace(structures::lsmtree::record_t key, const std::size_t length);
     bool empty() const;
 
-    [[nodiscard]] std::vector<offset_t> offset(
-        const structures::lsmtree::key_t &key) const;
+    [[nodiscard]] std::vector<offset_t> offset(const structures::lsmtree::key_t &key) const;
 
-   private:
+  private:
     cursor_t m_cursor;
     storage_t m_offsets;
 };
 
-}  // namespace structures::hashindex
+} // namespace structures::hashindex

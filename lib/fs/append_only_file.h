@@ -1,16 +1,13 @@
 #pragma once
 
+#include "types.h"
+
 #include <string>
 #include <sstream>
 #include <fstream>
-#include <filesystem>
 
 namespace fs
 {
-
-namespace stdfs = std::filesystem;
-
-using path_t = stdfs::path;
 
 struct append_only_file_t
 {
