@@ -50,7 +50,7 @@ jobs:
       run: |
         sudo add-apt-repository universe
         sudo apt-get update
-        sudo apt-get install gcc-14
+        sudo apt-get install gcc
 
     - uses: actions/setup-python@v4
       with:
