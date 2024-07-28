@@ -69,6 +69,7 @@ jobs:
       run: |
         conan install . --output-folder=${{ steps.strings.outputs.build-output-dir }} --build=missing --profile:host=${{ github.workspace }}/conan/profiles/release-${{ matrix.c_compiler }} --profile:build=${{ github.workspace }}/conan/profiles/release-${{ matrix.c_compiler }}
         cp -f ${{ github.workspace }}/build/CMakePresets.json ${{ github.workspace }}
+        ls ${{ github.workspace }}
 
     - name: Configure CMake
       # Configure CMake in a 'build' subdirectory. `CMAKE_BUILD_TYPE` is only required if you are using a single-configuration generator such as make.
