@@ -5,7 +5,7 @@
 #ifndef ZKV_LSMTREEREGULARSEGMENT_H
 #define ZKV_LSMTREEREGULARSEGMENT_H
 
-#include "fs/append_only_file.h"
+#include "fs/types.h"
 #include "structures/memtable/memtable.h"
 #include "structures/hashindex/hashindex.h"
 #include <structures/lsmtree/segments/types.h>

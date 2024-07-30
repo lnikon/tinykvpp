@@ -32,9 +32,8 @@ TEST_CASE("Emplace and Find", "[MemTable]")
 
 TEST_CASE("Check record size before and after insertion", "[MemTable]")
 {
-    memtable_t mt;
-
     {
+        memtable_t mt;
         record_key_t k{"B"};
         record_value_t v{"123"};
 
@@ -45,10 +44,13 @@ TEST_CASE("Check record size before and after insertion", "[MemTable]")
 
         size_t actualSize = record->size();
         size_t expectedSize = k.size() + v.size();
+        auto kz = k.size();
+        auto vz = v.size();
         REQUIRE(actualSize == expectedSize);
     }
 
     {
+        memtable_t mt;
         record_key_t k{"B"};
         record_value_t v{123};
 
@@ -58,11 +60,14 @@ TEST_CASE("Check record size before and after insertion", "[MemTable]")
         REQUIRE(record != std::nullopt);
 
         size_t actualSize = record->size();
+        auto kz = k.size();
+        auto vz = v.size();
         size_t expectedSize = k.size() + v.size();
         REQUIRE(actualSize == expectedSize);
     }
 
     {
+        memtable_t mt;
         record_key_t k{"B"};
         record_value_t v{123.456};
 
@@ -83,15 +88,13 @@ TEST_CASE("Check size", "[MemTable]")
 {
     memtable_t mt;
     auto k1 = record_key_t{"B"}, k2 = record_key_t{"A"}, k3 = record_key_t{"Z"};
-    auto v1 = record_value_t{123}, v2 = record_value_t{34.44},
-         v3 = record_value_t{"Hello"};
+    auto v1 = record_value_t{123}, v2 = record_value_t{34.44}, v3 = record_value_t{"Hello"};
     mt.emplace(record_t{k1, v1});
     mt.emplace(record_t{k2, v2});
     mt.emplace(record_t{k3, v3});
 
     // TODO: Not sure if this a good/correct way to check MemTable::Size() :)
-    REQUIRE(mt.size() == k1.size() + v1.size() + k2.size() + v2.size() +
-                             k3.size() + v3.size());
+    REQUIRE(mt.size() == k1.size() + v1.size() + k2.size() + v2.size() + k3.size() + v3.size());
 }
 
 TEST_CASE("Check count", "[MemTable]")

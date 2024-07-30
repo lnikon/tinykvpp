@@ -7,6 +7,7 @@
 
 #include <cassert>
 #include <structures/sorted_vector/sorted_vector.h>
+#include <structures/skiplist/skiplist.h>
 
 #include <optional>
 #include <string>
@@ -23,7 +24,8 @@ template <class> inline constexpr bool always_false_v = false;
 
 std::size_t string_size_in_bytes(const std::string &str);
 
-class memtable_t
+// class memtable_t
+class memtable_t : public std::ranges::range_adaptor_closure<memtable_t>
 {
   public:
     struct record_t
@@ -127,12 +129,13 @@ class memtable_t
         }
     };
 
-    using storage_t = typename sorted_vector::sorted_vector_t<record_t, record_comparator_by_key_t>;
+    // using storage_t = typename sorted_vector::sorted_vector_t<record_t, record_comparator_by_key_t>;
+    using storage_t = typename skiplist::skiplist_t<record_t, record_comparator_by_key_t>;
     using size_type = typename storage_t::size_type;
     using index_type = typename storage_t::index_type;
     using iterator = typename storage_t::iterator;
     using const_iterator = typename storage_t::const_iterator;
-    using reverse_iterator = typename storage_t::reverse_iterator;
+    // using reverse_iterator = typename storage_t::reverse_iterator;
     using value_type = typename storage_t::value_type;
 
     memtable_t() = default;
@@ -222,7 +225,7 @@ class memtable_t
     std::size_t m_count{0};
 };
 
-static_assert(std::ranges::random_access_range<memtable_t>);
+// static_assert(std::ranges::random_access_range<memtable_t>);
 
 template <typename stream_gt> void memtable_t::record_t::key_t::write(stream_gt &os) const
 {
@@ -325,9 +328,9 @@ template <typename stream_gt> void memtable_t::record_t::read(stream_gt &os)
 
 template <typename stream_gt> void memtable_t::write(stream_gt &os) const
 {
-    for (auto record : *this)
+    for (auto rec : *this)
     {
-        record.write(os);
+        rec.write(os);
         os << std::endl;
     }
 }

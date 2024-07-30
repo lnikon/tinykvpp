@@ -1,6 +1,7 @@
 #include "memtable.h"
 
 #include <optional>
+#include <type_traits>
 #include <utility>
 
 namespace structures::memtable
@@ -59,7 +60,7 @@ std::size_t memtable_t::record_t::value_t::size() const
         [](auto &&value)
         {
             using T = std::decay_t<decltype(value)>;
-            if constexpr (std::is_same_v<T, int64_t>)
+            if constexpr (std::is_integral_v<T>)
             {
                 return sizeof(value);
             }
@@ -174,10 +175,7 @@ void memtable_t::emplace(const memtable_t::record_t &record)
 
 std::optional<memtable_t::record_t> memtable_t::find(const memtable_t::record_t::key_t &key)
 {
-    record_t record{key, record_t::value_t{""}};
-
-    auto it = m_data.find(record);
-    return (it.first ? std::make_optional(m_data.at(it.second)) : std::nullopt);
+    return m_data.find(key);
 }
 
 std::size_t memtable_t::size() const
@@ -216,16 +214,26 @@ typename memtable_t::storage_t::const_iterator memtable_t::end() const
 
 std::optional<memtable_t::record_t::key_t> memtable_t::min() const noexcept
 {
-    static_assert(std::is_same_v<structures::sorted_vector::sorted_vector_t<record_t, record_comparator_by_key_t>,
-                                 decltype(m_data)>);
     return m_data.size() > 0 ? std::make_optional(m_data.cbegin()->m_key) : std::nullopt;
 }
 
 std::optional<memtable_t::record_t::key_t> memtable_t::max() const noexcept
 {
-    static_assert(std::is_same_v<structures::sorted_vector::sorted_vector_t<record_t, record_comparator_by_key_t>,
-                                 decltype(m_data)>);
-    return m_data.size() > 0 ? std::make_optional(m_data.back().m_key) : std::nullopt;
+    // TODO(lnikon): Fix this
+    storage_t::const_iterator beforeEnd{nullptr};
+    auto idx{0};
+    for (auto begin{m_data.cbegin()}; begin != m_data.cend(); ++begin)
+    {
+        if (idx == 0)
+        {
+            continue;
+        }
+        else
+        {
+            beforeEnd = begin;
+        }
+    }
+    return m_data.size() > 0 ? std::make_optional((beforeEnd)->m_key) : std::nullopt;
 }
 
 bool memtable_t::operator<(const memtable_t &other)

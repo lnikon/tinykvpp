@@ -166,7 +166,13 @@ segments::regular_segment::shared_ptr_t level_t::compact() const noexcept
 segments::regular_segment::shared_ptr_t level_t::merge(segments::regular_segment::shared_ptr_t pSegment) noexcept
 {
     // Input memtable to merge with
-    auto inMemtableView = pSegment->memtable().value() | std::views::all;
+    // auto inMemtableView = pSegment->memtable().value() | std::views::all;
+    auto inMemtableView = pSegment->memtable().value();
+    std::vector<memtable_t::record_t> inMemtable{};
+    for (auto &rec : inMemtableView)
+    {
+        inMemtable.emplace_back(std::move(rec));
+    }
 
     // Segments overlapping with input memtable
     auto overlappingSegmentsView = *m_pStorage | std::views::filter(
@@ -175,13 +181,24 @@ segments::regular_segment::shared_ptr_t level_t::merge(segments::regular_segment
                                                                 pSegment->max().value() < pSegment->max().value();
                                                      });
 
-    auto memtablesJoined = overlappingSegmentsView |
-                           std::views::transform([](auto pSegment) { return pSegment->memtable().value(); }) |
-                           std::views::join;
+    // auto memtablesJoined = mmtbls | std::views::join;
+    std::vector<memtable_t::record_t> memtablesJoined{};
+    for (auto &os : overlappingSegmentsView)
+    {
+        auto memtable = os->memtable().value();
+        for (auto rec : memtable)
+        {
+            memtablesJoined.emplace_back(std::move(rec));
+        }
+    }
+
+    // auto memtablesJoined = overlappingSegmentsView |
+    //                        std::views::transform([](auto pSegment) { return pSegment->memtable().value(); }) |
+    //                        std::views::join;
 
     // Merge overlapping memtables and segments
     std::vector<memtable::memtable_t::record_t> mergedMemtable;
-    std::ranges::merge(inMemtableView, memtablesJoined, std::back_inserter(mergedMemtable), std::less<>{});
+    std::ranges::merge(inMemtable, memtablesJoined, std::back_inserter(mergedMemtable), std::less<>{});
 
     // TODO(lnikon): Make this parameter configurable. Use measurement units(mb).
     const std::size_t segmentSize{1024};
