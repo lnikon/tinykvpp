@@ -5,15 +5,13 @@
 #include <optional>
 #include <random>
 #include <vector>
-#include <ranges>
 
 namespace structures::skiplist
 {
 
 const std::int64_t max_height = 12;
 
-template <typename record_gt, typename comparator_gt>
-class skiplist_t : public std::ranges::view_interface<skiplist_t<record_gt, comparator_gt>>
+template <typename record_gt, typename comparator_gt> class skiplist_t
 {
   public:
     template <typename T, typename Pointer, typename Reference> struct iterator_base;

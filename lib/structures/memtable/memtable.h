@@ -25,7 +25,7 @@ template <class> inline constexpr bool always_false_v = false;
 std::size_t string_size_in_bytes(const std::string &str);
 
 // class memtable_t
-class memtable_t : public std::ranges::range_adaptor_closure<memtable_t>
+class memtable_t
 {
   public:
     struct record_t
