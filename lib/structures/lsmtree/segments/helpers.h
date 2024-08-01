@@ -13,13 +13,13 @@
 namespace structures::lsmtree::segments::helpers
 {
 
-std::string uuid();
+auto uuid() -> std::string;
 
 [[nodiscard]] auto unix_timestamp();
 
-[[nodiscard]] types::name_t segment_name();
+[[nodiscard]] auto segment_name() -> types::name_t;
 
-[[nodiscard]] std::filesystem::path segment_path(const std::filesystem::path datadir, const types::name_t &name);
+[[nodiscard]] auto segment_path(std::filesystem::path datadir, const types::name_t &name) -> std::filesystem::path;
 
 } // namespace structures::lsmtree::segments::helpers
 

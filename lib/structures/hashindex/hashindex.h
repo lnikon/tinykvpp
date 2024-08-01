@@ -21,16 +21,16 @@ class hashindex_t
     hashindex_t();
     hashindex_t(const hashindex_t &) = default;
     hashindex_t(hashindex_t &&) = default;
-    hashindex_t &operator=(const hashindex_t &) = default;
-    hashindex_t &operator=(hashindex_t &&) = default;
+    auto operator=(const hashindex_t &) -> hashindex_t & = default;
+    auto operator=(hashindex_t &&) -> hashindex_t & = default;
 
-    [[nodiscard]] iterator begin();
-    [[nodiscard]] iterator end();
+    [[nodiscard]] auto begin() -> iterator;
+    [[nodiscard]] auto end() -> iterator;
 
-    void emplace(structures::lsmtree::record_t key, const std::size_t length);
-    bool empty() const;
+    void emplace(structures::lsmtree::record_t key, std::size_t length);
+    [[nodiscard]] auto empty() const -> bool;
 
-    [[nodiscard]] std::vector<offset_t> offset(const structures::lsmtree::key_t &key) const;
+    [[nodiscard]] auto offset(const structures::lsmtree::key_t &key) const -> std::vector<offset_t>;
 
   private:
     cursor_t m_cursor;

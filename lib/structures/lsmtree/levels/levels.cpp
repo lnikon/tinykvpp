@@ -7,51 +7,25 @@
 
 #include <spdlog/spdlog.h>
 
+#include <utility>
+
 namespace structures::lsmtree::levels
 {
 
 using level_operation_k = db::manifest::manifest_t::level_record_t::operation_k;
 using segment_operation_k = db::manifest::manifest_t::segment_record_t::operation_k;
 
-// ====================
-// compaction_trigger_t
-// ====================
-struct compaction_trigger_t
-{
-    /**
-     * @brief
-     *
-     * @param pLevel
-     */
-    compaction_trigger_t(level::shared_ptr_t pLevel);
-
-    /**
-     * @brief
-     *
-     * @return
-     */
-    virtual bool trigger() const noexcept = 0;
-
-  private:
-    level::shared_ptr_t m_pLevel{nullptr};
-};
-
-compaction_trigger_t::compaction_trigger_t(level::shared_ptr_t pLevel)
-    : m_pLevel{pLevel}
-{
-}
-
 // ========
 // levels_t
 // ========
-levels_t::levels_t(const config::shared_ptr_t pConfig, db::manifest::shared_ptr_t manifest) noexcept
-    : m_pConfig{pConfig},
-      m_manifest{manifest}
+levels_t::levels_t(config::shared_ptr_t pConfig, db::manifest::shared_ptr_t manifest) noexcept
+    : m_pConfig{std::move(pConfig)},
+      m_manifest{std::move(std::move(manifest))}
 {
 }
 
-segments::regular_segment::shared_ptr_t levels_t::segment(const structures::lsmtree::lsmtree_segment_type_t type,
-                                                          memtable::memtable_t memtable)
+auto levels_t::segment(const structures::lsmtree::lsmtree_segment_type_t type,
+                       memtable::memtable_t memtable) -> segments::regular_segment::shared_ptr_t
 {
     // Create level zero if it doesn't exist
     if (m_levels.empty())
@@ -62,7 +36,7 @@ segments::regular_segment::shared_ptr_t levels_t::segment(const structures::lsmt
 
     // Create a new segment for the memtable that became immutable
     assert(m_levels[0]);
-    auto pSegment = m_levels[0]->segment(type, std::move(memtable));
+    auto pSegment = m_levels[0]->segment(type, memtable);
     assert(pSegment);
 
     // Update manifest with new segment
@@ -144,7 +118,7 @@ segments::regular_segment::shared_ptr_t levels_t::segment(const structures::lsmt
     return compactedCurrentLevelSegment ? compactedCurrentLevelSegment : pSegment;
 }
 
-level::shared_ptr_t levels_t::level() noexcept
+auto levels_t::level() noexcept -> level::shared_ptr_t
 {
     return m_levels.emplace_back(level::make_shared(m_levels.size(), m_pConfig, m_manifest));
 }
@@ -154,27 +128,27 @@ level::shared_ptr_t levels_t::level() noexcept
  *
  * @param idx
  */
-[[maybe_unused]] level::shared_ptr_t levels_t::level(const std::size_t idx) noexcept
+[[maybe_unused]] auto levels_t::level(const std::size_t idx) noexcept -> level::shared_ptr_t
 {
     assert(idx < m_levels.size());
     return m_levels[idx];
 }
 
-levels_t::levels_storage_t::size_type levels_t::size() const noexcept
+auto levels_t::size() const noexcept -> levels_t::levels_storage_t::size_type
 {
     return m_levels.size();
 }
 
-std::optional<record_t> levels_t::record(const key_t &key) const noexcept
+auto levels_t::record(const key_t &key) const noexcept -> std::optional<record_t>
 {
     std::optional<record_t> result{};
-    for (const auto level : m_levels)
+    for (const auto &currentLevel : m_levels)
     {
-        assert(level);
-        result = level->record(key);
+        assert(currentLevel);
+        result = currentLevel->record(key);
         if (result)
         {
-            spdlog::info("Found key {} at level {}", key.m_key, level->index());
+            spdlog::info("Found key {} at level {}", key.m_key, currentLevel->index());
             break;
         }
     }

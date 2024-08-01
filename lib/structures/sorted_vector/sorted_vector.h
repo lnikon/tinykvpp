@@ -22,31 +22,31 @@ template <typename Data, typename Comparator = std::less<Data>> class sorted_vec
     sorted_vector_t() = default;
     sorted_vector_t(sorted_vector_t &) = default;
     sorted_vector_t(sorted_vector_t &&) = default;
-    sorted_vector_t &operator=(sorted_vector_t &) = default;
-    sorted_vector_t &operator=(sorted_vector_t &&) = default;
+    auto operator=(const sorted_vector_t &) -> sorted_vector_t & = default;
+    auto operator=(sorted_vector_t &&) -> sorted_vector_t & = default;
     ~sorted_vector_t() = default;
 
     void emplace(Data data, Comparator comparator = Comparator());
-    std::optional<Data> find(Data data, Comparator comparator = Comparator()) const;
+    auto find(Data data, Comparator comparator = Comparator()) const -> std::optional<Data>;
 
-    size_type size() const;
-    Data &at(const index_type index);
+    [[nodiscard]] auto size() const -> size_type;
+    auto at(index_type index) -> Data &;
 
-    iterator begin();
-    iterator end();
+    auto begin() -> iterator;
+    auto end() -> iterator;
 
-    iterator begin() const;
-    iterator end() const;
+    [[nodiscard]] auto begin() const -> iterator;
+    [[nodiscard]] auto end() const -> iterator;
 
-    reverse_iterator rbegin();
-    reverse_iterator rend();
+    auto rbegin() -> reverse_iterator;
+    auto rend() -> reverse_iterator;
 
-    const_iterator cbegin() const;
-    const_iterator cend() const;
+    [[nodiscard]] auto cbegin() const -> const_iterator;
+    [[nodiscard]] auto cend() const -> const_iterator;
 
-    iterator erase(iterator begin, iterator end);
+    auto erase(iterator begin, iterator end) -> iterator;
 
-    Data back() const noexcept;
+    [[nodiscard]] auto back() const noexcept -> Data;
 
     void clear() noexcept;
 
@@ -54,7 +54,7 @@ template <typename Data, typename Comparator = std::less<Data>> class sorted_vec
     std::vector<Data> m_data;
 };
 
-template <typename Data, typename Comparator> Data sorted_vector_t<Data, Comparator>::back() const noexcept
+template <typename Data, typename Comparator> auto sorted_vector_t<Data, Comparator>::back() const noexcept -> Data
 {
     return m_data.back();
 }
@@ -71,76 +71,77 @@ void sorted_vector_t<Data, Comparator>::emplace(Data data, Comparator comparator
 }
 
 template <typename Data, typename Comparator>
-std::optional<Data> sorted_vector_t<Data, Comparator>::find(Data data, Comparator comparator) const
+auto sorted_vector_t<Data, Comparator>::find(Data data, Comparator comparator) const -> std::optional<Data>
 {
-    auto it = std::lower_bound(m_data.begin(), m_data.end(), data, comparator);
-    const bool found = (it != m_data.end()) && !comparator(data, *it);
-    return found ? std::make_optional(*it) : std::nullopt;
+    auto dataIt = std::lower_bound(m_data.begin(), m_data.end(), data, comparator);
+    const bool found = (dataIt != m_data.end()) && !comparator(data, *dataIt);
+    return found ? std::make_optional(*dataIt) : std::nullopt;
     ;
 }
 
 template <typename Data, typename Comparator>
-typename sorted_vector_t<Data, Comparator>::size_type sorted_vector_t<Data, Comparator>::size() const
+auto sorted_vector_t<Data, Comparator>::size() const -> typename sorted_vector_t<Data, Comparator>::size_type
 {
     return m_data.size();
 }
 
-template <typename Data, typename Comparator> Data &sorted_vector_t<Data, Comparator>::at(const index_type index)
+template <typename Data, typename Comparator>
+auto sorted_vector_t<Data, Comparator>::at(const index_type index) -> Data &
 {
-  return m_data[index];
+    return m_data[index];
 }
 
 template <typename Data, typename Comparator>
-typename sorted_vector_t<Data, Comparator>::iterator sorted_vector_t<Data, Comparator>::begin()
-{
-    return m_data.begin();
-}
-
-template <typename Data, typename Comparator>
-typename sorted_vector_t<Data, Comparator>::iterator sorted_vector_t<Data, Comparator>::end()
-{
-    return m_data.end();
-}
-
-template <typename Data, typename Comparator>
-typename sorted_vector_t<Data, Comparator>::iterator sorted_vector_t<Data, Comparator>::begin() const
+auto sorted_vector_t<Data, Comparator>::begin() -> typename sorted_vector_t<Data, Comparator>::iterator
 {
     return m_data.begin();
 }
 
 template <typename Data, typename Comparator>
-typename sorted_vector_t<Data, Comparator>::iterator sorted_vector_t<Data, Comparator>::end() const
+auto sorted_vector_t<Data, Comparator>::end() -> typename sorted_vector_t<Data, Comparator>::iterator
 {
     return m_data.end();
 }
 
 template <typename Data, typename Comparator>
-typename sorted_vector_t<Data, Comparator>::reverse_iterator sorted_vector_t<Data, Comparator>::rbegin()
+auto sorted_vector_t<Data, Comparator>::begin() const -> typename sorted_vector_t<Data, Comparator>::iterator
+{
+    return m_data.begin();
+}
+
+template <typename Data, typename Comparator>
+auto sorted_vector_t<Data, Comparator>::end() const -> typename sorted_vector_t<Data, Comparator>::iterator
+{
+    return m_data.end();
+}
+
+template <typename Data, typename Comparator>
+auto sorted_vector_t<Data, Comparator>::rbegin() -> typename sorted_vector_t<Data, Comparator>::reverse_iterator
 {
     return m_data.rbegin();
 }
 
 template <typename Data, typename Comparator>
-typename sorted_vector_t<Data, Comparator>::reverse_iterator sorted_vector_t<Data, Comparator>::rend()
+auto sorted_vector_t<Data, Comparator>::rend() -> typename sorted_vector_t<Data, Comparator>::reverse_iterator
 {
     return m_data.rend();
 }
 
 template <typename Data, typename Comparator>
-typename sorted_vector_t<Data, Comparator>::const_iterator sorted_vector_t<Data, Comparator>::cbegin() const
+auto sorted_vector_t<Data, Comparator>::cbegin() const -> typename sorted_vector_t<Data, Comparator>::const_iterator
 {
     return m_data.cbegin();
 }
 
 template <typename Data, typename Comparator>
-typename sorted_vector_t<Data, Comparator>::const_iterator sorted_vector_t<Data, Comparator>::cend() const
+auto sorted_vector_t<Data, Comparator>::cend() const -> typename sorted_vector_t<Data, Comparator>::const_iterator
 {
     return m_data.cend();
 }
 
 template <typename Data, typename Comparator>
-typename sorted_vector_t<Data, Comparator>::iterator sorted_vector_t<Data, Comparator>::erase(iterator begin,
-                                                                                              iterator end)
+auto sorted_vector_t<Data, Comparator>::erase(iterator begin, iterator end) ->
+    typename sorted_vector_t<Data, Comparator>::iterator
 {
     return m_data.erase(begin, end);
 }

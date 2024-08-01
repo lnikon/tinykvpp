@@ -13,7 +13,7 @@ struct config_t
     structures::lsmtree::lsmtree_config_t LSMTreeConfig;
     structures::lsmtree::segments::segment_config_t SegmentConfig;
 
-    [[nodiscard]] std::filesystem::path datadir_path() const;
+    [[nodiscard]] auto datadir_path() const -> std::filesystem::path;
 };
 
 using shared_ptr_t = std::shared_ptr<config_t>;

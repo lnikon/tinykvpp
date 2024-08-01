@@ -42,7 +42,7 @@ struct manifest_t
             remove_segment_k,
         };
 
-        std::string ToString(operation_k) const
+        [[nodiscard]] auto ToString(operation_k /*unused*/) const -> std::string
         {
             switch (op)
             {
@@ -55,7 +55,7 @@ struct manifest_t
             }
         }
 
-        std::string ToString() const
+        [[nodiscard]] auto ToString() const -> std::string
         {
             std::stringstream ss;
             write(ss);
@@ -90,7 +90,7 @@ struct manifest_t
         const record_type_k type{record_type_k::segment_k};
         operation_k op;
         segment_name_t name;
-        level_index_t level;
+        level_index_t level{};
     };
 
     /**
@@ -107,7 +107,7 @@ struct manifest_t
             purge_level_k,
         };
 
-        std::string ToString(operation_k op) const
+        [[nodiscard]] static auto ToString(operation_k op)  -> std::string
         {
             switch (op)
             {
@@ -122,7 +122,7 @@ struct manifest_t
             }
         }
 
-        std::string ToString() const
+        [[nodiscard]] auto ToString() const -> std::string
         {
             std::stringstream ss;
             write(ss);
@@ -153,12 +153,12 @@ struct manifest_t
 
         const record_type_k type{record_type_k::level_k};
         operation_k op;
-        level_index_t level;
+        level_index_t level{};
     };
 
     using record_t = std::variant<segment_record_t, level_record_t>;
 
-    explicit manifest_t(const config::shared_ptr_t config);
+    explicit manifest_t(config::shared_ptr_t config);
 
     void add(record_t info)
     {
@@ -195,14 +195,14 @@ struct manifest_t
         }
     }
 
-    bool recover()
+    auto recover() -> bool
     {
         spdlog::info("recovering manifest file");
         auto ss = m_log.stream();
         std::int32_t record_type_int{0};
         while (ss >> record_type_int)
         {
-            const record_type_k record_type = static_cast<record_type_k>(record_type_int);
+            const auto record_type = static_cast<record_type_k>(record_type_int);
             switch (record_type)
             {
             case record_type_k::segment_k:
@@ -232,12 +232,12 @@ struct manifest_t
         return true;
     }
 
-    fs::path_t path() const noexcept
+    auto path() const noexcept -> fs::path_t
     {
         return m_path;
     }
 
-    std::vector<record_t> records() const noexcept
+    auto records() const noexcept -> std::vector<record_t>
     {
         return m_records;
     }
@@ -253,7 +253,7 @@ struct manifest_t
     }
 
   private:
-    void update(const segment_record_t &info)
+    static void update(const segment_record_t &info)
     {
         switch (info.op)
         {
@@ -268,7 +268,7 @@ struct manifest_t
         }
     }
 
-    void update(const level_record_t &info)
+    static void update(const level_record_t &info)
     {
         switch (info.op)
         {
@@ -283,7 +283,7 @@ struct manifest_t
         }
     }
 
-  private:
+  
     std::string m_name;
     fs::path_t m_path;
     std::vector<record_t> m_records;

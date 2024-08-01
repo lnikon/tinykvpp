@@ -18,8 +18,8 @@ class level_t
      *
      * @param pConfig
      */
-    explicit level_t(const level_index_type_t levelIndex,
-                     const config::shared_ptr_t pConfig,
+    explicit level_t(level_index_type_t levelIndex,
+                     config::shared_ptr_t pConfig,
                      db::manifest::shared_ptr_t manifest) noexcept;
 
     /**
@@ -27,7 +27,7 @@ class level_t
      *
      * @param pSegment
      */
-    void emplace(segments::regular_segment::shared_ptr_t pSegment) noexcept;
+    void emplace(const segments::regular_segment::shared_ptr_t &pSegment) noexcept;
 
     /**
      * @brief Create an immutable segment of a given type for the @pMemtable.
@@ -38,27 +38,27 @@ class level_t
      * @param pMemtable
      * @return owning pointer to the newly created segment
      */
-    [[maybe_unused]] segments::regular_segment::shared_ptr_t segment(const lsmtree_segment_type_t type,
-                                                                     memtable::memtable_t pMemtable);
+    [[maybe_unused]] auto segment(lsmtree_segment_type_t type,
+                                  memtable::memtable_t pMemtable) -> segments::regular_segment::shared_ptr_t;
 
     /**
      * @brief
      *
      * @param key
      */
-    [[nodiscard]] std::optional<memtable::memtable_t::record_t> record(const key_t &key) const noexcept;
+    [[nodiscard]] auto record(const key_t &key) const noexcept -> std::optional<memtable::memtable_t::record_t>;
 
     /**
      * @brief Compact level0 into a single segment in 'ReadyToFlush' state
      */
-    segments::regular_segment::shared_ptr_t compact() const noexcept;
+    [[nodiscard]] auto compact() const noexcept -> segments::regular_segment::shared_ptr_t;
 
     /**
      * @brief
      *
      * @param pSegment
      */
-    segments::regular_segment::shared_ptr_t merge(segments::regular_segment::shared_ptr_t pSegment) noexcept;
+    void merge(const segments::regular_segment::shared_ptr_t &pSegment) noexcept;
 
     /**
      * @brief Purge segments from memory and disk
@@ -74,25 +74,21 @@ class level_t
      */
     void purge(const segments::types::name_t &segment_name) const noexcept;
 
-    segments::storage::shared_ptr_t storage()
-    {
-        return m_pStorage;
-    }
+    auto storage() -> segments::storage::shared_ptr_t;
 
     /**
      * @brief Return index of the level.
      *
      * @return An unsigned integer
      */
-    level_index_type_t index() const noexcept;
+    [[nodiscard]] auto index() const noexcept -> level_index_type_t;
 
   private:
     void purge(segments::storage::segment_storage_t &m_pStorage) const noexcept;
-    void purge(segments::regular_segment::shared_ptr_t pSegment) const noexcept;
+    void purge(const segments::regular_segment::shared_ptr_t &pSegment) const noexcept;
 
-  private:
-    const config::shared_ptr_t m_pConfig;
-    const level_index_type_t m_levelIndex;
+    level_index_type_t m_levelIndex;
+    config::shared_ptr_t m_pConfig;
     segments::storage::shared_ptr_t m_pStorage;
     db::manifest::shared_ptr_t m_manifest;
 };

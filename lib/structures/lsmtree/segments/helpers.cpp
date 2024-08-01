@@ -2,6 +2,7 @@
 // Created by nikon on 3/8/24.
 //
 
+#include <iterator>
 #include <structures/lsmtree/segments/helpers.h>
 
 #include <random>
@@ -12,13 +13,6 @@
 namespace structures::lsmtree::segments::helpers
 {
 
-auto unix_timestamp()
-
-{
-    return std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch())
-        .count();
-}
-
 std::string uuid()
 {
     // Step 1: Generate 16 random bytes
@@ -27,10 +21,7 @@ std::string uuid()
     std::uniform_int_distribution<uint32_t> dis(0, 255);
 
     std::array<uint8_t, 16> uuid;
-    for (auto &byte : uuid)
-    {
-        byte = static_cast<uint8_t>(dis(gen));
-    }
+    std::fill(std::begin(uuid), std::end(uuid), static_cast<uint8_t>(dis(gen)));
 
     // Step 2: Set the version (4) and variant (8, 9, A, or B)
     uuid[6] = (uuid[6] & 0x0F) | 0x40; // Set the version to 0100

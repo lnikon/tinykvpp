@@ -1,17 +1,10 @@
 #include "memtable.h"
 
-#include <optional>
-#include <string>
-#include <type_traits>
-#include <utility>
+#include <cstddef>
+#include <vector>
 
 namespace structures::memtable
 {
-
-std::size_t string_size_in_bytes(const std::string &str)
-{
-    return sizeof(std::string::value_type) * str.size();
-}
 
 // ----------------------------------------------
 // memtable_t::record_t::key_t
@@ -27,22 +20,22 @@ void memtable_t::record_t::key_t::swap(memtable_t::record_t::key_t &lhs, memtabl
     std::swap(lhs.m_key, rhs.m_key);
 }
 
-std::size_t memtable_t::record_t::key_t::size() const
+auto memtable_t::record_t::key_t::size() const -> std::size_t
 {
     return m_key.size();
 }
 
-bool memtable_t::record_t::key_t::operator<(const memtable_t::record_t::key_t &other) const
+auto memtable_t::record_t::key_t::operator<(const memtable_t::record_t::key_t &other) const -> bool
 {
     return m_key < other.m_key;
 }
 
-bool memtable_t::record_t::key_t::operator>(const memtable_t::record_t::key_t &other) const
+auto memtable_t::record_t::key_t::operator>(const memtable_t::record_t::key_t &other) const -> bool
 {
     return m_key > other.m_key;
 }
 
-bool memtable_t::record_t::key_t::operator==(const memtable_t::record_t::key_t &other) const
+auto memtable_t::record_t::key_t::operator==(const memtable_t::record_t::key_t &other) const -> bool
 {
     return m_key == other.m_key;
 }
@@ -55,12 +48,12 @@ memtable_t::record_t::value_t::value_t(memtable_t::record_t::value_t::storage_ty
 {
 }
 
-std::size_t memtable_t::record_t::value_t::size() const
+auto memtable_t::record_t::value_t::size() const -> std::size_t
 {
     return m_value.size();
 }
 
-bool memtable_t::record_t::value_t::operator==(const memtable_t::record_t::value_t &other) const
+auto memtable_t::record_t::value_t::operator==(const memtable_t::record_t::value_t &other) const -> bool
 {
     return m_value == other.m_value;
 }
@@ -79,7 +72,7 @@ memtable_t::record_t::timestamp_t::timestamp_t()
 {
 }
 
-bool memtable_t::record_t::timestamp_t::operator<(const timestamp_t &other) const
+auto memtable_t::record_t::timestamp_t::operator<(const timestamp_t &other) const -> bool
 {
     return m_value < other.m_value;
 }
@@ -105,7 +98,7 @@ memtable_t::record_t::record_t(const memtable_t::record_t &other)
 {
 }
 
-memtable_t::record_t &memtable_t::record_t::operator=(const memtable_t::record_t &other)
+auto memtable_t::record_t::operator=(const memtable_t::record_t &other) -> memtable_t::record_t &
 {
     if (this == &other)
     {
@@ -120,23 +113,23 @@ memtable_t::record_t &memtable_t::record_t::operator=(const memtable_t::record_t
     return *this;
 }
 
-bool memtable_t::record_t::operator<(const memtable_t::record_t &record) const
+auto memtable_t::record_t::operator<(const memtable_t::record_t &record) const -> bool
 {
     // return m_key < record.m_key && m_timestamp < record.m_timestamp;
     return (m_key != record.m_key) ? m_key < record.m_key : !(m_timestamp < record.m_timestamp);
 }
 
-bool memtable_t::record_t::operator>(const memtable_t::record_t &record) const
+auto memtable_t::record_t::operator>(const memtable_t::record_t &record) const -> bool
 {
     return !(m_key < record.m_key);
 }
 
-bool memtable_t::record_t::operator==(const record_t &record) const
+auto memtable_t::record_t::operator==(const record_t &record) const -> bool
 {
     return m_key == record.m_key;
 }
 
-std::size_t memtable_t::record_t::size() const
+auto memtable_t::record_t::size() const -> std::size_t
 {
     return m_key.size() + m_value.size();
 }
@@ -152,51 +145,51 @@ void memtable_t::emplace(const memtable_t::record_t &record)
     m_count++;
 }
 
-std::optional<memtable_t::record_t> memtable_t::find(const memtable_t::record_t::key_t &key)
+auto memtable_t::find(const memtable_t::record_t::key_t &key) -> std::optional<memtable_t::record_t>
 {
     return m_data.find(key);
 }
 
-std::size_t memtable_t::size() const
+auto memtable_t::size() const -> std::size_t
 {
     return m_size;
 }
 
-std::size_t memtable_t::count() const
+auto memtable_t::count() const -> std::size_t
 {
     return m_count;
 }
 
-[[nodiscard]] bool memtable_t::empty() const
+[[nodiscard]] auto memtable_t::empty() const -> bool
 {
     return m_data.size() == 0;
 }
 
 void memtable_t::merge(memtable_t pMemtable) noexcept
 {
-    // TODO: Use timestamp to compare items
+    // TODO(nikon): Use timestamp to compare items
     for (auto &record : pMemtable.m_data)
     {
         emplace(record);
     }
 }
 
-typename memtable_t::storage_t::const_iterator memtable_t::begin() const
+auto memtable_t::begin() const -> typename memtable_t::storage_t::const_iterator
 {
     return m_data.cbegin();
 }
 
-typename memtable_t::storage_t::const_iterator memtable_t::end() const
+auto memtable_t::end() const -> typename memtable_t::storage_t::const_iterator
 {
     return m_data.cend();
 }
 
-std::optional<memtable_t::record_t::key_t> memtable_t::min() const noexcept
+auto memtable_t::min() const noexcept -> std::optional<memtable_t::record_t::key_t>
 {
     return m_data.size() > 0 ? std::make_optional(m_data.cbegin()->m_key) : std::nullopt;
 }
 
-std::optional<memtable_t::record_t::key_t> memtable_t::max() const noexcept
+auto memtable_t::max() const noexcept -> std::optional<memtable_t::record_t::key_t>
 {
     // TODO(lnikon): Fix this
     storage_t::const_iterator beforeEnd{nullptr};
@@ -207,15 +200,18 @@ std::optional<memtable_t::record_t::key_t> memtable_t::max() const noexcept
         {
             continue;
         }
-        else
-        {
-            beforeEnd = begin;
-        }
+
+        beforeEnd = begin;
     }
     return m_data.size() > 0 ? std::make_optional((beforeEnd)->m_key) : std::nullopt;
 }
 
-bool memtable_t::operator<(const memtable_t &other)
+[[nodiscard]] auto memtable_t::moved_records() -> std::vector<memtable_t::record_t>
+{
+    return {std::make_move_iterator(std::begin(m_data)), std::make_move_iterator(std::end(m_data))};
+}
+
+auto memtable_t::operator<(const memtable_t &other) const -> bool
 {
     return max() < other.min();
 }

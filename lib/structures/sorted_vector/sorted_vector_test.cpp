@@ -114,13 +114,14 @@ TEST_CASE("std::find_if", "[SortedVector]")
     sv.emplace({"rec3", "val3"});
     sv.emplace({"rec2", "val2"});
 
-    auto it = std::find_if(std::begin(sv), std::end(sv), [](test_record_t record) { return record.m_key == "rec1"; });
+    auto it =
+        std::find_if(std::begin(sv), std::end(sv), [](const test_record_t &record) { return record.m_key == "rec1"; });
     STATIC_CHECK(std::is_same_v<decltype(it), test_sorted_vector_t::iterator>);
     REQUIRE(it != sv.end());
     REQUIRE(it->m_key == "rec1");
     REQUIRE(it->m_value == "val1");
 
-    it = std::find_if(std::begin(sv), std::end(sv), [](test_record_t record) { return record.m_key == "rec4"; });
+    it = std::find_if(std::begin(sv), std::end(sv), [](const test_record_t &record) { return record.m_key == "rec4"; });
     STATIC_CHECK(std::is_same_v<decltype(it), test_sorted_vector_t::iterator>);
     REQUIRE(it == sv.end());
 }

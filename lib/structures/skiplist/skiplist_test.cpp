@@ -92,13 +92,14 @@ TEST_CASE("std::find_if", "[SkipList]")
     sl.emplace({"rec3", "val3"});
     sl.emplace({"rec2", "val2"});
 
-    auto it = std::find_if(std::begin(sl), std::end(sl), [](test_record_t record) { return record.m_key == "rec1"; });
+    auto it =
+        std::find_if(std::begin(sl), std::end(sl), [](const test_record_t &record) { return record.m_key == "rec1"; });
     STATIC_CHECK(std::is_same_v<decltype(it), test_skiplist_t::iterator>);
     REQUIRE(it != sl.end());
     REQUIRE(it->m_key == "rec1");
     REQUIRE(it->m_value == "val1");
 
-    it = std::find_if(std::begin(sl), std::end(sl), [](test_record_t record) { return record.m_key == "rec4"; });
+    it = std::find_if(std::begin(sl), std::end(sl), [](const test_record_t &record) { return record.m_key == "rec4"; });
     STATIC_CHECK(std::is_same_v<decltype(it), test_skiplist_t::iterator>);
     REQUIRE(it == sl.end());
 }

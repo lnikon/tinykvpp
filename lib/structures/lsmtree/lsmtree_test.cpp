@@ -25,11 +25,13 @@ class RemoveArtefactsListener : public Catch::EventListenerBase
         std::filesystem::remove("wal");
     }
 
+    /// cppcheck-suppress unusedFunction
     void testCaseStarting(Catch::TestCaseInfo const &testInfo) override
     {
         prepare();
     }
 
+    /// cppcheck-suppress unusedFunction
     void testCaseEnded(Catch::TestCaseStats const &testCaseStats) override
     {
         prepare();
@@ -80,17 +82,6 @@ std::string generateRandomString(std::size_t length) noexcept
         result += alphabet[generateRandomNumber<std::size_t>(0, sizeof(alphabet) - 2)];
     }
 
-    return result;
-}
-
-std::vector<std::string> generateRandomStringVector(const std::size_t length) noexcept
-{
-    std::vector<std::string> result;
-    result.reserve(length);
-    for (std::string::size_type size = 0; size < length; size++)
-    {
-        result.emplace_back(generateRandomString(generateRandomNumber<std::size_t>(4, 64)));
-    }
     return result;
 }
 

@@ -44,8 +44,6 @@ TEST_CASE("Check record size before and after insertion", "[MemTable]")
 
         size_t actualSize = record->size();
         size_t expectedSize = k.size() + v.size();
-        auto kz = k.size();
-        auto vz = v.size();
         REQUIRE(actualSize == expectedSize);
     }
 
@@ -60,8 +58,6 @@ TEST_CASE("Check record size before and after insertion", "[MemTable]")
         REQUIRE(record != std::nullopt);
 
         size_t actualSize = record->size();
-        auto kz = k.size();
-        auto vz = v.size();
         size_t expectedSize = k.size() + v.size();
         REQUIRE(actualSize == expectedSize);
     }

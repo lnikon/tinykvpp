@@ -20,7 +20,7 @@ namespace types = lsmtree::segments::types;
  */
 struct last_write_time_comparator_t
 {
-    bool operator()(regular_segment::shared_ptr_t lhs, regular_segment::shared_ptr_t rhs)
+    auto operator()(const regular_segment::shared_ptr_t& lhs, const regular_segment::shared_ptr_t& rhs) -> bool
     {
         return lhs->last_write_time() <= rhs->last_write_time();
     }
@@ -33,7 +33,7 @@ struct last_write_time_comparator_t
  */
 struct key_range_comparator_t
 {
-    bool operator()(regular_segment::shared_ptr_t lhs, regular_segment::shared_ptr_t rhs)
+    auto operator()(const regular_segment::shared_ptr_t& lhs, const regular_segment::shared_ptr_t& rhs) -> bool
     {
         return lhs->max() < rhs->min();
     }
@@ -56,16 +56,16 @@ class segment_storage_t : public std::enable_shared_from_this<segment_storage_t>
     using reverse_iterator = storage_t::reverse_iterator;
     using size_type = storage_t::size_type;
 
-    [[nodiscard]] size_type size() const noexcept;
+    [[nodiscard]] auto size() const noexcept -> size_type;
 
-    [[nodiscard]] iterator begin() noexcept;
-    [[nodiscard]] iterator end() noexcept;
+    [[nodiscard]] auto begin() noexcept -> iterator;
+    [[nodiscard]] auto end() noexcept -> iterator;
 
-    [[nodiscard]] const_iterator cbegin() const noexcept;
-    [[nodiscard]] const_iterator cend() const noexcept;
+    [[nodiscard]] auto cbegin() const noexcept -> const_iterator;
+    [[nodiscard]] auto cend() const noexcept -> const_iterator;
 
-    [[nodiscard]] reverse_iterator rbegin() noexcept;
-    [[nodiscard]] reverse_iterator rend() noexcept;
+    [[nodiscard]] auto rbegin() noexcept -> reverse_iterator;
+    [[nodiscard]] auto rend() noexcept -> reverse_iterator;
 
     void emplace(regular_segment::shared_ptr_t pSegment, segment_comp_t comp);
     void clear() noexcept;

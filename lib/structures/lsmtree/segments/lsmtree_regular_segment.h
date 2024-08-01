@@ -37,29 +37,34 @@ class regular_segment_t final
      *
      * @param key
      */
-    [[nodiscard]] std::vector<std::optional<memtable::memtable_t::record_t>> record(const lsmtree::key_t &key);
+    [[nodiscard]] auto record(const lsmtree::key_t &key) -> std::vector<std::optional<memtable::memtable_t::record_t>>;
 
     /**
      * @brief
      *
      * @param offset
      */
-    [[nodiscard]] std::optional<memtable::memtable_t::record_t> record(const hashindex::hashindex_t::offset_t &offset);
+    [[nodiscard]] auto record(const hashindex::hashindex_t::offset_t &offset) -> std::optional<memtable::memtable_t::record_t>;
 
     /**
      * @brief
      */
-    types::name_t get_name() const;
+    [[nodiscard]] auto get_name() const -> types::name_t;
 
     /**
      * @brief
      */
-    types::path_t get_path() const;
+    [[nodiscard]] auto get_path() const -> types::path_t;
 
     /**
      * @brief
      */
-    std::optional<memtable::memtable_t> memtable();
+    auto memtable() -> std::optional<memtable::memtable_t> &;
+
+    /**
+     * @brief
+     */
+    auto moved_memtable() -> std::optional<memtable::memtable_t>;
 
     /**
      * @brief
@@ -79,22 +84,22 @@ class regular_segment_t final
     /**
      * @brief
      */
-    std::filesystem::file_time_type last_write_time();
+    auto last_write_time() -> std::filesystem::file_time_type;
 
     /**
      * @brief
      */
-    [[nodiscard]] virtual std::optional<memtable::memtable_t::record_t::key_t> min() const noexcept;
+    [[nodiscard]] virtual auto min() const noexcept -> std::optional<memtable::memtable_t::record_t::key_t>;
 
     /**
      * @brief
      */
-    [[nodiscard]] virtual std::optional<memtable::memtable_t::record_t::key_t> max() const noexcept;
+    [[nodiscard]] virtual auto max() const noexcept -> std::optional<memtable::memtable_t::record_t::key_t>;
 
   private:
     void restore_index();
 
-  private:
+  
     const fs::path_t m_path;
     const types::name_t m_name;
 

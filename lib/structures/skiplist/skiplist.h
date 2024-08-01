@@ -45,89 +45,79 @@ template <typename record_gt, typename comparator_gt> class skiplist_t
         using pointer = Pointer;
         using reference = Reference;
 
-        iterator_base(node_t *node)
+        explicit iterator_base(node_t *node)
             : m_node{node}
         {
         }
 
-        reference operator*() const
+        auto operator*() const -> reference
         {
             return m_node->record;
         }
 
-        pointer operator->()
+        auto operator->() -> pointer
         {
             return &m_node->record;
         }
 
-        iterator_base &operator++()
+        auto operator++() -> iterator_base &
         {
             m_node = m_node->forward[0];
             return *this;
         }
 
-        iterator_base operator++(int)
+        auto operator++(int) -> iterator_base
         {
             iterator_base tmp = *this;
             ++(*this);
             return tmp;
         }
 
-        friend bool operator==(const iterator_base &a, const iterator_base &b)
+        friend auto operator==(const iterator_base &lhs, const iterator_base &rhs) -> bool
         {
-            return a.m_node == b.m_node;
+            return lhs.m_node == rhs.m_node;
         };
 
-        friend bool operator!=(const iterator_base &a, const iterator_base &b)
+        friend auto operator!=(const iterator_base &lhs, const iterator_base &rhs) -> bool
         {
-            return a.m_node != b.m_node;
+            return lhs.m_node != rhs.m_node;
         };
 
       private:
         node_t *m_node;
     };
 
-    iterator begin()
+    auto begin() -> iterator
     {
         return iterator(m_head->forward[0]);
     }
 
-    iterator end()
+    auto end() -> iterator
     {
         return iterator(nullptr);
     }
 
-    const_iterator cbegin()
+    auto cbegin() -> const_iterator
     {
         return const_iterator(m_head->forward[0]);
     }
 
-    const_iterator cend()
+    auto cend() -> const_iterator
     {
         return const_iterator(nullptr);
     }
 
-    // iterator begin() const
-    // {
-    //     return iterator(m_head->forward[0]);
-    // }
-
-    // iterator end() const
-    // {
-    //     return iterator(nullptr);
-    // }
-
-    const_iterator cbegin() const
+    [[nodiscard]] auto cbegin() const -> const_iterator
     {
         return const_iterator(m_head->forward[0]);
     }
 
-    const_iterator cend() const
+    [[nodiscard]] auto cend() const -> const_iterator
     {
         return const_iterator(nullptr);
     }
 
-    std::optional<record_gt> find(const record_gt::key_t &key)
+    auto find(const typename record_gt::key_t &key) -> std::optional<record_gt>
     {
         node_t *current{m_head};
         for (std::int64_t i = m_level; i >= 0; i--)
@@ -147,7 +137,7 @@ template <typename record_gt, typename comparator_gt> class skiplist_t
         return std::nullopt;
     }
 
-    void emplace(record_gt record)
+    void emplace(const record_gt &record)
     {
         const auto newLevel{random_level()};
         if (newLevel > m_level)
@@ -171,7 +161,7 @@ template <typename record_gt, typename comparator_gt> class skiplist_t
         current = current->forward[0];
         if (current == nullptr || current->record.m_key != record.m_key)
         {
-            node_t *newNode = new node_t(record, m_level);
+            auto *newNode = new node_t(record, m_level);
             for (std::int64_t i{0}; i <= newLevel; i++)
             {
                 newNode->forward[i] = to_be_updated[i]->forward[i];
@@ -182,25 +172,27 @@ template <typename record_gt, typename comparator_gt> class skiplist_t
         }
     }
 
-    std::size_t size() const noexcept
+    [[nodiscard]] auto size() const noexcept -> std::size_t
     {
         return m_size;
     }
 
   private:
-    std::int64_t random_level() const
+    [[nodiscard]] auto random_level() const -> std::int64_t
     {
+        constexpr const int min = 0;
+        constexpr const int max = 1024;
+
         std::int64_t level{0};
-        std::mt19937 rg{std::random_device{}()};
-        while (std::uniform_int_distribution<std::int64_t>(0, 1024)(rg) % 2 == 0)
+        std::mt19937 rng{std::random_device{}()};
+        while (std::uniform_int_distribution<std::int64_t>(min, max)(rng) % 2 == 0)
         {
             level += 1;
         }
         return level;
     }
 
-  private:
-    node_t *m_head{new node_t(record_gt{}, max_height)};
+    node_t *m_head = new node_t(record_gt{}, max_height);
     std::int64_t m_level{0};
     std::size_t m_size{0};
 };

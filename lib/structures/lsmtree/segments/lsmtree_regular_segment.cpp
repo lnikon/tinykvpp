@@ -91,7 +91,6 @@ void regular_segment_t::flush()
     if (!stream.is_open())
     {
         throw std::runtime_error("unable to flush segment for path " + m_path.string());
-        return;
     }
 
     assert(!ss.str().empty());
@@ -142,9 +141,14 @@ types::path_t regular_segment_t::get_path() const
     return m_path;
 }
 
-std::optional<memtable::memtable_t> regular_segment_t::memtable()
+std::optional<memtable::memtable_t> &regular_segment_t::memtable()
 {
-    return std::move(m_memtable);
+    return m_memtable;
+}
+
+std::optional<memtable::memtable_t> regular_segment_t::moved_memtable()
+{
+    return m_memtable.has_value() ? std::move(m_memtable) : std::nullopt;
 }
 
 void regular_segment_t::restore()
