@@ -96,7 +96,7 @@ class memtable_t
             underlying_value_type_t m_value;
         };
 
-        record_t(const key_t &key, const value_t &value);
+        record_t(key_t key, value_t value);
 
         record_t() = default;
         record_t(const record_t &other);

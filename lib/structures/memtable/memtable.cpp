@@ -1,6 +1,7 @@
 #include "memtable.h"
 
 #include <cstddef>
+#include <utility>
 #include <vector>
 
 namespace structures::memtable
@@ -86,9 +87,9 @@ void memtable_t::record_t::timestamp_t::swap(timestamp_t &lhs, timestamp_t &rhs)
 // ---------------------------------------
 // memtable_t::record_t
 // ---------------------------------------
-memtable_t::record_t::record_t(const memtable_t::record_t::key_t &key, const memtable_t::record_t::value_t &value)
-    : m_key(key),
-      m_value(value)
+memtable_t::record_t::record_t(memtable_t::record_t::key_t key, memtable_t::record_t::value_t value)
+    : m_key(std::move(key)),
+      m_value(std::move(value))
 {
 }
 
@@ -196,7 +197,7 @@ auto memtable_t::max() const noexcept -> std::optional<memtable_t::record_t::key
     auto idx{0};
     for (auto begin{m_data.cbegin()}; begin != m_data.cend(); ++begin)
     {
-        if (idx == 0)
+        if (idx++ == 0)
         {
             continue;
         }

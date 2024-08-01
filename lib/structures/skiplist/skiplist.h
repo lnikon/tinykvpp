@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <optional>
 #include <random>
+#include <utility>
 #include <vector>
 
 namespace structures::skiplist
@@ -19,7 +20,7 @@ template <typename record_gt, typename comparator_gt> class skiplist_t
     struct node_t
     {
         node_t(record_gt rec, std::int64_t level)
-            : record(rec),
+            : record(std::move(rec)),
               forward(level + 1, nullptr)
         {
         }
