@@ -17,9 +17,9 @@ using record_value_t = structures::memtable::memtable_t::record_t::value_t;
 TEST_CASE("Emplace and Find", "[MemTable]")
 {
     memtable_t mt;
-    mt.emplace(record_t{record_key_t{"B"}, record_value_t{123}});
-    mt.emplace(record_t{record_key_t{"A"}, record_value_t{-12}});
-    mt.emplace(record_t{record_key_t{"Z"}, record_value_t{34.44}});
+    mt.emplace(record_t{record_key_t{"B"}, record_value_t{"123"}});
+    mt.emplace(record_t{record_key_t{"A"}, record_value_t{"-12"}});
+    mt.emplace(record_t{record_key_t{"Z"}, record_value_t{"34.44"}});
     mt.emplace(record_t{record_key_t{"C"}, record_value_t{"Hello"}});
 
     auto record = mt.find(record_key_t{"C"});
@@ -52,7 +52,7 @@ TEST_CASE("Check record size before and after insertion", "[MemTable]")
     {
         memtable_t mt;
         record_key_t k{"B"};
-        record_value_t v{123};
+        record_value_t v{"123"};
 
         mt.emplace(record_t{k, v});
 
@@ -69,7 +69,7 @@ TEST_CASE("Check record size before and after insertion", "[MemTable]")
     {
         memtable_t mt;
         record_key_t k{"B"};
-        record_value_t v{123.456};
+        record_value_t v{"123.456"};
 
         auto record = record_t{k, v};
         mt.emplace(record);
@@ -88,7 +88,7 @@ TEST_CASE("Check size", "[MemTable]")
 {
     memtable_t mt;
     auto k1 = record_key_t{"B"}, k2 = record_key_t{"A"}, k3 = record_key_t{"Z"};
-    auto v1 = record_value_t{123}, v2 = record_value_t{34.44}, v3 = record_value_t{"Hello"};
+    auto v1 = record_value_t{"123"}, v2 = record_value_t{"34.44"}, v3 = record_value_t{"Hello"};
     mt.emplace(record_t{k1, v1});
     mt.emplace(record_t{k2, v2});
     mt.emplace(record_t{k3, v3});
@@ -100,9 +100,9 @@ TEST_CASE("Check size", "[MemTable]")
 TEST_CASE("Check count", "[MemTable]")
 {
     memtable_t mt;
-    mt.emplace(record_t{record_key_t{"B"}, record_value_t{123}});
-    mt.emplace(record_t{record_key_t{"A"}, record_value_t{-12}});
-    mt.emplace(record_t{record_key_t{"Z"}, record_value_t{34.44}});
+    mt.emplace(record_t{record_key_t{"B"}, record_value_t{"123"}});
+    mt.emplace(record_t{record_key_t{"A"}, record_value_t{"-12"}});
+    mt.emplace(record_t{record_key_t{"Z"}, record_value_t{"z`34.44"}});
     mt.emplace(record_t{record_key_t{"C"}, record_value_t{"Hello"}});
 
     REQUIRE(mt.count() == 4);

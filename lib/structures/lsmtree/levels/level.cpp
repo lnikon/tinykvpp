@@ -100,15 +100,6 @@ segments::regular_segment::shared_ptr_t level_t::compact() const noexcept
         return nullptr;
     }
 
-    // Memtable containing the result of compactation of all segments
-
-    // Restore each segment, then merge it with resulting memtable
-    // for (auto begin{m_pStorage->rbegin()}, end{m_pStorage->rend()}; begin != end; ++begin)
-    // {
-    //     begin->get()->restore();
-    //     memtable.merge(begin->get()->memtable().value());
-    // }
-
     std::priority_queue<
         std::pair<typename memtable::memtable_t::const_iterator, typename memtable::memtable_t::const_iterator>,
         std::vector<

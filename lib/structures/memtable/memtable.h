@@ -12,8 +12,6 @@
 #include <optional>
 #include <string>
 #include <sys/types.h>
-#include <utility>
-#include <variant>
 #include <chrono>
 #include <iostream>
 
@@ -22,27 +20,17 @@ namespace structures::memtable
 
 template <class> inline constexpr bool always_false_v = false;
 
-std::size_t string_size_in_bytes(const std::string &str);
-
 // class memtable_t
 class memtable_t
 {
   public:
     struct record_t
     {
-        // TODO(vahag): Introduce 'buffer' type, an uninterpreted array of bytes
-        enum class record_value_type_t
-        {
-            integer_k = 0,
-            double_k,
-            string_k
-        };
-
         struct key_t
         {
             using storage_type_t = std::string;
 
-            explicit key_t(std::string key);
+            explicit key_t(storage_type_t key);
 
             key_t() = default;
             key_t(const key_t &other) = default;
@@ -64,9 +52,9 @@ class memtable_t
 
         struct value_t
         {
-            using underlying_value_type_t = std::variant<int64_t, double, std::string>;
+            using storage_type_t = std::string;
 
-            explicit value_t(underlying_value_type_t value);
+            explicit value_t(storage_type_t value);
 
             value_t() = default;
             value_t(const value_t &other) = default;
@@ -81,7 +69,7 @@ class memtable_t
 
             static void swap(value_t &lhs, value_t &rhs);
 
-            underlying_value_type_t m_value;
+            storage_type_t m_value;
         };
 
         struct timestamp_t
@@ -135,7 +123,6 @@ class memtable_t
     using index_type = typename storage_t::index_type;
     using iterator = typename storage_t::iterator;
     using const_iterator = typename storage_t::const_iterator;
-    // using reverse_iterator = typename storage_t::reverse_iterator;
     using value_type = typename storage_t::value_type;
 
     memtable_t() = default;
@@ -225,8 +212,6 @@ class memtable_t
     std::size_t m_count{0};
 };
 
-// static_assert(std::ranges::random_access_range<memtable_t>);
-
 template <typename stream_gt> void memtable_t::record_t::key_t::write(stream_gt &os) const
 {
     os << m_key.size() << ' ' << m_key << ' ';
@@ -242,61 +227,15 @@ template <typename stream_gt> void memtable_t::record_t::key_t::read(stream_gt &
 
 template <typename stream_gt> void memtable_t::record_t::value_t::write(stream_gt &os) const
 {
-    std::visit(
-        [&os, this](auto &&value)
-        {
-            using T = std::decay_t<decltype(value)>;
-            if constexpr (std::is_same_v<T, int64_t>)
-            {
-                os << std::to_underlying(record_t::record_value_type_t::integer_k) << ' ' << value << ' ';
-            }
-            else if constexpr (std::is_same_v<T, double>)
-            {
-                os << std::to_underlying(record_t::record_value_type_t::double_k) << ' ' << value << ' ';
-            }
-            else if constexpr (std::is_same_v<T, std::string>)
-            {
-                os << std::to_underlying(record_t::record_value_type_t::string_k) << ' ' << size() << ' ' << value
-                   << ' ';
-            }
-            else
-            {
-                static_assert(always_false_v<T>, "non-exhaustive visitor");
-            }
-        },
-        m_value);
+    os << ' ' << size() << ' ' << m_value << ' ';
 }
 
 template <typename stream_gt> void memtable_t::record_t::value_t::read(stream_gt &os)
 {
-    std::size_t tag;
-    os >> tag;
-
-    if (tag == std::to_underlying(record_t::record_value_type_t::integer_k))
-    {
-        std::int64_t value;
-        os >> value;
-        m_value.emplace<std::int64_t>(value);
-    }
-    else if (tag == std::to_underlying(record_t::record_value_type_t::double_k))
-    {
-        double value;
-        os >> value;
-        m_value.emplace<double>(value);
-    }
-    else if (tag == std::to_underlying(record_t::record_value_type_t::string_k))
-    {
-        std::size_t size{0};
-        os >> size;
-        std::string value;
-        value.resize(size);
-        os >> value;
-        m_value.emplace<std::string>(std::move(value));
-    }
-    else
-    {
-        assert("non-exhaustive if");
-    }
+    std::size_t size{0};
+    os >> size;
+    m_value.reserve(size);
+    os >> m_value;
 }
 
 template <typename stream_gt> void memtable_t::record_t::timestamp_t::write(stream_gt &os) const

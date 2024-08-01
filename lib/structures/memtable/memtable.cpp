@@ -1,6 +1,7 @@
 #include "memtable.h"
 
 #include <optional>
+#include <string>
 #include <type_traits>
 #include <utility>
 
@@ -15,7 +16,7 @@ std::size_t string_size_in_bytes(const std::string &str)
 // ----------------------------------------------
 // memtable_t::record_t::key_t
 // ----------------------------------------------------
-memtable_t::record_t::key_t::key_t(std::string key)
+memtable_t::record_t::key_t::key_t(record_t::key_t::storage_type_t key)
     : m_key(std::move(key))
 {
 }
@@ -28,7 +29,7 @@ void memtable_t::record_t::key_t::swap(memtable_t::record_t::key_t &lhs, memtabl
 
 std::size_t memtable_t::record_t::key_t::size() const
 {
-    return string_size_in_bytes(m_key);
+    return m_key.size();
 }
 
 bool memtable_t::record_t::key_t::operator<(const memtable_t::record_t::key_t &other) const
@@ -49,36 +50,14 @@ bool memtable_t::record_t::key_t::operator==(const memtable_t::record_t::key_t &
 // ------------------------------------------------
 // memtable_t::record_t::value_t
 // ------------------------------------------------
-memtable_t::record_t::value_t::value_t(memtable_t::record_t::value_t::underlying_value_type_t value)
+memtable_t::record_t::value_t::value_t(memtable_t::record_t::value_t::storage_type_t value)
     : m_value(std::move(value))
 {
 }
 
 std::size_t memtable_t::record_t::value_t::size() const
 {
-    return std::visit(
-        [](auto &&value)
-        {
-            using T = std::decay_t<decltype(value)>;
-            if constexpr (std::is_integral_v<T>)
-            {
-                return sizeof(value);
-            }
-            else if constexpr (std::is_same_v<T, double>)
-            {
-                return sizeof(value);
-            }
-            else if constexpr (std::is_same_v<T, std::string>)
-            {
-                return string_size_in_bytes(value);
-            }
-            else
-            {
-                static_assert(always_false_v<T>, "non-exhaustive visitor!");
-                return std::size_t{0};
-            }
-        },
-        m_value);
+    return m_value.size();
 }
 
 bool memtable_t::record_t::value_t::operator==(const memtable_t::record_t::value_t &other) const
