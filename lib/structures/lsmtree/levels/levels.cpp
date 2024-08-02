@@ -24,6 +24,18 @@ levels_t::levels_t(config::shared_ptr_t pConfig, db::manifest::shared_ptr_t mani
 {
 }
 
+// 1. Create a new segment(in-memory representation of the on-disk SST) based on received @memtable
+// 2. Push that segment into level0
+// 3. Set i=0, check whether leveli is ready for compaction(e.g. number of segments >= LevelZeroCompactionSegmentCount)
+// 4. If no, then function ends here
+// 5. Otherwise compact the level0 into @compactedCurentLevelSegment
+// 6. Check whether next level exists, if no - create
+// 7. Find segments from the @nextLevel overlapping with the @compactedCurentLevelSegment
+// 8. If no overlaps are found, then push @compactedCurentLevelSegment into next levl
+// 9. Otherwise merge @compactedCurentLevelSegment with overlapping segment
+// 10. Create new segments based on merge results, push them into leveli
+// 11. Remove now old overlapping segments
+// 12. Continue until i >= number of levels
 auto levels_t::segment(const structures::lsmtree::lsmtree_segment_type_t type,
                        memtable::memtable_t memtable) -> segments::regular_segment::shared_ptr_t
 {
@@ -57,11 +69,9 @@ auto levels_t::segment(const structures::lsmtree::lsmtree_segment_type_t type,
         {
             if (currentLevel->index() == 0)
             {
-                // std::cout << "skipping compactation of levels >= 1" << std::endl;
                 break;
             }
 
-            // std::cout << "skipping compactation of level = " << currentLevel->index() << std::endl;
             continue;
         }
 
