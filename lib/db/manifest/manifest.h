@@ -1,6 +1,7 @@
 #pragma once
 
 #include "config/config.h"
+#include <cstdint>
 #include <fs/append_only_file.h>
 
 #include <spdlog/spdlog.h>
@@ -23,7 +24,7 @@ struct manifest_t
     using segment_names_t = std::vector<std::string>;
     using storage_t = std::unordered_map<level_index_t, segment_names_t>;
 
-    enum record_type_k
+    enum record_type_k : int8_t
     {
         segment_k = 0,
         level_k,
@@ -36,36 +37,37 @@ struct manifest_t
      */
     struct segment_record_t
     {
-        enum class operation_k
+        enum class operation_k : int8_t
         {
+            undefined_k = -1,
             add_segment_k = 0,
             remove_segment_k,
         };
 
-        [[nodiscard]] auto ToString(operation_k /*unused*/) const -> std::string
+        [[nodiscard]] static auto ToString(operation_k operation) -> std::string
         {
-            switch (op)
+            switch (operation)
             {
             case operation_k::add_segment_k:
-                return std::string("add_segment_k");
+                return {"add_segment_k"};
             case operation_k::remove_segment_k:
-                return std::string("remove_segment_k");
+                return {"remove_segment_k"};
             default:
-                return std::string("unkown op");
+                return {"unkown op"};
             }
         }
 
         [[nodiscard]] auto ToString() const -> std::string
         {
-            std::stringstream ss;
-            write(ss);
-            return ss.str();
+            std::stringstream stringStream;
+            write(stringStream);
+            return stringStream.str();
         }
 
-        template <typename stream_gt> void write(stream_gt &os) const
+        template <typename stream_gt> void write(stream_gt &outStream) const
         {
-            os << static_cast<std::int32_t>(type) << ' ' << static_cast<std::int32_t>(op) << ' ' << name << ' ' << level
-               << std::endl;
+            outStream << static_cast<std::int32_t>(type) << ' ' << static_cast<std::int32_t>(op) << ' ' << name << ' '
+                      << level << std::endl;
         }
 
         /**
@@ -76,19 +78,19 @@ struct manifest_t
          * @tparam stream_gt
          * @param os
          */
-        template <typename stream_gt> void read(stream_gt &os)
+        template <typename stream_gt> void read(stream_gt &outStream)
         {
             std::int32_t op_int{0};
-            os >> op_int;
+            outStream >> op_int;
             op = static_cast<operation_k>(op_int);
 
-            os >> name;
+            outStream >> name;
 
-            os >> level;
+            outStream >> level;
         }
 
-        const record_type_k type{record_type_k::segment_k};
-        operation_k op;
+        record_type_k type{record_type_k::segment_k};
+        operation_k op{operation_k::undefined_k};
         segment_name_t name;
         level_index_t level{};
     };
@@ -100,33 +102,34 @@ struct manifest_t
      */
     struct level_record_t
     {
-        enum class operation_k
+        enum class operation_k : int8_t
         {
+            undefined_k = -1,
             add_level_k,
             compact_level_k,
             purge_level_k,
         };
 
-        [[nodiscard]] static auto ToString(operation_k op)  -> std::string
+        [[nodiscard]] static auto ToString(operation_k operation) -> std::string
         {
-            switch (op)
+            switch (operation)
             {
             case operation_k::add_level_k:
-                return std::string("add_level_k");
+                return {"add_level_k"};
             case operation_k::compact_level_k:
-                return std::string("compact_level_k");
+                return {"compact_level_k"};
             case operation_k::purge_level_k:
-                return std::string("purge_level_k");
+                return {"purge_level_k"};
             default:
-                return std::string("unkown op");
+                return {"unkown op"};
             }
         }
 
         [[nodiscard]] auto ToString() const -> std::string
         {
-            std::stringstream ss;
-            write(ss);
-            return ss.str();
+            std::stringstream stringStream;
+            write(stringStream);
+            return stringStream.str();
         }
 
         /**
@@ -137,22 +140,23 @@ struct manifest_t
          * @tparam stream_gt
          * @param os
          */
-        template <typename stream_gt> void write(stream_gt &os) const
+        template <typename stream_gt> void write(stream_gt &outStream) const
         {
-            os << static_cast<std::int32_t>(type) << ' ' << static_cast<std::int32_t>(op) << ' ' << level << std::endl;
+            outStream << static_cast<std::int32_t>(type) << ' ' << static_cast<std::int32_t>(op) << ' ' << level
+                      << std::endl;
         }
 
-        template <typename stream_gt> void read(stream_gt &os)
+        template <typename stream_gt> void read(stream_gt &outStream)
         {
             std::int32_t op_int{0};
-            os >> op_int;
+            outStream >> op_int;
             op = static_cast<operation_k>(op_int);
 
-            os >> level;
+            outStream >> level;
         }
 
-        const record_type_k type{record_type_k::level_k};
-        operation_k op;
+        record_type_k type{record_type_k::level_k};
+        operation_k op{operation_k::undefined_k};
         level_index_t level{};
     };
 
@@ -169,9 +173,9 @@ struct manifest_t
 
         m_records.emplace_back(info);
 
-        std::stringstream ss;
-        std::visit([&ss](auto &&record) { record.write(ss); }, info);
-        m_log.write(ss.str());
+        std::stringstream stringStream;
+        std::visit([&stringStream](auto &&record) { record.write(stringStream); }, info);
+        m_log.write(stringStream.str());
     }
 
     void print() const
@@ -198,9 +202,9 @@ struct manifest_t
     auto recover() -> bool
     {
         spdlog::info("recovering manifest file");
-        auto ss = m_log.stream();
+        auto stringStream = m_log.stream();
         std::int32_t record_type_int{0};
-        while (ss >> record_type_int)
+        while (stringStream >> record_type_int)
         {
             const auto record_type = static_cast<record_type_k>(record_type_int);
             switch (record_type)
@@ -208,7 +212,7 @@ struct manifest_t
             case record_type_k::segment_k:
             {
                 segment_record_t record;
-                record.read(ss);
+                record.read(stringStream);
                 spdlog::info("recovered segment_record={}", record.ToString());
                 m_records.emplace_back(record);
                 break;
@@ -216,7 +220,7 @@ struct manifest_t
             case record_type_k::level_k:
             {
                 level_record_t record;
-                record.read(ss);
+                record.read(stringStream);
                 spdlog::info("recovered level_record={}", record.ToString());
                 m_records.emplace_back(record);
                 break;
@@ -283,7 +287,6 @@ struct manifest_t
         }
     }
 
-  
     std::string m_name;
     fs::path_t m_path;
     std::vector<record_t> m_records;
