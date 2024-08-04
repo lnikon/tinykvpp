@@ -26,14 +26,12 @@ struct lsmtree_config_t
      * start.
      */
     const uint64_t DefaultLevelZeroCompactionSegmentCount{4};
-    uint64_t LevelZeroCompactionSegmentCount{
-        DefaultLevelZeroCompactionSegmentCount};
+    uint64_t LevelZeroCompactionSegmentCount{DefaultLevelZeroCompactionSegmentCount};
 
     /*
      * Type of the segment that LSMTree should use.
      */
-    const lsmtree_segment_type_t DefaultSegmentType{
-        lsmtree_segment_type_t::regular_k};
+    const lsmtree_segment_type_t DefaultSegmentType{lsmtree_segment_type_t::regular_k};
     lsmtree_segment_type_t SegmentType{DefaultSegmentType};
 
     /*
@@ -44,6 +42,6 @@ struct lsmtree_config_t
     std::string SegmentsDirectoryName{DefaultSegmentsDirectoryName};
 };
 
-}  // namespace structures::lsmtree
+} // namespace structures::lsmtree
 
-#endif  // ZKV_LSMTREECONFIG_H
+#endif // ZKV_LSMTREECONFIG_H

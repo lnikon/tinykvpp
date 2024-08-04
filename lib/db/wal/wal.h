@@ -7,13 +7,14 @@
 #include <sstream>
 #include <stdexcept>
 #include <structures/memtable/memtable.h>
+#include <utility>
 #include <vector>
 
 namespace db::wal
 {
 
 // WAL gets cleaned-up everytime memtable is flushed so its save to reuse the same name
-std::string wal_filename();
+auto wal_filename() -> std::string;
 
 class wal_t
 {
@@ -32,8 +33,8 @@ class wal_t
         kv_t kv;
     };
 
-    explicit wal_t(const fs::path_t path)
-        : m_path{path},
+    explicit wal_t(fs::path_t  path)
+        : m_path{std::move(path)},
           m_log{m_path}
     {
         if (!m_log.is_open())
@@ -63,13 +64,12 @@ class wal_t
         {
             throw std::runtime_error("unable to reset wal " + m_path.string());
         }
-        else
-        {
-            spdlog::info("wal reset is successfull " + m_path.string());
-        }
+        
+                    spdlog::info("wal reset is successfull " + m_path.string());
+       
     }
 
-    std::vector<record_t> records() noexcept
+    auto records() noexcept -> std::vector<record_t>
     {
         return m_records;
     }

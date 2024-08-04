@@ -1,0 +1,69 @@
+{
+    "$id": "https://json-schema.hyperjump.io/schema",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$title": "Schema for tinykvpp's JSON config",
+    "type": "object",
+    "properties": {
+        "database": {
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string"
+                },
+                "walFilename": {
+                    "type": "string"
+                },
+                "manifileFilenamePrefix": {
+                    "type": "string"
+                }
+            }
+        },
+        "lsmtree": {
+            "type": "object",
+            "properties": {
+                "memtableFlushThreashold": {
+                    "type": "number"
+                },
+                "levelZeroCompaction": {
+                    "$ref": "#/$defs/compaction"
+                },
+                "levelNonZeroCompaction": {
+                    "$ref": "#/$defs/compaction"
+                }
+            },
+            "required": [
+                "memtableFlushThreashold",
+                "levelZeroCompaction",
+                "levelNonZeroCompaction"
+            ]
+        }
+    },
+    "required": [
+        "database",
+        "lsmtree"
+    ],
+    "$defs": {
+        "compactionStrategy": {
+            "type": "string",
+            "enum": [
+                "levelled",
+                "tiered"
+            ]
+        },
+        "compaction": {
+            "type": "object",
+            "properties": {
+                "compactionStrategy": {
+                    "$ref": "#/$defs/compactionStrategy"
+                },
+                "compactionThreashold": {
+                    "type": "number"
+                }
+            },
+            "required": [
+                "compactionStrategy",
+                "compactionThreashold"
+            ]
+        }
+    }
+}

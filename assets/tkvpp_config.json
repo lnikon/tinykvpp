@@ -1,0 +1,18 @@
+{
+    "database": {
+        "path": ".",
+        "walFilename": "wal",
+        "manifileFilenamePrefix": "manifest_"
+    },
+    "lsmtree": {
+        "memtableFlushThreashold": 1024,
+        "levelZeroCompaction": {
+            "compactionStrategy": "levelled",
+            "compactionThreashold": 4
+        },
+        "levelNonZeroCompaction": {
+            "compactionStrategy": "tiered",
+            "compactionThreashold": 1024
+        }
+    }
+}

@@ -17,7 +17,8 @@ db_t::db_t(const config::shared_ptr_t config)
 {
 }
 
-bool db_t::open()
+// TODO(lnikon): use error_code_t
+auto db_t::open() -> bool
 {
     if (!prepare_directory_structure())
     {

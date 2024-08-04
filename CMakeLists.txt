@@ -14,9 +14,13 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}")
 find_package(Catch2 REQUIRED)
 find_package(spdlog REQUIRED)
 find_package(fmt REQUIRED)
+find_package(nlohmann_json REQUIRED)
+find_package(nlohmann_json_schema_validator REQUIRED)
+find_package(cxxopts REQUIRED)
 
 include_directories(lib)
 
 add_subdirectory(lib)
 add_subdirectory(app)
+add_subdirectory(src)
 # add_subdirectory(grpcapp)

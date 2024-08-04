@@ -13,4 +13,4 @@ struct db_config_t
     std::filesystem::path DatabasePath{DefaultDabasePath};
 };
 
-}  // namespace db
+} // namespace db

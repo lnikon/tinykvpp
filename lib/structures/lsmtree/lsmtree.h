@@ -26,7 +26,7 @@ class lsmtree_t
      *
      * @param pConfig
      */
-    explicit lsmtree_t(const config::shared_ptr_t pConfig,
+    explicit lsmtree_t(config::shared_ptr_t pConfig,
                        db::manifest::shared_ptr_t manifest,
                        db::wal::shared_ptr_t wal) noexcept;
 
@@ -45,7 +45,7 @@ class lsmtree_t
      *
      * @return
      */
-    lsmtree_t &operator=(const lsmtree_t &) = delete;
+    auto operator=(const lsmtree_t &) -> lsmtree_t & = delete;
 
     /**
      * @brief
@@ -57,7 +57,7 @@ class lsmtree_t
      *
      * @return
      */
-    lsmtree_t &operator=(lsmtree_t &&) = delete;
+    auto operator=(lsmtree_t &&) -> lsmtree_t & = delete;
 
     /**
      * @brief
@@ -72,20 +72,20 @@ class lsmtree_t
      *
      * @param key
      */
-    [[nodiscard]] std::optional<record_t> get(const key_t &key) noexcept;
+    [[nodiscard]] auto get(const key_t &key) noexcept -> std::optional<record_t>;
 
     /**
      * @brief
      *
      * @return
      */
-    bool restore() noexcept;
+    auto restore() noexcept -> bool;
 
   private:
-    bool restore_manifest() noexcept;
-    bool restore_wal() noexcept;
+    auto restore_manifest() noexcept -> bool;
+    auto restore_wal() noexcept -> bool;
 
-  private:
+  
     const config::shared_ptr_t m_pConfig;
     std::optional<memtable::memtable_t> m_table;
     db::manifest::shared_ptr_t m_manifest;
