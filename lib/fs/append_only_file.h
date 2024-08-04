@@ -14,9 +14,11 @@ struct append_only_file_t
     using data_t = std::string;
 
     explicit append_only_file_t(fs::path_t path);
+    append_only_file_t() = default;
     ~append_only_file_t() noexcept;
 
     auto open() noexcept -> bool;
+    auto open(fs::path_t path) noexcept -> bool;
     auto is_open() noexcept -> bool;
 
     /**
@@ -42,8 +44,7 @@ struct append_only_file_t
 };
 
 inline append_only_file_t::append_only_file_t(fs::path_t path)
-    : m_path{std::move(path)},
-      m_out{m_path, std::fstream::app | std::fstream::ate | std::fstream::out}
+    : m_path{std::move(path)}
 {
 }
 
@@ -56,6 +57,12 @@ inline auto append_only_file_t::open() noexcept -> bool
 {
     m_out = std::fstream{m_path, std::fstream::app | std::fstream::ate | std::fstream::out};
     return m_out.is_open();
+}
+
+inline auto append_only_file_t::open(fs::path_t path) noexcept -> bool
+{
+    m_path = std::move(path);
+    return open();
 }
 
 inline auto append_only_file_t::is_open() noexcept -> bool

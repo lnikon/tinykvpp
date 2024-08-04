@@ -79,13 +79,12 @@ class lsmtree_t
      *
      * @return
      */
-    auto restore() noexcept -> bool;
+    auto recover() noexcept -> bool;
 
   private:
     auto restore_manifest() noexcept -> bool;
     auto restore_wal() noexcept -> bool;
 
-  
     const config::shared_ptr_t m_pConfig;
     std::optional<memtable::memtable_t> m_table;
     db::manifest::shared_ptr_t m_manifest;

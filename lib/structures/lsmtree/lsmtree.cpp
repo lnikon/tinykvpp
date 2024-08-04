@@ -1,5 +1,7 @@
 #include "db/wal/wal.h"
+#include <cassert>
 #include <db/manifest/manifest.h>
+#include <sstream>
 #include <structures/lsmtree/lsmtree_types.h>
 #include <structures/lsmtree/segments/helpers.h>
 #include <structures/lsmtree/lsmtree.h>
@@ -33,7 +35,7 @@ void lsmtree_t::put(const structures::lsmtree::key_t &key, const structures::lsm
 
     // Record addition of the new key into the WAL and add record into memtable
     auto record{record_t{key, value}};
-    m_wal->add(db::wal::wal_t::operation_k::add_k, record);
+    m_wal->add({db::wal::wal_t::operation_k::add_k, record});
     m_table->emplace(record);
 
     // Check whether after addition size of the memtable increased above the
@@ -72,7 +74,7 @@ std::optional<record_t> lsmtree_t::get(const key_t &key) noexcept
     return result;
 }
 
-bool lsmtree_t::restore() noexcept
+auto lsmtree_t::recover() noexcept -> bool
 {
     assert(m_pConfig);
     assert(m_manifest);
@@ -83,18 +85,26 @@ bool lsmtree_t::restore() noexcept
     m_manifest->disable();
 
     // Restore lsmtree structure from the manifest file
-    restore_manifest();
+    if (!restore_manifest())
+    {
+        spdlog::error("Unable to restore manifest at {}", m_manifest->path().c_str());
+        return false;
+    }
 
     // Restore memtable from WAL
-    restore_wal();
+    if (!restore_wal())
+    {
+        spdlog::error("Unable to restore WAL at {}", m_wal->path().c_str());
+        return false;
+    }
 
     // Enable updates to manifest after recovery is finished
     m_manifest->enable();
 
-    return false;
+    return true;
 }
 
-bool lsmtree_t::restore_manifest() noexcept
+auto lsmtree_t::restore_manifest() noexcept -> bool
 {
     const auto &records{m_manifest->records()};
     for (const auto &record : records)
@@ -113,7 +123,7 @@ bool lsmtree_t::restore_manifest() noexcept
                             ->emplace(segments::factories::lsmtree_segment_factory(
                                 record.name,
                                 segments::helpers::segment_path(m_pConfig->datadir_path(), record.name),
-                                std::move(memtable_t{})));
+                                memtable_t{}));
                         spdlog::info("add segment {} into level {} during recovery", record.name, record.level);
                         break;
                     }
@@ -175,7 +185,7 @@ bool lsmtree_t::restore_manifest() noexcept
     {
         spdlog::info("level {} has following segments...", current_level_idx);
         auto storage{m_levels.level(current_level_idx)->storage()};
-        for (auto pSegment : *storage)
+        for (const auto &pSegment : *storage)
         {
             pSegment->restore();
             spdlog::info("segment {}", pSegment->get_name());
@@ -187,8 +197,15 @@ bool lsmtree_t::restore_manifest() noexcept
     return true;
 }
 
-bool lsmtree_t::restore_wal() noexcept
+auto lsmtree_t::restore_wal() noexcept -> bool
 {
+    auto stringify_record = [](const memtable_t::record_t &record) -> std::string
+    {
+        std::stringstream strStream;
+        record.write(strStream);
+        return strStream.str();
+    };
+
     const auto &records{m_wal->records()};
     for (const auto &record : records)
     {
@@ -196,18 +213,19 @@ bool lsmtree_t::restore_wal() noexcept
         {
         case db::wal::wal_t::operation_k::add_k:
         {
-            spdlog::info("add_k kv into memtable during WAL recovery");
+            assert(m_table.has_value());
+            spdlog::debug("Recovering record {} from WAL", stringify_record(record.kv));
             m_table->emplace(record.kv);
             break;
         }
         case db::wal::wal_t::operation_k::delete_k:
         {
-            spdlog::info("delete_k is not supported yet in WAL recovery");
+            spdlog::debug("Recovery of delete records from WAS is not supported");
             break;
         }
         default:
         {
-            spdlog::error("unkown WAL operation {}", static_cast<std::int32_t>(record.op));
+            spdlog::error("Unkown WAL operation {}", static_cast<std::int32_t>(record.op));
             break;
         }
         };

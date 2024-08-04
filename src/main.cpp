@@ -3,12 +3,12 @@
 #include "memtable.h"
 #include <cstdlib>
 #include <exception>
-#include <iostream>
 #include <fstream>
 
 #include <nlohmann/json.hpp>
 #include <nlohmann/json-schema.hpp>
 #include <cxxopts.hpp>
+#include <spdlog/common.h>
 #include <spdlog/spdlog.h>
 #include <sys/types.h>
 
@@ -94,6 +94,9 @@ static json database_config_schema = R"(
 
 auto main(int argc, char *argv[]) -> int
 {
+    // Configure spdlog
+    spdlog::set_level(spdlog::level::debug);
+
     // Construct options
     cxxopts::Options options("tinykvpp", "A tiny database, powering big ideas");
     options.add_options()("c,config", "Path to JSON configuration of database", cxxopts::value<std::string>());
@@ -108,7 +111,7 @@ auto main(int argc, char *argv[]) -> int
 
     // Read and parse config file into json
     const auto config = parsedOptions["config"].as<std::string>();
-    std::ifstream configStream(config);
+    std::fstream configStream(config, std::fstream::in);
     json configJson = json::parse(configStream);
 
     // Set root schema and validate config file
@@ -119,7 +122,7 @@ auto main(int argc, char *argv[]) -> int
     }
     catch (const std::exception &e)
     {
-        spdlog::error("Wrong database config validation schema. {}", e.what());
+        spdlog::error("Wrong database config validation schema={}", e.what());
         return EXIT_FAILURE;
     }
 
@@ -129,7 +132,7 @@ auto main(int argc, char *argv[]) -> int
     }
     catch (const std::exception &e)
     {
-        spdlog::error("Database config validation failed. {}", e.what());
+        spdlog::error("Database config validation failed. Error={}", e.what());
         return EXIT_FAILURE;
     }
 
@@ -150,11 +153,11 @@ auto main(int argc, char *argv[]) -> int
     auto record = db.get(key);
     if (record.has_value())
     {
-        spdlog::info("Record key={} and value={}", record->m_key.m_key, record->m_value.m_value);
+        spdlog::info("Found record key={} and value={}", record->m_key.m_key, record->m_value.m_value);
     }
     else
     {
-        spdlog::error("Unable to find record with key={}", record->m_key.m_key);
+        spdlog::error("Unable to find record with key={}", key.m_key);
     }
 
     return EXIT_SUCCESS;

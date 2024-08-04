@@ -1,5 +1,6 @@
 #pragma once
 
+#include "fs/types.h"
 #include <cstdint>
 #include <filesystem>
 #include <fs/append_only_file.h>
@@ -21,8 +22,9 @@ class wal_t
   public:
     using kv_t = structures::memtable::memtable_t::record_t;
 
-    enum operation_k
+    enum operation_k : int8_t
     {
+        undefined_k = -1,
         add_k,
         delete_k,
     };
@@ -31,48 +33,72 @@ class wal_t
     {
         operation_k op;
         kv_t kv;
+
+        template <typename Stream> void write(Stream &stream) const
+        {
+            stream << static_cast<std::int32_t>(op) << ' ';
+            kv.write(stream);
+        }
+
+        template <typename Stream> void read(Stream &stream)
+        {
+            int32_t opInt{0};
+            stream >> opInt;
+            op = static_cast<operation_k>(opInt);
+
+            kv.read(stream);
+        }
     };
 
-    explicit wal_t(fs::path_t  path)
-        : m_path{std::move(path)},
-          m_log{m_path}
-    {
-        if (!m_log.is_open())
-        {
-            // TODO(lnikon): Better way to handle. Without exceptions.
-            throw std::runtime_error("unable to open wal " + m_path.string());
-        }
-    }
+    /**
+     * @brief Construct a new wal t object
+     *
+     * @param path
+     */
+    explicit wal_t(fs::path_t path);
 
-    void add(const operation_k op, const kv_t &kv) noexcept
-    {
-        m_records.push_back(record_t{op, kv});
+    /**
+     * @brief
+     *
+     * @return true
+     * @return false
+     */
+    auto open() -> bool;
 
-        std::stringstream ss;
-        ss << static_cast<std::int32_t>(op) << ' ';
-        kv.write(ss);
-        m_log.write(ss.str());
+    /**
+     * @brief
+     *
+     * @return fs::path_t
+     */
+    auto path() -> fs::path_t;
 
-        spdlog::debug("add wal log: {}", ss.str());
-    }
+    /**
+     * @brief
+     *
+     * @param rec
+     */
+    void add(record_t rec) noexcept;
 
-    void reset()
-    {
-        m_log.close();
-        fs::stdfs::remove(m_path);
-        if (!m_log.open())
-        {
-            throw std::runtime_error("unable to reset wal " + m_path.string());
-        }
-        
-                    spdlog::info("wal reset is successfull " + m_path.string());
-       
-    }
+    /**
+     * @brief
+     *
+     */
+    void reset();
 
-    auto records() noexcept -> std::vector<record_t>
-    {
-        return m_records;
-    }
+    /**
+     * @brief
+     *
+     * @return true
+     * @return false
+     */
+    auto recover() noexcept -> bool;
+
+    /**
+     * @brief
+     *
+     * @return std::vector<record_t>
+     */
+    auto records() noexcept -> std::vector<record_t>;
 
   private:
     fs::path_t m_path;

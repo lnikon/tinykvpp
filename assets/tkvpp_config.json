@@ -1,6 +1,6 @@
 {
     "database": {
-        "path": ".",
+        "path": "/home/nikon/tkvpp",
         "walFilename": "wal",
         "manifileFilenamePrefix": "manifest_"
     },

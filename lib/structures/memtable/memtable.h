@@ -227,9 +227,12 @@ class memtable_t
     std::size_t m_count{0};
 };
 
+// ------------------------------------------------
+// memtable_t::record_t::key_t
+// ------------------------------------------------
 template <typename stream_gt> void memtable_t::record_t::key_t::write(stream_gt &outStream) const
 {
-    outStream << m_key.size() << ' ' << m_key << ' ';
+    outStream << m_key.size() << ' ' << m_key;
 }
 
 template <typename stream_gt> void memtable_t::record_t::key_t::read(stream_gt &outStream)
@@ -240,9 +243,12 @@ template <typename stream_gt> void memtable_t::record_t::key_t::read(stream_gt &
     outStream >> m_key;
 }
 
+// ------------------------------------------------
+// memtable_t::record_t::value_t
+// ------------------------------------------------
 template <typename stream_gt> void memtable_t::record_t::value_t::write(stream_gt &outStream) const
 {
-    outStream << ' ' << size() << ' ' << m_value << ' ';
+    outStream << size() << ' ' << m_value;
 }
 
 template <typename stream_gt> void memtable_t::record_t::value_t::read(stream_gt &outStream)
@@ -253,9 +259,12 @@ template <typename stream_gt> void memtable_t::record_t::value_t::read(stream_gt
     outStream >> m_value;
 }
 
+// ------------------------------------------------
+// memtable_t::record_t::timestamp_t
+// ------------------------------------------------
 template <typename stream_gt> void memtable_t::record_t::timestamp_t::write(stream_gt &outStream) const
 {
-    outStream << m_value.time_since_epoch().count() << ' ';
+    outStream << m_value.time_since_epoch().count();
 }
 
 template <typename stream_gt> void memtable_t::record_t::timestamp_t::read(stream_gt &outStream)
@@ -265,12 +274,16 @@ template <typename stream_gt> void memtable_t::record_t::timestamp_t::read(strea
     m_value = clock_t::time_point{clock_t::duration{count}};
 }
 
+// ------------------------------------------------
+// memtable_t::record_t
+// ------------------------------------------------
 template <typename stream_gt> void memtable_t::record_t::write(stream_gt &outStream) const
 {
     m_key.write(outStream);
+    outStream << ' ';
     m_value.write(outStream);
+    outStream << ' ';
     m_timestamp.write(outStream);
-    outStream << std::endl;
 }
 
 template <typename stream_gt> void memtable_t::record_t::read(stream_gt &outStream)
@@ -291,6 +304,7 @@ template <typename stream_gt> void memtable_t::write(stream_gt &outStream) const
 
 template <typename stream_gt> void memtable_t::read(stream_gt &outStream)
 {
+    // TODO(lnikon): Implement deserialization
 }
 
 } // namespace structures::memtable

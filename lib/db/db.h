@@ -14,18 +14,41 @@ namespace db
 class db_t
 {
   public:
-    explicit db_t(const config::shared_ptr_t config);
+    /**
+     * @brief Construct a new db_t object
+     *
+     * @param config
+     */
+    explicit db_t(config::shared_ptr_t config);
 
-    [[nodiscard]] bool open();
+    /**
+     * @brief Open database
+     *
+     * @return true
+     * @return false
+     */
+    [[nodiscard]] auto open() -> bool;
 
+    /**
+     * @brief Put key-value pair into the database
+     *
+     * @param key
+     * @param value
+     */
     void put(const structures::lsmtree::key_t &key, const structures::lsmtree::value_t &value);
-    std::optional<structures::memtable::memtable_t::record_t> get(const structures::lsmtree::key_t &key);
+
+    /**
+     * @brief Get key-value pair from database
+     *
+     * @param key
+     * @return std::optional<structures::memtable::memtable_t::record_t>
+     */
+    auto get(const structures::lsmtree::key_t &key) -> std::optional<structures::memtable::memtable_t::record_t>;
 
   private:
-    bool prepare_directory_structure();
+    auto prepare_directory_structure() -> bool;
 
-  private:
-    const config::shared_ptr_t m_config;
+    config::shared_ptr_t m_config;
     manifest::shared_ptr_t m_manifest;
     wal::shared_ptr_t m_wal;
     structures::lsmtree::lsmtree_t m_lsmTree;

@@ -1,5 +1,6 @@
 #include "fs/append_only_file.h"
 #include <iostream>
+#include <spdlog/spdlog.h>
 #include <structures/lsmtree/lsmtree_types.h>
 #include <structures/lsmtree/segments/lsmtree_regular_segment.h>
 
@@ -47,44 +48,47 @@ std::optional<record_t> regular_segment_t::record(const hashindex::hashindex_t::
 void regular_segment_t::flush()
 {
     // Skip execution if for some reason the memtable is empty
-    if (m_memtable->empty())
+    if (m_memtable.has_value() && m_memtable->empty())
     {
-        // std::cerr << "can not flush empty memtable" << std::endl;
+        spdlog::warn("Can not flush empty memtable at segment {}", m_path.c_str());
         return;
     }
 
     // Serialize memtable into stringstream and build hash index
-    std::stringstream ss;
-    for (const auto &kv : m_memtable.value())
+    std::stringstream stringStream;
+    for (std::size_t recordIndex{0}; const auto &record : m_memtable.value())
     {
-        std::size_t ss_before = ss.tellp();
-        kv.write(ss);
-        m_hashIndex.emplace(kv, static_cast<std::size_t>(ss.tellp()) - ss_before);
+        std::size_t ss_before = stringStream.tellp();
+        record.write(stringStream);
+        if (recordIndex++ != m_memtable.value().count())
+        {
+            stringStream << '\n';
+        }
+        m_hashIndex.emplace(record, static_cast<std::size_t>(stringStream.tellp()) - ss_before);
     }
-    ss << std::endl;
 
     // Calcuate datablock size
     // const auto dataBlockSize{ss.tellp() - dataBlockOffset};
 
     // Serialize hashindex
-    const auto hashIndexBlockOffset{ss.tellp()};
+    const auto hashIndexBlockOffset{stringStream.tellp()};
     for (const auto &[key, offset] : m_hashIndex)
     {
-        ss << key.m_key << ' ' << offset << std::endl;
+        stringStream << key.m_key << ' ' << offset << std::endl;
     }
 
     // Calculate size of the index block
-    const auto hashIndexBlockSize{ss.tellp() - hashIndexBlockOffset};
+    const auto hashIndexBlockSize{stringStream.tellp() - hashIndexBlockOffset};
 
     // Get offset into footer section
-    const auto footerBlockOffset{ss.tellp()};
+    const auto footerBlockOffset{stringStream.tellp()};
 
     // Serialize footer
     // TODO(lnikon): First "big enough" number that came to my mind :)
-    ss << hashIndexBlockOffset << ' ' << hashIndexBlockSize << std::endl;
+    stringStream << hashIndexBlockOffset << ' ' << hashIndexBlockSize << std::endl;
 
-    const auto footerPaddingSize{footerSize - (ss.tellp() - footerBlockOffset)};
-    ss << std::string(footerPaddingSize, ' ') << std::endl;
+    const auto footerPaddingSize{footerSize - (stringStream.tellp() - footerBlockOffset)};
+    stringStream << std::string(footerPaddingSize, ' ') << std::endl;
 
     // Flush the segment onto the disk
     std::fstream stream(get_path(), std::fstream::trunc | std::fstream::out);
@@ -93,8 +97,8 @@ void regular_segment_t::flush()
         throw std::runtime_error("unable to flush segment for path " + m_path.string());
     }
 
-    assert(!ss.str().empty());
-    stream << ss.str();
+    assert(!stringStream.str().empty());
+    stream << stringStream.str();
     stream.flush();
 
     // std::cout << "[regular_segment_t::flush]: "

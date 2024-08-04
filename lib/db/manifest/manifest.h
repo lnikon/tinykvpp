@@ -1,13 +1,16 @@
 #pragma once
 
 #include "config/config.h"
-#include <cstdint>
+#include "fs/types.h"
 #include <fs/append_only_file.h>
 
 #include <spdlog/spdlog.h>
 
+#include <sstream>
+#include <string>
 #include <vector>
 #include <variant>
+#include <cstdint>
 
 namespace db::manifest
 {
@@ -18,7 +21,6 @@ namespace db::manifest
  */
 struct manifest_t
 {
-    // using level_index_t = structures::lsmtree::level::level_t::level_index_type_t;
     using level_index_t = std::size_t;
     using segment_name_t = std::string;
     using segment_names_t = std::vector<std::string>;
@@ -80,13 +82,21 @@ struct manifest_t
          */
         template <typename stream_gt> void read(stream_gt &outStream)
         {
+            std::string line;
+            std::getline(outStream, line);
+            if (line.empty())
+            {
+                return;
+            }
+
+            std::istringstream lineStream(line);
             std::int32_t op_int{0};
-            outStream >> op_int;
+            lineStream >> op_int;
             op = static_cast<operation_k>(op_int);
 
-            outStream >> name;
+            lineStream >> name;
 
-            outStream >> level;
+            lineStream >> level;
         }
 
         record_type_k type{record_type_k::segment_k};
@@ -142,17 +152,24 @@ struct manifest_t
          */
         template <typename stream_gt> void write(stream_gt &outStream) const
         {
-            outStream << static_cast<std::int32_t>(type) << ' ' << static_cast<std::int32_t>(op) << ' ' << level
-                      << std::endl;
+            outStream << static_cast<std::int32_t>(type) << ' ' << static_cast<std::int32_t>(op) << ' ' << level;
         }
 
         template <typename stream_gt> void read(stream_gt &outStream)
         {
+            std::string line;
+            std::getline(outStream, line);
+            if (line.empty())
+            {
+                return;
+            }
+
+            std::istringstream lineStream(line);
             std::int32_t op_int{0};
-            outStream >> op_int;
+            lineStream >> op_int;
             op = static_cast<operation_k>(op_int);
 
-            outStream >> level;
+            lineStream >> level;
         }
 
         record_type_k type{record_type_k::level_k};
@@ -162,131 +179,77 @@ struct manifest_t
 
     using record_t = std::variant<segment_record_t, level_record_t>;
 
+    /**
+     * @brief Construct a new manifest t object
+     *
+     * @param config
+     */
     explicit manifest_t(config::shared_ptr_t config);
 
-    void add(record_t info)
-    {
-        if (!m_enabled)
-        {
-            return;
-        }
+    /**
+     * @brief
+     *
+     * @return true
+     * @return false
+     */
+    auto open() -> bool;
 
-        m_records.emplace_back(info);
+    /**
+     * @brief
+     *
+     * @return fs::path_t
+     */
+    auto path() -> fs::path_t;
 
-        std::stringstream stringStream;
-        std::visit([&stringStream](auto &&record) { record.write(stringStream); }, info);
-        m_log.write(stringStream.str());
-    }
+    /**
+     * @brief
+     *
+     * @param info
+     */
+    void add(record_t info);
 
-    void print() const
-    {
-        for (const auto &rec : m_records)
-        {
-            std::visit(
-                [](auto &&arg)
-                {
-                    using T = std::decay_t<decltype(arg)>;
-                    if constexpr (std::is_same_v<T, segment_record_t>)
-                    {
-                        spdlog::info("{} on with name {} level {}", arg.ToString(arg.op), arg.name, arg.level);
-                    }
-                    else if constexpr (std::is_same_v<T, level_record_t>)
-                    {
-                        spdlog::info("{} on level {}", arg.ToString(arg.op), arg.level);
-                    }
-                },
-                rec);
-        }
-    }
+    /**
+     * @brief
+     *
+     */
+    void print() const;
 
-    auto recover() -> bool
-    {
-        spdlog::info("recovering manifest file");
-        auto stringStream = m_log.stream();
-        std::int32_t record_type_int{0};
-        while (stringStream >> record_type_int)
-        {
-            const auto record_type = static_cast<record_type_k>(record_type_int);
-            switch (record_type)
-            {
-            case record_type_k::segment_k:
-            {
-                segment_record_t record;
-                record.read(stringStream);
-                spdlog::info("recovered segment_record={}", record.ToString());
-                m_records.emplace_back(record);
-                break;
-            }
-            case record_type_k::level_k:
-            {
-                level_record_t record;
-                record.read(stringStream);
-                spdlog::info("recovered level_record={}", record.ToString());
-                m_records.emplace_back(record);
-                break;
-            }
-            default:
-            {
-                spdlog::error("undhandled record_type_int={}", record_type_int);
-                break;
-            }
-            }
-        }
+    /**
+     * @brief
+     *
+     * @return true
+     * @return false
+     */
+    auto recover() -> bool;
 
-        return true;
-    }
+    /**
+     * @brief
+     *
+     * @return fs::path_t
+     */
+    auto path() const noexcept -> fs::path_t;
 
-    auto path() const noexcept -> fs::path_t
-    {
-        return m_path;
-    }
+    /**
+     * @brief
+     *
+     * @return std::vector<record_t>
+     */
+    auto records() const noexcept -> std::vector<record_t>;
 
-    auto records() const noexcept -> std::vector<record_t>
-    {
-        return m_records;
-    }
+    /**
+     * @brief
+     *
+     */
+    void enable();
 
-    void enable()
-    {
-        m_enabled = true;
-    }
-
-    void disable()
-    {
-        m_enabled = false;
-    }
+    /**
+     * @brief
+     *
+     */
+    void disable();
 
   private:
-    static void update(const segment_record_t &info)
-    {
-        switch (info.op)
-        {
-        case segment_record_t::operation_k::add_segment_k:
-            throw std::runtime_error("add_segment_k not implemented");
-            break;
-        case segment_record_t::operation_k::remove_segment_k:
-            throw std::runtime_error("remove_segment_k not implemented");
-            break;
-        default:
-            assert(false);
-        }
-    }
-
-    static void update(const level_record_t &info)
-    {
-        switch (info.op)
-        {
-        case level_record_t::operation_k::add_level_k:
-            throw std::runtime_error("add_level_k not implemented");
-            break;
-        case level_record_t::operation_k::compact_level_k:
-            throw std::runtime_error("compact_level_k not implemented");
-            break;
-        default:
-            assert(false);
-        }
-    }
-
+    config::shared_ptr_t m_config;
     std::string m_name;
     fs::path_t m_path;
     std::vector<record_t> m_records;
