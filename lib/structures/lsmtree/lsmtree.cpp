@@ -43,7 +43,7 @@ void lsmtree_t::put(const structures::lsmtree::key_t &key, const structures::lsm
     // TODO(lnikon): This logic should be a part of
     if (m_table->size() >= m_pConfig->LSMTreeConfig.DiskFlushThresholdSize)
     {
-        m_levels.segment(m_pConfig->LSMTreeConfig.SegmentType, std::move(m_table.value()));
+        m_levels.segment(std::move(m_table.value()));
         m_table = std::make_optional<memtable::memtable_t>();
         m_wal->reset();
     }

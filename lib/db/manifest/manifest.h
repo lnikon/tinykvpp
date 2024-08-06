@@ -82,21 +82,21 @@ struct manifest_t
          */
         template <typename stream_gt> void read(stream_gt &outStream)
         {
-            std::string line;
-            std::getline(outStream, line);
-            if (line.empty())
-            {
-                return;
-            }
+            //            std::string line;
+            //            std::getline(outStream, line);
+            //            if (line.empty())
+            //            {
+            //                return;
+            //            }
 
-            std::istringstream lineStream(line);
+            //            std::istringstream lineStream(line);
             std::int32_t op_int{0};
-            lineStream >> op_int;
+            outStream >> op_int;
             op = static_cast<operation_k>(op_int);
 
-            lineStream >> name;
+            outStream >> name;
 
-            lineStream >> level;
+            outStream >> level;
         }
 
         record_type_k type{record_type_k::segment_k};
@@ -157,19 +157,19 @@ struct manifest_t
 
         template <typename stream_gt> void read(stream_gt &outStream)
         {
-            std::string line;
-            std::getline(outStream, line);
-            if (line.empty())
-            {
-                return;
-            }
+            //            std::string line;
+            //            std::getline(outStream, line);
+            //            if (line.empty())
+            //            {
+            //                return;
+            //            }
 
-            std::istringstream lineStream(line);
+            //            std::istringstream lineStream(line);
             std::int32_t op_int{0};
-            lineStream >> op_int;
+            outStream >> op_int;
             op = static_cast<operation_k>(op_int);
 
-            lineStream >> level;
+            outStream >> level;
         }
 
         record_type_k type{record_type_k::level_k};

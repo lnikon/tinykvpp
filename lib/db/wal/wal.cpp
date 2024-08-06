@@ -2,6 +2,9 @@
 
 #include <sstream>
 #include <string>
+#include <algorithm>
+#include <cctype>
+#include <locale>
 
 namespace db::wal
 {
@@ -49,6 +52,25 @@ void wal_t::reset()
     spdlog::info("wal reset is successfull " + m_path.string());
 }
 
+// trim from start (in place)
+inline void ltrim(std::string &s)
+{
+    s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](unsigned char ch) { return !std::isspace(ch); }));
+}
+
+// trim from end (in place)
+inline void rtrim(std::string &s)
+{
+    s.erase(std::find_if(s.rbegin(), s.rend(), [](unsigned char ch) { return !std::isspace(ch); }).base(), s.end());
+}
+
+inline auto trim(std::string &s) -> std::string &
+{
+    rtrim(s);
+    ltrim(s);
+    return s;
+}
+
 auto wal_t::recover() noexcept -> bool
 {
     auto recordToString = [](const record_t &rec) -> std::string
@@ -64,7 +86,7 @@ auto wal_t::recover() noexcept -> bool
     std::string line;
     while (std::getline(stringStream, line))
     {
-        if (line.empty())
+        if (trim(line).empty())
         {
             continue;
         }

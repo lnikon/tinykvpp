@@ -14,32 +14,35 @@ namespace structures::lsmtree
 
 struct lsmtree_config_t
 {
-    /*
+    /**
      * Determines the size (in Mb) of the in-memory memtable after which it should be flushed
      * onto the disk.
      */
-    const uint64_t DefaultDiskFlushThresholdSize{8 * 1024 * 1024};
-    uint64_t DiskFlushThresholdSize{DefaultDiskFlushThresholdSize};
+    uint64_t DiskFlushThresholdSize{8 * 1024 * 1024};
 
-    /*
+    /**
      * Determines number of segments after whicqh compaction process should
      * start.
      */
-    const uint64_t DefaultLevelZeroCompactionSegmentCount{4};
-    uint64_t LevelZeroCompactionSegmentCount{DefaultLevelZeroCompactionSegmentCount};
+    uint64_t LevelZeroCompactionThreshold{0};
 
-    /*
-     * Type of the segment that LSMTree should use.
+    /**
+     * Determines strategy used by compaction process
+     * TODO(lnikon): Switch to enum
      */
-    const lsmtree_segment_type_t DefaultSegmentType{lsmtree_segment_type_t::regular_k};
-    lsmtree_segment_type_t SegmentType{DefaultSegmentType};
+    std::string LevelZeroCompactionStrategy;
 
-    /*
-     * Name of directory inside the database root dir where segments should be
-     * stored
+    /**
+     * Determines number of segments after whicqh compaction process should
+     * start.
      */
-    const std::string DefaultSegmentsDirectoryName = "segments";
-    std::string SegmentsDirectoryName{DefaultSegmentsDirectoryName};
+    uint64_t LevelNonZeroCompactionThreshold{0};
+
+    /**
+     * Determines strategy used by compaction process
+     * TODO(lnikon): Switch to enum
+     */
+    std::string LevelNonZeroCompactionStrategy;
 };
 
 } // namespace structures::lsmtree

@@ -100,6 +100,25 @@ void manifest_t::print() const
     }
 }
 
+// trim from start (in place)
+inline void ltrim(std::string &s)
+{
+    s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](unsigned char ch) { return !std::isspace(ch); }));
+}
+
+// trim from end (in place)
+inline void rtrim(std::string &s)
+{
+    s.erase(std::find_if(s.rbegin(), s.rend(), [](unsigned char ch) { return !std::isspace(ch); }).base(), s.end());
+}
+
+inline auto trim(std::string &s) -> std::string &
+{
+    rtrim(s);
+    ltrim(s);
+    return s;
+}
+
 auto manifest_t::recover() -> bool
 {
     spdlog::info("Manifest recovery started");
@@ -108,7 +127,7 @@ auto manifest_t::recover() -> bool
     std::string line;
     while (std::getline(stringStream, line))
     {
-        if (line.empty())
+        if (trim(line).empty())
         {
             continue;
         }
@@ -121,7 +140,7 @@ auto manifest_t::recover() -> bool
         case record_type_k::segment_k:
         {
             segment_record_t record;
-            record.read(stringStream);
+            record.read(lineStream);
             spdlog::info("recovered segment_record={}", record.ToString());
             m_records.emplace_back(record);
             break;
@@ -129,14 +148,14 @@ auto manifest_t::recover() -> bool
         case record_type_k::level_k:
         {
             level_record_t record;
-            record.read(stringStream);
+            record.read(lineStream);
             spdlog::info("recovered level_record={}", record.ToString());
             m_records.emplace_back(record);
             break;
         }
         default:
         {
-            spdlog::error("undhandled record_type_int={}. Skipping record.", record_type_int);
+            spdlog::error("unhandled record_type_int={}. Skipping record.", record_type_int);
             break;
         }
         }

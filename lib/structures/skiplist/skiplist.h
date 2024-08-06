@@ -160,8 +160,9 @@ template <typename record_gt, typename comparator_gt> class skiplist_t
         }
 
         current = current->forward[0];
-        if (current == nullptr || current->record.m_key != record.m_key)
+        if (current == nullptr)
         {
+            // Insert new node
             auto *newNode = new node_t(record, m_level);
             for (std::int64_t i{0}; i <= newLevel; i++)
             {
@@ -170,6 +171,11 @@ template <typename record_gt, typename comparator_gt> class skiplist_t
             }
 
             m_size++;
+        }
+        else
+        {
+            // Update value of the existing node
+            current->record = record;
         }
     }
 

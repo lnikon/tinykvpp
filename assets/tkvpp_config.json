@@ -1,18 +1,18 @@
 {
-    "database": {
-        "path": "/home/nikon/tkvpp",
-        "walFilename": "wal",
-        "manifileFilenamePrefix": "manifest_"
+  "database": {
+    "path": "/home/nikon/tkvpp",
+    "walFilename": "wal",
+    "manifestFilenamePrefix": "manifest_"
+  },
+  "lsmtree": {
+    "memtableFlushThreshold": 1024,
+    "levelZeroCompaction": {
+      "compactionStrategy": "levelled",
+      "compactionThreshold": 4
     },
-    "lsmtree": {
-        "memtableFlushThreashold": 1024,
-        "levelZeroCompaction": {
-            "compactionStrategy": "levelled",
-            "compactionThreashold": 4
-        },
-        "levelNonZeroCompaction": {
-            "compactionStrategy": "tiered",
-            "compactionThreashold": 1024
-        }
+    "levelNonZeroCompaction": {
+      "compactionStrategy": "tiered",
+      "compactionThreshold": 1024
     }
+  }
 }

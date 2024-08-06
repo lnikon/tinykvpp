@@ -3,43 +3,34 @@
 namespace structures::hashindex
 {
 
-hashindex_t::hashindex_t()
-    : m_cursor{0}
-{
-}
-
 void hashindex_t::emplace(lsmtree::record_t record, const std::size_t length)
 {
-    m_offsets.emplace(record.m_key, m_cursor);
-    m_cursor += length;
+    m_offsets.emplace(record.m_key, length);
 }
 
-bool hashindex_t::empty() const
+auto hashindex_t::empty() const -> bool
 {
     return m_offsets.empty();
 }
 
-std::vector<hashindex_t::offset_t> hashindex_t::offset(
-    const lsmtree::key_t &key) const
+auto hashindex_t::offset(const lsmtree::key_t &key) const -> std::vector<hashindex_t::offset_t>
 {
     std::vector<offset_t> result;
-    for (auto offsets{m_offsets.equal_range(key)};
-         offsets.first != offsets.second;
-         ++offsets.first)
+    for (auto offsets{m_offsets.equal_range(key)}; offsets.first != offsets.second; ++offsets.first)
     {
         result.emplace_back(offsets.first->second);
     }
     return result;
 }
 
-hashindex_t::iterator hashindex_t::begin()
+auto hashindex_t::begin() -> hashindex_t::iterator
 {
     return m_offsets.begin();
 }
 
-hashindex_t::iterator hashindex_t::end()
+auto hashindex_t::end() -> hashindex_t::iterator
 {
     return m_offsets.end();
 }
 
-}  // namespace structures::hashindex
+} // namespace structures::hashindex

@@ -14,6 +14,7 @@
 #include <sys/types.h>
 #include <chrono>
 #include <iostream>
+#include <csignal>
 
 namespace structures::memtable
 {
@@ -232,6 +233,7 @@ class memtable_t
 // ------------------------------------------------
 template <typename stream_gt> void memtable_t::record_t::key_t::write(stream_gt &outStream) const
 {
+    auto size = m_key.size();
     outStream << m_key.size() << ' ' << m_key;
 }
 

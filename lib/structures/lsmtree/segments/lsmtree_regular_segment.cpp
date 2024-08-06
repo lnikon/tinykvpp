@@ -56,6 +56,7 @@ void regular_segment_t::flush()
 
     // Serialize memtable into stringstream and build hash index
     std::stringstream stringStream;
+    std::size_t cursor{0};
     for (std::size_t recordIndex{0}; const auto &record : m_memtable.value())
     {
         std::size_t ss_before = stringStream.tellp();
@@ -64,7 +65,9 @@ void regular_segment_t::flush()
         {
             stringStream << '\n';
         }
-        m_hashIndex.emplace(record, static_cast<std::size_t>(stringStream.tellp()) - ss_before);
+        const auto length{static_cast<std::size_t>(stringStream.tellp()) - ss_before};
+        m_hashIndex.emplace(record, cursor);
+        cursor += length;
     }
 
     // Calcuate datablock size
@@ -74,7 +77,7 @@ void regular_segment_t::flush()
     const auto hashIndexBlockOffset{stringStream.tellp()};
     for (const auto &[key, offset] : m_hashIndex)
     {
-        stringStream << key.m_key << ' ' << offset << std::endl;
+        stringStream << key.m_key << ' ' << offset << '\n';
     }
 
     // Calculate size of the index block
@@ -190,7 +193,7 @@ void regular_segment_t::restore_index()
         throw std::runtime_error("unable to open SST " + m_path.string());
     }
 
-    // Seek to the beggining of the footer
+    // Seek to the beginning of the footer
     sst.seekg(-footerSize - 1, std::ios_base::end);
 
     // Read index block offset and size
@@ -205,18 +208,21 @@ void regular_segment_t::restore_index()
     // Start reading <key, offset> pairs
     std::size_t bytesRead{0};
     std::string key;
-    std::size_t offset;
-    while (bytesRead < indexBlockSize)
+    std::size_t offset{0};
+    std::string line;
+    while (bytesRead <= indexBlockSize - 1 && std::getline(sst, line))
     {
-        auto start = sst.tellg();
-        sst >> key;
-        auto end = sst.tellg();
-        bytesRead += end - start;
+        std::istringstream lineStream{line};
+        //        auto start = sst.tellg();
+        lineStream >> key;
+        //        auto end = sst.tellg();
+        //        bytesRead += end - start;
 
-        start = sst.tellg();
-        sst >> offset;
-        end = sst.tellg();
-        bytesRead += end - start;
+        //        start = sst.tellg();
+        lineStream >> offset;
+        //        end = sst.tellg();
+        //        bytesRead += end - start;
+        bytesRead += line.size() + 1;
 
         m_hashIndex.emplace(structures::lsmtree::record_t{key_t{key}, value_t{}}, offset);
     }

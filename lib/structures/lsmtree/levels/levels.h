@@ -40,8 +40,7 @@ class levels_t
      * @param type
      * @param pMemtable
      */
-    [[maybe_unused]] auto segment(lsmtree_segment_type_t type,
-                                  memtable::memtable_t memtable) -> segments::regular_segment::shared_ptr_t;
+    [[maybe_unused]] auto segment(memtable::memtable_t memtable) -> segments::regular_segment::shared_ptr_t;
     /**
      * @brief Appends an additional level to the levels storage.
      *        If the table has #L levels, this new level will act as an #L+1th level.

@@ -27,7 +27,7 @@ int main(int argc, char *argv[])
     spdlog::set_level(spdlog::level::debug);
 
     auto pConfig = config::make_shared();
-    pConfig->LSMTreeConfig.DiskFlushThresholdSize = 128;
+    pConfig->LSMTreeConfig.DiskFlushThresholdSize = 1024;
     db::db_t db(pConfig);
     if (!db.open())
     {

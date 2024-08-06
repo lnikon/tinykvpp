@@ -35,7 +35,7 @@ static json database_config_schema = R"(
                 "walFilename": {
                     "type": "string"
                 },
-                "manifileFilenamePrefix": {
+                "manifestFilenamePrefix": {
                     "type": "string"
                 }
             }
@@ -54,7 +54,7 @@ static json database_config_schema = R"(
                 }
             },
             "required": [
-                "memtableFlushThreashold",
+                "memtableFlushThreshold",
                 "levelZeroCompaction",
                 "levelNonZeroCompaction"
             ]
@@ -78,13 +78,13 @@ static json database_config_schema = R"(
                 "compactionStrategy": {
                     "$ref": "#/$defs/compactionStrategy"
                 },
-                "compactionThreashold": {
+                "compactionThreshold": {
                     "type": "number"
                 }
             },
             "required": [
                 "compactionStrategy",
-                "compactionThreashold"
+                "compactionThreshold"
             ]
         }
     }
@@ -109,12 +109,12 @@ auto main(int argc, char *argv[]) -> int
         return EXIT_SUCCESS;
     }
 
-    // Read and parse config file into json
-    const auto config = parsedOptions["config"].as<std::string>();
-    std::fstream configStream(config, std::fstream::in);
+    // Read and parse configPath file into json
+    const auto configPath = parsedOptions["config"].as<std::string>();
+    std::fstream configStream(configPath, std::fstream::in);
     json configJson = json::parse(configStream);
 
-    // Set root schema and validate config file
+    // Set root schema and validate configPath file
     json_validator validator; // create validator
     try
     {
@@ -122,7 +122,7 @@ auto main(int argc, char *argv[]) -> int
     }
     catch (const std::exception &e)
     {
-        spdlog::error("Wrong database config validation schema={}", e.what());
+        spdlog::error("Wrong database configPath validation schema={}", e.what());
         return EXIT_FAILURE;
     }
 
@@ -132,13 +132,114 @@ auto main(int argc, char *argv[]) -> int
     }
     catch (const std::exception &e)
     {
-        spdlog::error("Database config validation failed. Error={}", e.what());
+        spdlog::error("Database configPath validation failed. Error={}", e.what());
         return EXIT_FAILURE;
     }
 
-    // Create database config based on parsed config
+    // Create database configPath based on parsed configPath
     auto dbConfig = config::make_shared();
-    dbConfig->DatabaseConfig.DatabasePath = configJson["database"]["path"].template get<std::string>();
+
+    // Fill database related fields
+    if (configJson["database"].contains("path"))
+    {
+        dbConfig->DatabaseConfig.DatabasePath = configJson["database"]["path"].template get<std::string>();
+    }
+
+    if (configJson["database"].contains("walFilename"))
+    {
+        dbConfig->DatabaseConfig.WalFilename = configJson["database"]["walFilename"].template get<std::string>();
+    }
+
+    if (configJson["database"].contains("manifestFilenamePrefix"))
+    {
+        dbConfig->DatabaseConfig.ManifestFilenamePrefix =
+            configJson["database"]["manifestFilenamePrefix"].template get<std::string>();
+    }
+
+    // Fill LSMTree related fields
+    if (configJson.contains("lsmtree"))
+    {
+        const auto &lsmtreeConfig = configJson["lsmtree"];
+        if (lsmtreeConfig.contains("memtableFlushThreshold"))
+        {
+            dbConfig->LSMTreeConfig.DiskFlushThresholdSize =
+                lsmtreeConfig["memtableFlushThreshold"].template get<uint64_t>();
+        }
+        else
+        {
+            spdlog::error("\"memtableFlushThreshold\" is not specified in configPath {}", configPath);
+            return EXIT_FAILURE;
+        }
+
+        if (lsmtreeConfig.contains("levelZeroCompaction"))
+        {
+            if (lsmtreeConfig["levelZeroCompaction"].contains("compactionStrategy"))
+            {
+                dbConfig->LSMTreeConfig.LevelZeroCompactionStrategy =
+                    lsmtreeConfig["levelZeroCompaction"]["compactionStrategy"].template get<std::string>();
+            }
+            else
+            {
+                spdlog::error("\"levelZeroCompaction.compactionStrategy\" is not specified in configPath {}",
+                              configPath);
+                return EXIT_FAILURE;
+            }
+
+            if (lsmtreeConfig["levelZeroCompaction"].contains("compactionThreshold"))
+            {
+                dbConfig->LSMTreeConfig.LevelZeroCompactionThreshold =
+                    lsmtreeConfig["levelZeroCompaction"]["compactionThreshold"].template get<std::uint64_t>();
+            }
+            else
+            {
+                spdlog::error("\"levelZeroCompaction.compactionThreshold\" is not specified in configPath {}",
+                              configPath);
+                return EXIT_FAILURE;
+            }
+        }
+        else
+        {
+            spdlog::error("\"levelZeroCompaction\" is not specified in configPath {}", configPath);
+            return EXIT_FAILURE;
+        }
+
+        if (lsmtreeConfig.contains("levelNonZeroCompaction"))
+        {
+            if (lsmtreeConfig["levelNonZeroCompaction"].contains("compactionStrategy"))
+            {
+                dbConfig->LSMTreeConfig.LevelNonZeroCompactionStrategy =
+                    lsmtreeConfig["levelNonZeroCompaction"]["compactionStrategy"].template get<std::string>();
+            }
+            else
+            {
+                spdlog::error("\"levelNonZeroCompaction.compactionStrategy\" is not specified in configPath {}",
+                              configPath);
+                return EXIT_FAILURE;
+            }
+
+            if (lsmtreeConfig["levelNonZeroCompaction"].contains("compactionThreshold"))
+            {
+                dbConfig->LSMTreeConfig.LevelNonZeroCompactionThreshold =
+                    lsmtreeConfig["levelNonZeroCompaction"]["compactionThreshold"].template get<std::uint64_t>();
+            }
+            else
+            {
+                spdlog::error("\"levelNonZeroCompaction.compactionThreshold\" is not specified in configPath {}",
+                              configPath);
+                return EXIT_FAILURE;
+            }
+        }
+        else
+        {
+            spdlog::error("\"levelNonZeroCompaction\" is not specified in configPath {}", configPath);
+            return EXIT_FAILURE;
+        }
+    }
+    else
+    {
+        spdlog::error("\"lsmtree\" is not specified in configPath {}", configPath);
+        return EXIT_FAILURE;
+    }
 
     // Create/open the database
     auto db = db::db_t(dbConfig);
@@ -147,9 +248,71 @@ auto main(int argc, char *argv[]) -> int
         spdlog::error("Unable to open the database");
     }
 
-    auto key = tk_key_t{"hello"};
-    auto value = tk_value_t{"world"};
-    db.put(key, value);
+    auto key = tk_key_t{"aaaaaa"};
+    //    auto value = tk_value_t{"world"};
+    //    db.put(key, value);
+    //
+    //    key = tk_key_t{"goodbye"};
+    //    value = tk_value_t{"internet"};
+    //    db.put(key, value);
+    //
+    //    db.put(tk_key_t{"aaaaaa"}, tk_value_t{"version1"});
+    //    db.put(tk_key_t{"aaaaaa"}, tk_value_t{"version2"});
+    //    db.put(tk_key_t{"aaaaaa"}, tk_value_t{"version3"});
+    //    db.put(tk_key_t{"cccccc"}, tk_value_t{"aaaa"});
+    //    db.put(tk_key_t{"aaaaaa"}, tk_value_t{"version4"});
+    //    db.put(tk_key_t{"aaaaaa"}, tk_value_t{"version5"});
+    //    db.put(tk_key_t{"aaaaaa"}, tk_value_t{"version6"});
+    //    db.put(tk_key_t{"cccccc"}, tk_value_t{"bbbb"});
+    //    db.put(tk_key_t{"aaaaaa"}, tk_value_t{"version7"});
+    //    db.put(tk_key_t{"aaaaaa"}, tk_value_t{"version8"});
+    //    db.put(tk_key_t{"ddddd"}, tk_value_t{"version1"});
+    //    db.put(tk_key_t{"cccccc"}, tk_value_t{"dddd"});
+    //    db.put(tk_key_t{"aaaaaa"}, tk_value_t{"version9"});
+    //    db.put(tk_key_t{"aaaaaa"}, tk_value_t{"version10"});
+    //    db.put(tk_key_t{"aaaaaa"}, tk_value_t{"version11"});
+    //    db.put(tk_key_t{"cccccc1"}, tk_value_t{"aaaa1"});
+    //    db.put(tk_key_t{"aaaaaa"}, tk_value_t{"version12"});
+    //    db.put(tk_key_t{"aaaaaa2"}, tk_value_t{"version13"});
+    //    db.put(tk_key_t{"aaaaaa"}, tk_value_t{"version13"});
+    //    db.put(tk_key_t{"ddddd"}, tk_value_t{"version1"});
+    //    db.put(tk_key_t{"cccccc"}, tk_value_t{"dddd"});
+    //    db.put(tk_key_t{"aaaaaa"}, tk_value_t{"version9"});
+    //    db.put(tk_key_t{"aaaaaa"}, tk_value_t{"version10"});
+    //    db.put(tk_key_t{"aaaaaa"}, tk_value_t{"version11"});
+    //    db.put(tk_key_t{"cccccc1"}, tk_value_t{"aaaa1"});
+    //    db.put(tk_key_t{"aaaaaa"}, tk_value_t{"version12"});
+    //    db.put(tk_key_t{"aaaaaa2"}, tk_value_t{"version13"});
+    //    db.put(tk_key_t{"aaaaaa"}, tk_value_t{"version13"});
+    //    db.put(tk_key_t{"aaaaaa"}, tk_value_t{"version1"});
+    //    db.put(tk_key_t{"aaaaaa"}, tk_value_t{"version2"});
+    //    db.put(tk_key_t{"aaaaaa"}, tk_value_t{"version3"});
+    //    db.put(tk_key_t{"cccccc"}, tk_value_t{"aaaa"});
+    //    db.put(tk_key_t{"aaaaaa"}, tk_value_t{"version4"});
+    //    db.put(tk_key_t{"aaaaaa"}, tk_value_t{"version5"});
+    //    db.put(tk_key_t{"aaaaaa"}, tk_value_t{"version6"});
+    //    db.put(tk_key_t{"cccccc"}, tk_value_t{"bbbb"});
+    //    db.put(tk_key_t{"aaaaaa"}, tk_value_t{"version7"});
+    //    db.put(tk_key_t{"aaaaaa"}, tk_value_t{"version8"});
+    //    db.put(tk_key_t{"ddddd"}, tk_value_t{"version1"});
+    //    db.put(tk_key_t{"cccccc"}, tk_value_t{"dddd"});
+    //    db.put(tk_key_t{"aaaaaa"}, tk_value_t{"version9"});
+    //    db.put(tk_key_t{"aaaaaa"}, tk_value_t{"version10"});
+    //    db.put(tk_key_t{"aaaaaa"}, tk_value_t{"version11"});
+    //    db.put(tk_key_t{"cccccc1"}, tk_value_t{"aaaa1"});
+    //    db.put(tk_key_t{"aaaaaa"}, tk_value_t{"version12"});
+    //    db.put(tk_key_t{"aaaaaa2"}, tk_value_t{"version13"});
+    //    db.put(tk_key_t{"aaaaaa"}, tk_value_t{"version13"});
+    //    db.put(tk_key_t{"ddddd"}, tk_value_t{"version1"});
+    //    db.put(tk_key_t{"cccccc"}, tk_value_t{"dddd"});
+    //    db.put(tk_key_t{"aaaaaa"}, tk_value_t{"version9"});
+    //    db.put(tk_key_t{"aaaaaa"}, tk_value_t{"version10"});
+    //    db.put(tk_key_t{"aaaaaa"}, tk_value_t{"version11"});
+    //    db.put(tk_key_t{"cccccc1"}, tk_value_t{"aaaa1"});
+    //    db.put(tk_key_t{"aaaaaa"}, tk_value_t{"version12"});
+    //    db.put(tk_key_t{"aaaaaa2"}, tk_value_t{"version13"});
+    //    db.put(tk_key_t{"aaaaaa"}, tk_value_t{"version13"});
+
     auto record = db.get(key);
     if (record.has_value())
     {

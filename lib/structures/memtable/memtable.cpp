@@ -141,7 +141,7 @@ auto memtable_t::record_t::size() const -> std::size_t
 void memtable_t::emplace(const memtable_t::record_t &record)
 {
     m_data.emplace(record);
-
+    auto size = record.m_key.m_key.size();
     update_size(record);
     m_count++;
 }

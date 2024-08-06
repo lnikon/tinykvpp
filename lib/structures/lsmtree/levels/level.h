@@ -38,8 +38,7 @@ class level_t
      * @param pMemtable
      * @return owning pointer to the newly created segment
      */
-    [[maybe_unused]] auto segment(lsmtree_segment_type_t type,
-                                  memtable::memtable_t pMemtable) -> segments::regular_segment::shared_ptr_t;
+    [[maybe_unused]] auto segment(memtable::memtable_t pMemtable) -> segments::regular_segment::shared_ptr_t;
 
     /**
      * @brief

@@ -3,14 +3,16 @@
 #include <structures/lsmtree/lsmtree_config.h>
 
 #include <filesystem>
+#include "fs/types.h"
 
 namespace db
 {
 
 struct db_config_t
 {
-    const std::filesystem::path DefaultDabasePath{"."};
-    std::filesystem::path DatabasePath{DefaultDabasePath};
+    fs::path_t DatabasePath{"."};
+    std::string WalFilename{"wal"};
+    std::string ManifestFilenamePrefix{"manifest_"};
 };
 
 } // namespace db
