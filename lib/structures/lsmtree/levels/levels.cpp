@@ -88,7 +88,7 @@ auto levels_t::segment(memtable::memtable_t memtable) -> segments::regular_segme
                                                                        .name = compactedCurrentLevelSegment->get_name(),
                                                                        .level = currentLevel->index()});
 
-            // If compactation succeeded, then flush the compacted segment into disk
+            // If computation succeeded, then flush the compacted segment into disk
             compactedCurrentLevelSegment->flush();
 
             // Create next level if it doesn't exist

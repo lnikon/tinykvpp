@@ -6,6 +6,7 @@ add_library(
         "segments/lsmtree_regular_segment.cpp"
         "segments/lsmtree_segment_factory.cpp"
         "segments/segment_storage.cpp"
+        "segments/uuid.h"
         "segments/helpers.cpp"
         "segments/types.h"
         "levels/levels.cpp"
@@ -13,7 +14,7 @@ add_library(
         "compactation/level_zero_compactation.cpp")
 
 set_target_properties(LSMTree PROPERTIES CXX_STANDARD 23)
-target_include_directories(LSMTree INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(LSMTree INTERFACE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/segments)
 target_link_libraries(LSMTree PRIVATE spdlog::spdlog)
 
 add_executable(LSMTreeTest "lsmtree_test.cpp")
