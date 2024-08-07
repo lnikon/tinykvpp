@@ -39,7 +39,7 @@ void lsmtree_t::put(const structures::lsmtree::key_t &key, const structures::lsm
     m_table->emplace(record);
 
     // Check whether after addition size of the memtable increased above the
-    // threashold. If so flush the memtable
+    // threshold. If so flush the memtable
     // TODO(lnikon): This logic should be a part of
     if (m_table->size() >= m_pConfig->LSMTreeConfig.DiskFlushThresholdSize)
     {
@@ -110,7 +110,7 @@ auto lsmtree_t::restore_manifest() noexcept -> bool
     for (const auto &record : records)
     {
         std::visit(
-            [this](auto &&record)
+            [this](auto record)
             {
                 using T = std::decay_t<decltype(record)>;
                 if constexpr (std::is_same_v<T, db::manifest::manifest_t::segment_record_t>)
@@ -135,7 +135,7 @@ auto lsmtree_t::restore_manifest() noexcept -> bool
                     }
                     default:
                     {
-                        spdlog::error("unkown segment operation={}", static_cast<std::int32_t>(record.op));
+                        spdlog::error("unknown segment operation={}", static_cast<std::int32_t>(record.op));
                         break;
                     }
                     }
@@ -162,14 +162,14 @@ auto lsmtree_t::restore_manifest() noexcept -> bool
                     }
                     default:
                     {
-                        spdlog::error("unkown level operation={}", static_cast<std::int32_t>(record.op));
+                        spdlog::error("unknown level operation={}", static_cast<std::int32_t>(record.op));
                         break;
                     }
                     }
                 }
                 else
                 {
-                    spdlog::error("unkown manifest record type");
+                    spdlog::error("unknown manifest record type");
                 }
             },
             record);
@@ -187,8 +187,8 @@ auto lsmtree_t::restore_manifest() noexcept -> bool
         auto storage{m_levels.level(current_level_idx)->storage()};
         for (const auto &pSegment : *storage)
         {
-            pSegment->restore();
             spdlog::info("segment {}", pSegment->get_name());
+            pSegment->restore();
         }
 
         current_level_idx++;

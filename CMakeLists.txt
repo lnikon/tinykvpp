@@ -18,6 +18,9 @@ find_package(nlohmann_json REQUIRED)
 find_package(nlohmann_json_schema_validator REQUIRED)
 find_package(cxxopts REQUIRED)
 
+#add_compile_options(-fsanitize=address)
+#add_link_options(-fsanitize=address)
+
 include_directories(lib)
 
 add_subdirectory(lib)

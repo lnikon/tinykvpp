@@ -271,11 +271,11 @@ void level_t::purge(const segments::regular_segment::shared_ptr_t &pSegment) con
 
     spdlog::info("Removing segment {} from level {}", pSegment->get_name(), index());
 
-    pSegment->purge();
-    m_pStorage->remove(pSegment);
-
     m_manifest->add(db::manifest::manifest_t::segment_record_t{
         .op = segment_operation_k::remove_segment_k, .name = pSegment->get_name(), .level = index()});
+
+    pSegment->purge();
+    m_pStorage->remove(pSegment);
 }
 
 auto level_t::index() const noexcept -> level_t::level_index_type_t
