@@ -31,7 +31,7 @@ class wal_t
 
     struct record_t
     {
-        operation_k op;
+        operation_k op{undefined_k};
         kv_t kv;
 
         template <typename Stream> void write(Stream &stream) const
