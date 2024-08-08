@@ -121,8 +121,6 @@ auto levels_t::segment(memtable::memtable_t memtable) -> segments::regular_segme
         }
     }
 
-    m_manifest->print();
-
     // If compaction happened, then return the resulting segment
     return compactedCurrentLevelSegment ? compactedCurrentLevelSegment : pSegment;
 }

@@ -1,4 +1,3 @@
-#include "fs/types.h"
 #include "structures/lsmtree/segments/helpers.h"
 #include <db/manifest/manifest.h>
 #include <filesystem>
@@ -11,7 +10,7 @@
 namespace db::manifest
 {
 
-const std::string current_filename("current");
+static constexpr const std::string current_filename("current");
 
 // Manifest file will be periodically rotated to we need a unique filename every time
 auto manifest_filename() -> std::string
@@ -19,7 +18,7 @@ auto manifest_filename() -> std::string
     return fmt::format("manifest_{}", structures::lsmtree::segments::helpers::uuid());
 }
 
-auto latest_manifest_filename(const fs::path_t databasePath) -> std::string
+auto latest_manifest_filename(const fs::path_t &databasePath) -> std::string
 {
     const auto current_path{databasePath / current_filename};
     if (!fs::stdfs::exists(current_path))
@@ -77,27 +76,6 @@ void manifest_t::add(record_t info)
     std::stringstream stringStream;
     std::visit([&stringStream](auto &&record) { record.write(stringStream); }, info);
     m_log.write(stringStream.str());
-}
-
-void manifest_t::print() const
-{
-    for (const auto &rec : m_records)
-    {
-        std::visit(
-            [](auto &&arg)
-            {
-                using T = std::decay_t<decltype(arg)>;
-                if constexpr (std::is_same_v<T, segment_record_t>)
-                {
-                    spdlog::info("{} on with name {} level {}", arg.ToString(arg.op), arg.name, arg.level);
-                }
-                else if constexpr (std::is_same_v<T, level_record_t>)
-                {
-                    spdlog::info("{} on level {}", arg.ToString(arg.op), arg.level);
-                }
-            },
-            rec);
-    }
 }
 
 // trim from start (in place)

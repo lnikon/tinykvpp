@@ -21,303 +21,305 @@ using nlohmann::json_schema::json_validator;
 // The schema is defined based upon a string literal
 static json database_config_schema = R"(
 {
-    "$id": "https://json-schema.hyperjump.io/schema",
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$title": "Schema for tinykvpp's JSON config",
-    "type": "object",
-    "properties": {
-        "database": {
-            "type": "object",
-            "properties": {
-                "path": {
-                    "type": "string"
-                },
-                "walFilename": {
-                    "type": "string"
-                },
-                "manifestFilenamePrefix": {
-                    "type": "string"
-                }
-            }
-        },
-        "lsmtree": {
-            "type": "object",
-            "properties": {
-                "memtableFlushThreashold": {
-                    "type": "number"
-                },
-                "levelZeroCompaction": {
-                    "$ref": "#/$defs/compaction"
-                },
-                "levelNonZeroCompaction": {
-                    "$ref": "#/$defs/compaction"
-                }
-            },
-            "required": [
-                "memtableFlushThreshold",
-                "levelZeroCompaction",
-                "levelNonZeroCompaction"
-            ]
+  "$id": "https://json-schema.hyperjump.io/schema",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$title": "Schema for tinykvpp's JSON config",
+  "type": "object",
+  "properties": {
+    "logging": {
+      "type": "object",
+      "properties": {
+        "loggingLevel": {
+          "$ref": "#/$defs/loggingLevel"
         }
+      },
+      "required": [
+        "loggingLevel"
+      ]
     },
-    "required": [
-        "database",
-        "lsmtree"
-    ],
-    "$defs": {
-        "compactionStrategy": {
-            "type": "string",
-            "enum": [
-                "levelled",
-                "tiered"
-            ]
+    "database": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
         },
-        "compaction": {
-            "type": "object",
-            "properties": {
-                "compactionStrategy": {
-                    "$ref": "#/$defs/compactionStrategy"
-                },
-                "compactionThreshold": {
-                    "type": "number"
-                }
-            },
-            "required": [
-                "compactionStrategy",
-                "compactionThreshold"
-            ]
+        "walFilename": {
+          "type": "string"
+        },
+        "manifestFilenamePrefix": {
+          "type": "string"
         }
+      },
+      "required": [
+        "path",
+        "walFilename",
+        "manifestFilenamePrefix"
+      ]
+    },
+    "lsmtree": {
+      "type": "object",
+      "properties": {
+        "memtableFlushThreshold": {
+          "type": "number"
+        },
+        "levelZeroCompaction": {
+          "$ref": "#/$defs/compaction"
+        },
+        "levelNonZeroCompaction": {
+          "$ref": "#/$defs/compaction"
+        }
+      },
+      "required": [
+        "memtableFlushThreshold",
+        "levelZeroCompaction",
+        "levelNonZeroCompaction"
+      ]
     }
+  },
+  "required": [
+    "logging",
+    "database",
+    "lsmtree"
+  ],
+  "$defs": {
+    "loggingLevel": {
+      "type": "string",
+      "enum": [
+        "info",
+        "debug"
+      ]
+    },
+    "compactionStrategy": {
+      "type": "string",
+      "enum": [
+        "levelled",
+        "tiered"
+      ]
+    },
+    "compaction": {
+      "type": "object",
+      "properties": {
+        "compactionStrategy": {
+          "$ref": "#/$defs/compactionStrategy"
+        },
+        "compactionThreshold": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "compactionStrategy",
+        "compactionThreshold"
+      ]
+    }
+  }
 }
 
 )"_json;
 
-auto main(int argc, char *argv[]) -> int
+using json = nlohmann::json;
+
+auto loadConfigJson(const std::string &configPath) -> json
 {
-    // Configure spdlog
-    spdlog::set_level(spdlog::level::debug);
-
-    // Construct options
-    cxxopts::Options options("tinykvpp", "A tiny database, powering big ideas");
-    options.add_options()("c,config", "Path to JSON configuration of database", cxxopts::value<std::string>());
-
-    // Parse options
-    auto parsedOptions = options.parse(argc, argv);
-    if ((parsedOptions.count("help") != 0U) || (parsedOptions.count("config") == 0U))
-    {
-        spdlog::info("{}", options.help());
-        return EXIT_SUCCESS;
-    }
-
-    // Read and parse configPath file into json
-    const auto configPath = parsedOptions["config"].as<std::string>();
     std::fstream configStream(configPath, std::fstream::in);
-    json configJson = json::parse(configStream);
-
-    // Set root schema and validate configPath file
-    json_validator validator; // create validator
-    try
+    if (!configStream.is_open())
     {
-        validator.set_root_schema(database_config_schema);
+        throw std::runtime_error("Unable to open config file: " + configPath);
     }
-    catch (const std::exception &e)
-    {
-        spdlog::error("Wrong database configPath validation schema={}", e.what());
-        return EXIT_FAILURE;
-    }
+    return json::parse(configStream);
+}
 
+void validateConfigJson(const json &configJson, json_validator &validator)
+{
     try
     {
         validator.validate(configJson);
     }
     catch (const std::exception &e)
     {
-        spdlog::error("Database configPath validation failed. Error={}", e.what());
-        return EXIT_FAILURE;
+        throw std::runtime_error("Database config validation failed. Error: " + std::string(e.what()));
     }
+}
 
-    // Create database configPath based on parsed configPath
+void configureLogging(const std::string &loggingLevel)
+{
+    if (loggingLevel == SPDLOG_LEVEL_NAME_INFO)
+    {
+        spdlog::set_level(spdlog::level::info);
+    }
+    else if (loggingLevel == SPDLOG_LEVEL_NAME_DEBUG)
+    {
+        spdlog::set_level(spdlog::level::debug);
+    }
+    else
+    {
+        throw std::runtime_error("Unsupported logging level: " + loggingLevel);
+    }
+}
+
+auto loadDatabaseConfig(const json &configJson) -> config::shared_ptr_t
+{
     auto dbConfig = config::make_shared();
 
-    // Fill database related fields
     if (configJson["database"].contains("path"))
     {
-        dbConfig->DatabaseConfig.DatabasePath = configJson["database"]["path"].template get<std::string>();
+        dbConfig->DatabaseConfig.DatabasePath = configJson["database"]["path"].get<std::string>();
     }
 
     if (configJson["database"].contains("walFilename"))
     {
-        dbConfig->DatabaseConfig.WalFilename = configJson["database"]["walFilename"].template get<std::string>();
+        dbConfig->DatabaseConfig.WalFilename = configJson["database"]["walFilename"].get<std::string>();
     }
 
     if (configJson["database"].contains("manifestFilenamePrefix"))
     {
         dbConfig->DatabaseConfig.ManifestFilenamePrefix =
-            configJson["database"]["manifestFilenamePrefix"].template get<std::string>();
+            configJson["database"]["manifestFilenamePrefix"].get<std::string>();
     }
 
-    // Fill LSMTree related fields
+    return dbConfig;
+}
+
+void loadLSMTreeConfig(const json &lsmtreeConfig, config::shared_ptr_t dbConfig, const std::string &configPath)
+{
+    if (lsmtreeConfig.contains("memtableFlushThreshold"))
+    {
+        dbConfig->LSMTreeConfig.DiskFlushThresholdSize = lsmtreeConfig["memtableFlushThreshold"].get<uint64_t>();
+    }
+    else
+    {
+        throw std::runtime_error("\"memtableFlushThreshold\" is not specified in config: " + configPath);
+    }
+
+    if (lsmtreeConfig.contains("levelZeroCompaction"))
+    {
+        const auto &levelZeroCompaction = lsmtreeConfig["levelZeroCompaction"];
+        if (levelZeroCompaction.contains("compactionStrategy"))
+        {
+            dbConfig->LSMTreeConfig.LevelZeroCompactionStrategy =
+                levelZeroCompaction["compactionStrategy"].get<std::string>();
+        }
+        else
+        {
+            throw std::runtime_error("\"levelZeroCompaction.compactionStrategy\" is not specified in config: " +
+                                     configPath);
+        }
+
+        if (levelZeroCompaction.contains("compactionThreshold"))
+        {
+            dbConfig->LSMTreeConfig.LevelZeroCompactionThreshold =
+                levelZeroCompaction["compactionThreshold"].get<std::uint64_t>();
+        }
+        else
+        {
+            throw std::runtime_error("\"levelZeroCompaction.compactionThreshold\" is not specified in config: " +
+                                     configPath);
+        }
+    }
+    else
+    {
+        throw std::runtime_error("\"levelZeroCompaction\" is not specified in config: " + configPath);
+    }
+
+    if (lsmtreeConfig.contains("levelNonZeroCompaction"))
+    {
+        const auto &levelNonZeroCompaction = lsmtreeConfig["levelNonZeroCompaction"];
+        if (levelNonZeroCompaction.contains("compactionStrategy"))
+        {
+            dbConfig->LSMTreeConfig.LevelNonZeroCompactionStrategy =
+                levelNonZeroCompaction["compactionStrategy"].get<std::string>();
+        }
+        else
+        {
+            throw std::runtime_error("\"levelNonZeroCompaction.compactionStrategy\" is not specified in config: " +
+                                     configPath);
+        }
+
+        if (levelNonZeroCompaction.contains("compactionThreshold"))
+        {
+            dbConfig->LSMTreeConfig.LevelNonZeroCompactionThreshold =
+                levelNonZeroCompaction["compactionThreshold"].get<std::uint64_t>();
+        }
+        else
+        {
+            throw std::runtime_error("\"levelNonZeroCompaction.compactionThreshold\" is not specified in config: " +
+                                     configPath);
+        }
+    }
+    else
+    {
+        throw std::runtime_error("\"levelNonZeroCompaction\" is not specified in config: " + configPath);
+    }
+}
+
+auto initializeDatabase(const json &configJson, const std::string &configPath) -> config::shared_ptr_t
+{
+    auto dbConfig = loadDatabaseConfig(configJson);
+
     if (configJson.contains("lsmtree"))
     {
-        const auto &lsmtreeConfig = configJson["lsmtree"];
-        if (lsmtreeConfig.contains("memtableFlushThreshold"))
-        {
-            dbConfig->LSMTreeConfig.DiskFlushThresholdSize =
-                lsmtreeConfig["memtableFlushThreshold"].template get<uint64_t>();
-        }
-        else
-        {
-            spdlog::error("\"memtableFlushThreshold\" is not specified in configPath {}", configPath);
-            return EXIT_FAILURE;
-        }
-
-        if (lsmtreeConfig.contains("levelZeroCompaction"))
-        {
-            if (lsmtreeConfig["levelZeroCompaction"].contains("compactionStrategy"))
-            {
-                dbConfig->LSMTreeConfig.LevelZeroCompactionStrategy =
-                    lsmtreeConfig["levelZeroCompaction"]["compactionStrategy"].template get<std::string>();
-            }
-            else
-            {
-                spdlog::error("\"levelZeroCompaction.compactionStrategy\" is not specified in configPath {}",
-                              configPath);
-                return EXIT_FAILURE;
-            }
-
-            if (lsmtreeConfig["levelZeroCompaction"].contains("compactionThreshold"))
-            {
-                dbConfig->LSMTreeConfig.LevelZeroCompactionThreshold =
-                    lsmtreeConfig["levelZeroCompaction"]["compactionThreshold"].template get<std::uint64_t>();
-            }
-            else
-            {
-                spdlog::error("\"levelZeroCompaction.compactionThreshold\" is not specified in configPath {}",
-                              configPath);
-                return EXIT_FAILURE;
-            }
-        }
-        else
-        {
-            spdlog::error("\"levelZeroCompaction\" is not specified in configPath {}", configPath);
-            return EXIT_FAILURE;
-        }
-
-        if (lsmtreeConfig.contains("levelNonZeroCompaction"))
-        {
-            if (lsmtreeConfig["levelNonZeroCompaction"].contains("compactionStrategy"))
-            {
-                dbConfig->LSMTreeConfig.LevelNonZeroCompactionStrategy =
-                    lsmtreeConfig["levelNonZeroCompaction"]["compactionStrategy"].template get<std::string>();
-            }
-            else
-            {
-                spdlog::error("\"levelNonZeroCompaction.compactionStrategy\" is not specified in configPath {}",
-                              configPath);
-                return EXIT_FAILURE;
-            }
-
-            if (lsmtreeConfig["levelNonZeroCompaction"].contains("compactionThreshold"))
-            {
-                dbConfig->LSMTreeConfig.LevelNonZeroCompactionThreshold =
-                    lsmtreeConfig["levelNonZeroCompaction"]["compactionThreshold"].template get<std::uint64_t>();
-            }
-            else
-            {
-                spdlog::error("\"levelNonZeroCompaction.compactionThreshold\" is not specified in configPath {}",
-                              configPath);
-                return EXIT_FAILURE;
-            }
-        }
-        else
-        {
-            spdlog::error("\"levelNonZeroCompaction\" is not specified in configPath {}", configPath);
-            return EXIT_FAILURE;
-        }
+        loadLSMTreeConfig(configJson["lsmtree"], dbConfig, configPath);
     }
     else
     {
-        spdlog::error("\"lsmtree\" is not specified in configPath {}", configPath);
+        throw std::runtime_error("\"lsmtree\" is not specified in config: " + configPath);
+    }
+
+    return dbConfig;
+}
+
+auto main(int argc, char *argv[]) -> int
+{
+    try
+    {
+
+        cxxopts::Options options("tinykvpp", "A tiny database, powering big ideas");
+        options.add_options()("c,config", "Path to JSON configuration of database", cxxopts::value<std::string>())(
+            "help", "Print help");
+
+        auto parsedOptions = options.parse(argc, argv);
+        if ((parsedOptions.count("help") != 0U) || (parsedOptions.count("config") == 0U))
+        {
+            spdlog::info("{}", options.help());
+            return EXIT_SUCCESS;
+        }
+
+        const auto configPath = parsedOptions["config"].as<std::string>();
+        auto configJson = loadConfigJson(configPath);
+
+        json_validator validator;
+        validator.set_root_schema(database_config_schema);
+        validateConfigJson(configJson, validator);
+
+        configureLogging(configJson["logging"]["loggingLevel"].get<std::string>());
+
+        auto dbConfig = initializeDatabase(configJson, configPath);
+        auto db = db::db_t(dbConfig);
+        if (!db.open())
+        {
+            spdlog::error("Unable to open the database");
+            return EXIT_FAILURE;
+        }
+
+        // Example usage of the database
+        auto key = tk_key_t{"goodbye"};
+        auto value = tk_value_t{"internet"};
+        db.put(key, value);
+
+        auto record = db.get(key);
+        if (record.has_value())
+        {
+            spdlog::info("Found record key={} and value={}", record->m_key.m_key, record->m_value.m_value);
+        }
+        else
+        {
+            spdlog::error("Unable to find record with key={}", key.m_key);
+        }
+
+        return EXIT_SUCCESS;
+    }
+    catch (const std::exception &e)
+    {
+        spdlog::error("Error: {}", e.what());
         return EXIT_FAILURE;
     }
-
-    // Create/open the database
-    auto db = db::db_t(dbConfig);
-    if (!db.open())
-    {
-        spdlog::error("Unable to open the database");
-    }
-
-    auto key = tk_key_t{"goodbye"};
-    auto value = tk_value_t{"internet"};
-    db.put(key, value);
-
-    db.put(tk_key_t{"aaaaaa"}, tk_value_t{"version1"});
-    db.put(tk_key_t{"aaaaaa"}, tk_value_t{"version2"});
-    db.put(tk_key_t{"aaaaaa"}, tk_value_t{"version3"});
-    db.put(tk_key_t{"cccccc"}, tk_value_t{"aaaa"});
-    db.put(tk_key_t{"aaaaaa"}, tk_value_t{"version4"});
-    db.put(tk_key_t{"aaaaaa"}, tk_value_t{"version5"});
-    db.put(tk_key_t{"aaaaaa"}, tk_value_t{"version6"});
-    db.put(tk_key_t{"cccccc"}, tk_value_t{"bbbb"});
-    db.put(tk_key_t{"aaaaaa"}, tk_value_t{"version7"});
-    db.put(tk_key_t{"aaaaaa"}, tk_value_t{"version8"});
-    db.put(tk_key_t{"ddddd"}, tk_value_t{"version1"});
-    db.put(tk_key_t{"cccccc"}, tk_value_t{"dddd"});
-    db.put(tk_key_t{"aaaaaa"}, tk_value_t{"version9"});
-    db.put(tk_key_t{"aaaaaa"}, tk_value_t{"version10"});
-    db.put(tk_key_t{"aaaaaa"}, tk_value_t{"version11"});
-    db.put(tk_key_t{"cccccc1"}, tk_value_t{"aaaa1"});
-    db.put(tk_key_t{"aaaaaa"}, tk_value_t{"version12"});
-    db.put(tk_key_t{"aaaaaa2"}, tk_value_t{"version13"});
-    db.put(tk_key_t{"aaaaaa"}, tk_value_t{"version13"});
-    db.put(tk_key_t{"ddddd"}, tk_value_t{"version1"});
-    db.put(tk_key_t{"cccccc"}, tk_value_t{"dddd"});
-    db.put(tk_key_t{"aaaaaa"}, tk_value_t{"version9"});
-    db.put(tk_key_t{"aaaaaa"}, tk_value_t{"version10"});
-    db.put(tk_key_t{"aaaaaa"}, tk_value_t{"version11"});
-    db.put(tk_key_t{"cccccc1"}, tk_value_t{"aaaa1"});
-    db.put(tk_key_t{"aaaaaa"}, tk_value_t{"version12"});
-    db.put(tk_key_t{"aaaaaa2"}, tk_value_t{"version13"});
-    db.put(tk_key_t{"aaaaaa"}, tk_value_t{"version13"});
-    db.put(tk_key_t{"aaaaaa"}, tk_value_t{"version1"});
-    db.put(tk_key_t{"aaaaaa"}, tk_value_t{"version2"});
-    db.put(tk_key_t{"aaaaaa"}, tk_value_t{"version3"});
-    db.put(tk_key_t{"cccccc"}, tk_value_t{"aaaa"});
-    db.put(tk_key_t{"aaaaaa"}, tk_value_t{"version4"});
-    db.put(tk_key_t{"aaaaaa"}, tk_value_t{"version5"});
-    db.put(tk_key_t{"aaaaaa"}, tk_value_t{"version6"});
-    db.put(tk_key_t{"cccccc"}, tk_value_t{"bbbb"});
-    db.put(tk_key_t{"aaaaaa"}, tk_value_t{"version7"});
-    db.put(tk_key_t{"aaaaaa"}, tk_value_t{"version8"});
-    db.put(tk_key_t{"ddddd"}, tk_value_t{"version1"});
-    db.put(tk_key_t{"cccccc"}, tk_value_t{"dddd"});
-    db.put(tk_key_t{"aaaaaa"}, tk_value_t{"version9"});
-    db.put(tk_key_t{"aaaaaa"}, tk_value_t{"version10"});
-    db.put(tk_key_t{"aaaaaa"}, tk_value_t{"version11"});
-    db.put(tk_key_t{"cccccc1"}, tk_value_t{"aaaa1"});
-    db.put(tk_key_t{"aaaaaa"}, tk_value_t{"version12"});
-    db.put(tk_key_t{"aaaaaa2"}, tk_value_t{"version13"});
-    db.put(tk_key_t{"aaaaaa"}, tk_value_t{"version13"});
-    db.put(tk_key_t{"ddddd"}, tk_value_t{"version1"});
-    db.put(tk_key_t{"cccccc"}, tk_value_t{"dddd"});
-    db.put(tk_key_t{"aaaaaa"}, tk_value_t{"version9"});
-    db.put(tk_key_t{"aaaaaa"}, tk_value_t{"version10"});
-    db.put(tk_key_t{"aaaaaa"}, tk_value_t{"version11"});
-    db.put(tk_key_t{"cccccc1"}, tk_value_t{"aaaa1"});
-    db.put(tk_key_t{"aaaaaa"}, tk_value_t{"version12"});
-    db.put(tk_key_t{"aaaaaa2"}, tk_value_t{"version13"});
-    db.put(tk_key_t{"aaaaaa"}, tk_value_t{"version13"});
-
-    auto record = db.get(key);
-    if (record.has_value())
-    {
-        spdlog::info("Found record key={} and value={}", record->m_key.m_key, record->m_value.m_value);
-    }
-    else
-    {
-        spdlog::error("Unable to find record with key={}", key.m_key);
-    }
-
-    return EXIT_SUCCESS;
 }

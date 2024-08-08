@@ -1,4 +1,7 @@
 {
+  "logging": {
+    "loggingLevel": "info"
+  },
   "database": {
     "path": "/home/nikon/tkvpp",
     "walFilename": "wal",

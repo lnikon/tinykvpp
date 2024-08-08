@@ -23,8 +23,6 @@ struct manifest_t
 {
     using level_index_t = std::size_t;
     using segment_name_t = std::string;
-    using segment_names_t = std::vector<std::string>;
-    using storage_t = std::unordered_map<level_index_t, segment_names_t>;
 
     enum record_type_k : int8_t
     {
@@ -82,20 +80,15 @@ struct manifest_t
          */
         template <typename stream_gt> void read(stream_gt &outStream)
         {
-            //            std::string line;
-            //            std::getline(outStream, line);
-            //            if (line.empty())
-            //            {
-            //                return;
-            //            }
-
-            //            std::istringstream lineStream(line);
+            // Deserialize operation
             std::int32_t op_int{0};
             outStream >> op_int;
             op = static_cast<operation_k>(op_int);
 
+            // Deserialize name of the segment
             outStream >> name;
 
+            // Deserialize level of the segment
             outStream >> level;
         }
 
@@ -157,18 +150,12 @@ struct manifest_t
 
         template <typename stream_gt> void read(stream_gt &outStream)
         {
-            //            std::string line;
-            //            std::getline(outStream, line);
-            //            if (line.empty())
-            //            {
-            //                return;
-            //            }
-
-            //            std::istringstream lineStream(line);
+            // Deserialize operation
             std::int32_t op_int{0};
             outStream >> op_int;
             op = static_cast<operation_k>(op_int);
 
+            // Deserialize level
             outStream >> level;
         }
 
@@ -178,6 +165,7 @@ struct manifest_t
     };
 
     using record_t = std::variant<segment_record_t, level_record_t>;
+    using storage_t = std::vector<record_t>;
 
     /**
      * @brief Construct a new manifest t object
@@ -211,12 +199,6 @@ struct manifest_t
     /**
      * @brief
      *
-     */
-    void print() const;
-
-    /**
-     * @brief
-     *
      * @return true
      * @return false
      */
@@ -234,7 +216,7 @@ struct manifest_t
      *
      * @return std::vector<record_t>
      */
-    auto records() const noexcept -> std::vector<record_t>;
+    auto records() const noexcept -> storage_t;
 
     /**
      * @brief
@@ -252,7 +234,7 @@ struct manifest_t
     config::shared_ptr_t m_config;
     std::string m_name;
     fs::path_t m_path;
-    std::vector<record_t> m_records;
+    storage_t m_records;
     fs::append_only_file_t m_log;
     bool m_enabled{true};
 };

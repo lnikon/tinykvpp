@@ -124,18 +124,18 @@ auto lsmtree_t::restore_manifest() noexcept -> bool
                                 record.name,
                                 segments::helpers::segment_path(m_pConfig->datadir_path(), record.name),
                                 memtable_t{}));
-                        spdlog::info("add segment {} into level {} during recovery", record.name, record.level);
+                        spdlog::debug("Segment {} added into level {} during recovery", record.name, record.level);
                         break;
                     }
                     case segment_operation_k::remove_segment_k:
                     {
                         m_levels.level(record.level)->purge(record.name);
-                        spdlog::info("remove segment {} from level {} during recovery", record.name, record.level);
+                        spdlog::info("Segment {} removed from level {} during recovery", record.name, record.level);
                         break;
                     }
                     default:
                     {
-                        spdlog::error("unknown segment operation={}", static_cast<std::int32_t>(record.op));
+                        spdlog::error("Unknown segment operation={}", static_cast<std::int32_t>(record.op));
                         break;
                     }
                     }
@@ -147,29 +147,34 @@ auto lsmtree_t::restore_manifest() noexcept -> bool
                     case level_operation_k::add_level_k:
                     {
                         m_levels.level();
-                        spdlog::info("create level {} during recovery", record.level);
+                        spdlog::info("Level {} created during recovery", record.level);
                         break;
                     }
                     case level_operation_k::compact_level_k:
                     {
-                        spdlog::info("ignoring compact_level_k during recovery");
+                        spdlog::info(
+                            "Ignoring {} during recovery",
+                            db::manifest::manifest_t::level_record_t::ToString(level_operation_k::compact_level_k));
                         break;
                     }
                     case level_operation_k::purge_level_k:
                     {
-                        spdlog::info("ignoring purge_level_k during recovery");
+                        spdlog::info(
+                            "Ignoring {} during recovery",
+                            db::manifest::manifest_t::level_record_t::ToString(level_operation_k::purge_level_k));
                         break;
                     }
                     default:
                     {
-                        spdlog::error("unknown level operation={}", static_cast<std::int32_t>(record.op));
+                        spdlog::error("Unknown level operation={}", static_cast<std::int32_t>(record.op));
                         break;
                     }
                     }
                 }
                 else
                 {
-                    spdlog::error("unknown manifest record type");
+                    spdlog::error("Unknown manifest record type");
+                    assert(false);
                 }
             },
             record);
@@ -178,21 +183,23 @@ auto lsmtree_t::restore_manifest() noexcept -> bool
     // A little bit of printbugging :)
     // Now is that all modifications are applied to the segments storage it is time to restore segments.
     // This will repopulate indices
-    spdlog::info("recovery finished");
+    spdlog::info("Restoring in-memory indices");
     const auto level_count{m_levels.size()};
     std::size_t current_level_idx{0};
     while (current_level_idx != level_count)
     {
-        spdlog::info("level {} has following segments...", current_level_idx);
+        spdlog::info("Restoring level {} segments", current_level_idx);
         auto storage{m_levels.level(current_level_idx)->storage()};
         for (const auto &pSegment : *storage)
         {
-            spdlog::info("segment {}", pSegment->get_name());
+            spdlog::debug("Segment name {}", pSegment->get_name());
             pSegment->restore();
         }
 
         current_level_idx++;
     }
+    spdlog::info("In-memory index restoration finished");
+    spdlog::info("Recovery finished");
 
     return true;
 }
