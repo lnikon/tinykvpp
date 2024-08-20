@@ -56,7 +56,7 @@ auto level_t::segment(memtable::memtable_t memtable) -> segments::regular_segmen
 
     // Generate a path for the segment, including its name, then based on @type and @pMemtable create a segment
     auto pSegment{segments::factories::lsmtree_segment_factory(
-        name, helpers::segment_path(m_pConfig->datadir_path(), name), memtable)};
+        name, helpers::segment_path(m_pConfig->datadir_path(), name), std::move(memtable))};
 
     // Store newly created segment into the storage
     emplace(pSegment);

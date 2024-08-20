@@ -27,91 +27,95 @@ static json database_config_schema = R"(
   "type": "object",
   "properties": {
     "logging": {
-      "type": "object",
-      "properties": {
-        "loggingLevel": {
-          "$ref": "#/$defs/loggingLevel"
-        }
-      },
-      "required": [
-        "loggingLevel"
-      ]
+        "type": "object",
+        "properties": {
+            "loggingLevel": {
+                "$ref": "#/$defs/loggingLevel"
+            }
+        },
+        "required": [
+                     "loggingLevel"
+                     ]
     },
     "database": {
-      "type": "object",
-      "properties": {
-        "path": {
-          "type": "string"
+        "type": "object",
+        "properties": {
+            "path": {
+                "type": "string"
+            },
+            "walFilename": {
+                "type": "string"
+            },
+            "manifestFilenamePrefix": {
+                "type": "string"
+            }
         },
-        "walFilename": {
-          "type": "string"
-        },
-        "manifestFilenamePrefix": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "path",
-        "walFilename",
-        "manifestFilenamePrefix"
-      ]
+        "required": [
+                     "path",
+                     "walFilename",
+                     "manifestFilenamePrefix"
+                     ]
     },
     "lsmtree": {
-      "type": "object",
-      "properties": {
-        "memtableFlushThreshold": {
-          "type": "number"
+        "type": "object",
+        "properties": {
+            "memtableFlushThreshold": {
+                "type": "number"
+            },
+            "maximumLevels": {
+                "type": "number"
+            },
+            "levelZeroCompaction": {
+                "$ref": "#/$defs/compaction"
+            },
+            "levelNonZeroCompaction": {
+                "$ref": "#/$defs/compaction"
+            }
         },
-        "levelZeroCompaction": {
-          "$ref": "#/$defs/compaction"
-        },
-        "levelNonZeroCompaction": {
-          "$ref": "#/$defs/compaction"
-        }
-      },
-      "required": [
-        "memtableFlushThreshold",
-        "levelZeroCompaction",
-        "levelNonZeroCompaction"
-      ]
+        "required": [
+                     "memtableFlushThreshold",
+                     "maximumLevels",
+                     "levelZeroCompaction",
+                     "levelNonZeroCompaction"
+                     ]
     }
-  },
-  "required": [
-    "logging",
-    "database",
-    "lsmtree"
-  ],
-  "$defs": {
+},
+"required": [
+             "database",
+             "lsmtree"
+             ],
+"$defs": {
     "loggingLevel": {
-      "type": "string",
-      "enum": [
-        "info",
-        "debug"
-      ]
+        "type": "string",
+        "enum": [
+                 "info",
+                 "debug"
+                 ]
     },
     "compactionStrategy": {
-      "type": "string",
-      "enum": [
-        "levelled",
-        "tiered"
-      ]
+        "type": "string",
+        "enum": [
+                 "levelled",
+                 "tiered"
+                 ]
     },
     "compaction": {
-      "type": "object",
-      "properties": {
-        "compactionStrategy": {
-          "$ref": "#/$defs/compactionStrategy"
+        "type": "object",
+        "properties": {
+            "compactionStrategy": {
+                "$ref": "#/$defs/compactionStrategy"
+            },
+            "compactionThreshold": {
+                "type": "number"
+            }
         },
-        "compactionThreshold": {
-          "type": "number"
-        }
-      },
-      "required": [
-        "compactionStrategy",
-        "compactionThreshold"
-      ]
+        "required": [
+                     "logging,",
+                     "compactionStrategy",
+                     "compactionThreshold"
+                     ]
     }
-  }
+}
 }
 
 )"_json;

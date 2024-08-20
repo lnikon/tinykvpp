@@ -40,6 +40,9 @@
         "memtableFlushThreshold": {
           "type": "number"
         },
+        "maximumLevels": {
+          "type": "number"
+        },
         "levelZeroCompaction": {
           "$ref": "#/$defs/compaction"
         },
@@ -49,6 +52,7 @@
       },
       "required": [
         "memtableFlushThreshold",
+        "maximumLevels",
         "levelZeroCompaction",
         "levelNonZeroCompaction"
       ]

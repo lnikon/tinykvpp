@@ -9,13 +9,14 @@
   },
   "lsmtree": {
     "memtableFlushThreshold": 1024,
+    "maximumLevels": 12,
     "levelZeroCompaction": {
       "compactionStrategy": "levelled",
       "compactionThreshold": 4
     },
     "levelNonZeroCompaction": {
       "compactionStrategy": "tiered",
-      "compactionThreshold": 1024
+      "compactionThreshold": 8
     }
   }
 }

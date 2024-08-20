@@ -6,6 +6,7 @@ nlohmann_json/3.11.3
 json-schema-validator/2.3.0
 cxxopts/3.2.0
 stduuid/1.2.3
+benchmark/1.8.4
 
 [generators]
 CMakeDeps
