@@ -49,7 +49,7 @@ class memtable_t
 
             [[nodiscard]] auto size() const -> std::size_t;
 
-            static void swap(key_t &lhs, key_t &rhs);
+            static void swap(key_t &lhs, key_t &rhs) noexcept;
 
             storage_type_t m_key;
         };
@@ -148,7 +148,7 @@ class memtable_t
      *
      * @param record
      */
-    void emplace(const record_t &record);
+    void emplace(record_t record);
 
     /**
      * @brief
@@ -171,13 +171,6 @@ class memtable_t
      * @brief
      */
     [[nodiscard]] auto empty() const -> bool;
-
-    /**
-     * @brief
-     *
-     * @param pMemtable
-     */
-    void merge(memtable_t pMemtable) noexcept;
 
     /**
      * @brief
@@ -216,13 +209,6 @@ class memtable_t
     template <typename stream_gt> void read(stream_gt &outStream);
 
   private:
-    /**
-     * @brief
-     *
-     * @param record
-     */
-    void update_size(const record_t &record);
-
     storage_t m_data;
     std::size_t m_size{0};
     std::size_t m_count{0};

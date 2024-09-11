@@ -15,7 +15,7 @@ memtable_t::record_t::key_t::key_t(record_t::key_t::storage_type_t key)
 {
 }
 
-void memtable_t::record_t::key_t::swap(memtable_t::record_t::key_t &lhs, memtable_t::record_t::key_t &rhs)
+void memtable_t::record_t::key_t::swap(memtable_t::record_t::key_t &lhs, memtable_t::record_t::key_t &rhs) noexcept
 {
     using std::swap;
     std::swap(lhs.m_key, rhs.m_key);
@@ -138,12 +138,11 @@ auto memtable_t::record_t::size() const -> std::size_t
 // -----------------------------
 // memtable_t
 // -----------------------------
-void memtable_t::emplace(const memtable_t::record_t &record)
+void memtable_t::emplace(memtable_t::record_t record)
 {
-    m_data.emplace(record);
-    auto size = record.m_key.m_key.size();
-    update_size(record);
+    m_size += record.size();
     m_count++;
+    m_data.emplace(std::move(record));
 }
 
 auto memtable_t::find(const memtable_t::record_t::key_t &key) -> std::optional<memtable_t::record_t>
@@ -166,15 +165,6 @@ auto memtable_t::count() const -> std::size_t
     return m_data.size() == 0;
 }
 
-void memtable_t::merge(memtable_t pMemtable) noexcept
-{
-    // TODO(nikon): Use timestamp to compare items
-    for (auto &record : pMemtable.m_data)
-    {
-        emplace(record);
-    }
-}
-
 auto memtable_t::begin() const -> typename memtable_t::storage_t::const_iterator
 {
     return m_data.cbegin();
@@ -192,7 +182,6 @@ auto memtable_t::min() const noexcept -> std::optional<memtable_t::record_t::key
 
 auto memtable_t::max() const noexcept -> std::optional<memtable_t::record_t::key_t>
 {
-    // TODO(lnikon): Fix this
     storage_t::const_iterator beforeEnd{nullptr};
     auto idx{0};
     for (auto begin{m_data.cbegin()}; begin != m_data.cend(); ++begin)
@@ -204,7 +193,7 @@ auto memtable_t::max() const noexcept -> std::optional<memtable_t::record_t::key
 
         beforeEnd = begin;
     }
-    return m_data.size() > 0 ? std::make_optional((beforeEnd)->m_key) : std::nullopt;
+    return m_data.size() > 0 ? std::make_optional(beforeEnd->m_key) : std::nullopt;
 }
 
 [[nodiscard]] auto memtable_t::moved_records() -> std::vector<memtable_t::record_t>
@@ -215,11 +204,6 @@ auto memtable_t::max() const noexcept -> std::optional<memtable_t::record_t::key
 auto memtable_t::operator<(const memtable_t &other) const -> bool
 {
     return max() < other.min();
-}
-
-void memtable_t::update_size(const memtable_t::record_t &record)
-{
-    m_size += record.size();
 }
 
 } // namespace structures::memtable

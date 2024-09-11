@@ -4,7 +4,7 @@
 #include <string>
 #include <algorithm>
 #include <cctype>
-#include <locale>
+
 
 namespace db::wal
 {
@@ -24,12 +24,12 @@ auto wal_t::open() -> bool
     return m_log.open(m_path);
 }
 
-auto wal_t::path() -> fs::path_t
+auto wal_t::path() const -> fs::path_t
 {
     return m_path;
 }
 
-void wal_t::add(record_t rec) noexcept
+void wal_t::add(const record_t& rec) noexcept
 {
     m_records.push_back(rec);
 
@@ -53,9 +53,9 @@ void wal_t::reset()
 }
 
 // trim from start (in place)
-inline void ltrim(std::string &s)
+inline void ltrim(std::string &str)
 {
-    s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](unsigned char ch) { return !std::isspace(ch); }));
+    str.erase(str.begin(), std::find_if(str.begin(), str.end(), [](unsigned char ch) { return !std::isspace(ch); }));
 }
 
 // trim from end (in place)
@@ -73,7 +73,7 @@ inline auto trim(std::string &s) -> std::string &
 
 auto wal_t::recover() noexcept -> bool
 {
-    auto recordToString = [](const record_t &rec) -> std::string
+    auto recordToString = [](const record_t &rec)
     {
         std::stringstream strStream;
         rec.write(strStream);
@@ -82,7 +82,6 @@ auto wal_t::recover() noexcept -> bool
 
     spdlog::info("WAL recovery started");
     auto stringStream = m_log.stream();
-    std::int32_t record_type_int{0};
     std::string line;
     while (std::getline(stringStream, line))
     {
@@ -103,7 +102,7 @@ auto wal_t::recover() noexcept -> bool
     return true;
 }
 
-auto wal_t::records() noexcept -> std::vector<record_t>
+auto wal_t::records() const noexcept -> std::vector<record_t>
 {
     return m_records;
 }

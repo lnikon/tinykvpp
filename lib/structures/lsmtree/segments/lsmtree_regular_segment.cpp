@@ -47,9 +47,9 @@ std::optional<record_t> regular_segment_t::record(const hashindex::hashindex_t::
 
 void regular_segment_t::flush()
 {
-    random_access_file_t
-        // Skip execution if for some reason the memtable is empty
-        if (m_memtable.has_value() && m_memtable->empty())
+    // random_access_file_t
+    // Skip execution if for some reason the memtable is empty
+    if (m_memtable.has_value() && m_memtable->empty())
     {
         spdlog::warn("Can not flush empty memtable at segment {}", m_path.c_str());
         return;

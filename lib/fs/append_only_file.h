@@ -14,7 +14,7 @@ struct append_only_file_t
     using data_t = std::string;
 
     explicit append_only_file_t(fs::path_t path);
-    append_only_file_t() = delete;
+    append_only_file_t() = default;
     ~append_only_file_t() noexcept;
 
     auto open() noexcept -> bool;

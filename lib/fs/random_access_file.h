@@ -14,10 +14,6 @@ class random_access_file
 {
     class random_access_file_t
     {
-      public:
-        void write();
-
-      private:
     };
 };
 
