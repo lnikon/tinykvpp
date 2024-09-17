@@ -22,7 +22,7 @@ class wal_t
   public:
     using kv_t = structures::memtable::memtable_t::record_t;
 
-    enum operation_k : int8_t
+    enum class operation_k : int8_t
     {
         undefined_k = -1,
         add_k,
@@ -31,7 +31,7 @@ class wal_t
 
     struct record_t
     {
-        operation_k op{undefined_k};
+        operation_k op{operation_k::undefined_k};
         kv_t kv;
 
         template <typename Stream> void write(Stream &stream) const
@@ -70,14 +70,14 @@ class wal_t
      *
      * @return fs::path_t
      */
-    auto path() -> fs::path_t;
+    auto path() const -> fs::path_t;
 
     /**
      * @brief
      *
      * @param rec
      */
-    void add(record_t rec) noexcept;
+    void add(const record_t& rec) noexcept;
 
     /**
      * @brief
@@ -98,7 +98,7 @@ class wal_t
      *
      * @return std::vector<record_t>
      */
-    auto records() noexcept -> std::vector<record_t>;
+    auto records() const noexcept -> std::vector<record_t>;
 
   private:
     fs::path_t m_path;
@@ -108,7 +108,7 @@ class wal_t
 
 using shared_ptr_t = std::shared_ptr<wal_t>;
 
-template <typename... Args> auto make_shared(Args... args)
+template <typename... Args> auto make_shared(Args&&... args)
 {
     return std::make_shared<wal_t>(std::forward<Args>(args)...);
 }
