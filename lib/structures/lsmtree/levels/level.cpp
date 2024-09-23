@@ -12,6 +12,7 @@
 #include <queue>
 #include <ranges>
 #include <utility>
+#include <cmath>
 
 #include <spdlog/spdlog.h>
 
@@ -52,7 +53,7 @@ void level_t::emplace(const lsmtree::segments::regular_segment::shared_ptr_t &pS
 auto level_t::segment(memtable::memtable_t memtable) -> segments::regular_segment::shared_ptr_t
 {
     // Generate name for the segment
-    const auto name{helpers::segment_name()};
+    const auto name{fmt::format("{}_{}", helpers::segment_name(), index())};
 
     // Generate a path for the segment, including its name, then based on @type and @pMemtable create a segment
     auto pSegment{segments::factories::lsmtree_segment_factory(
@@ -93,9 +94,16 @@ template <typename T, typename U = T> struct IteratorCompare
 
 auto level_t::compact() const noexcept -> segments::regular_segment::shared_ptr_t
 {
+    std::size_t num_of_bytes_used{0};
+    for (auto begin{m_pStorage->begin()}; begin != m_pStorage->end(); ++begin)
+    {
+        num_of_bytes_used += (*begin)->num_of_bytes_used();
+    }
+
     // If level size hasn't reached the size limit then skip the compaction
-    if ((index() == 0 && m_pStorage->size() >= m_pConfig->LSMTreeConfig.LevelZeroCompactionThreshold) ||
-        (index() != 0 && m_pStorage->size() >= m_pConfig->LSMTreeConfig.LevelNonZeroCompactionThreshold))
+    if ((index() == 0 && num_of_bytes_used >= m_pConfig->LSMTreeConfig.LevelZeroCompactionThreshold) ||
+        (index() != 0 &&
+         num_of_bytes_used >= m_pConfig->LSMTreeConfig.LevelNonZeroCompactionThreshold * std::pow(10, index())))
     {
         std::priority_queue<
             std::pair<typename memtable::memtable_t::const_iterator, typename memtable::memtable_t::const_iterator>,
@@ -149,7 +157,7 @@ auto level_t::compact() const noexcept -> segments::regular_segment::shared_ptr_
 
         // Create a new segment from the compacted segment.
         // The postfix "_compacted" signals that the segment is an intermediate result
-        auto name{helpers::segment_name() + segments::types::name_t{"_compacted"}};
+        auto name{fmt::format("{}_{}_compacted", helpers::segment_name(), index())};
         return segments::factories::lsmtree_segment_factory(
             name, helpers::segment_path(m_pConfig->datadir_path(), name), memtable);
     }
@@ -200,7 +208,7 @@ void level_t::merge(const segments::regular_segment::shared_ptr_t &pSegment) noe
         newMemtable.emplace(currentRecord);
         if (newMemtable.size() >= segmentSize)
         {
-            auto name = helpers::segment_name();
+            auto name{fmt::format("{}_{}", helpers::segment_name(), index())};
             newSegments.emplace(segments::factories::lsmtree_segment_factory(
                                     name, helpers::segment_path(m_pConfig->datadir_path(), name), newMemtable),
                                 segments::storage::key_range_comparator_t{});
@@ -211,7 +219,7 @@ void level_t::merge(const segments::regular_segment::shared_ptr_t &pSegment) noe
     // Flush leftover records
     if (!newMemtable.empty())
     {
-        auto name = helpers::segment_name();
+        auto name{fmt::format("{}_{}", helpers::segment_name(), index())};
         newSegments.emplace(segments::factories::lsmtree_segment_factory(
                                 name, helpers::segment_path(m_pConfig->datadir_path(), name), newMemtable),
                             segments::storage::key_range_comparator_t{});

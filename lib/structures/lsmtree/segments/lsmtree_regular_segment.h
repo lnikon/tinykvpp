@@ -29,11 +29,6 @@ class regular_segment_t final
 
     /**
      * @brief
-     */
-    virtual ~regular_segment_t() noexcept = default;
-
-    /**
-     * @brief
      *
      * @param key
      */
@@ -44,7 +39,8 @@ class regular_segment_t final
      *
      * @param offset
      */
-    [[nodiscard]] auto record(const hashindex::hashindex_t::offset_t &offset) -> std::optional<memtable::memtable_t::record_t>;
+    [[nodiscard]] auto record(const hashindex::hashindex_t::offset_t &offset)
+        -> std::optional<memtable::memtable_t::record_t>;
 
     /**
      * @brief
@@ -89,17 +85,18 @@ class regular_segment_t final
     /**
      * @brief
      */
-    [[nodiscard]] virtual auto min() const noexcept -> std::optional<memtable::memtable_t::record_t::key_t>;
+    [[nodiscard]] auto min() const noexcept -> std::optional<memtable::memtable_t::record_t::key_t>;
 
     /**
      * @brief
      */
-    [[nodiscard]] virtual auto max() const noexcept -> std::optional<memtable::memtable_t::record_t::key_t>;
+    [[nodiscard]] auto max() const noexcept -> std::optional<memtable::memtable_t::record_t::key_t>;
+
+    [[nodiscard]] auto num_of_bytes_used() const -> std::size_t;
 
   private:
     void restore_index();
 
-  
     const fs::path_t m_path;
     const types::name_t m_name;
 

@@ -6,6 +6,7 @@ namespace structures::hashindex
 void hashindex_t::emplace(lsmtree::record_t record, const std::size_t length)
 {
     m_offsets.emplace(record.m_key, length);
+    m_num_of_bytes += record.size() + length;
 }
 
 auto hashindex_t::empty() const -> bool
@@ -31,6 +32,11 @@ auto hashindex_t::begin() -> hashindex_t::iterator
 auto hashindex_t::end() -> hashindex_t::iterator
 {
     return m_offsets.end();
+}
+
+auto hashindex_t::num_of_bytes_used() const noexcept -> std::size_t
+{
+    return m_num_of_bytes;
 }
 
 } // namespace structures::hashindex

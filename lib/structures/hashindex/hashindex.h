@@ -24,8 +24,11 @@ class hashindex_t
     [[nodiscard]] auto empty() const -> bool;
     [[nodiscard]] auto offset(const structures::lsmtree::key_t &key) const -> std::vector<offset_t>;
 
+    auto num_of_bytes_used() const noexcept -> std::size_t;
+
   private:
     storage_t m_offsets;
+    std::size_t m_num_of_bytes{0};
 };
 
 } // namespace structures::hashindex

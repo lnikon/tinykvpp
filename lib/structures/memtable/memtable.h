@@ -165,6 +165,11 @@ class memtable_t
     /**
      * @brief
      */
+    [[nodiscard]] auto num_of_bytes_used() const -> std::size_t;
+
+    /**
+     * @brief
+     */
     [[nodiscard]] auto count() const -> std::size_t;
 
     /**
@@ -212,6 +217,7 @@ class memtable_t
     storage_t m_data;
     std::size_t m_size{0};
     std::size_t m_count{0};
+    std::size_t m_num_of_bytes{0};
 };
 
 // ------------------------------------------------

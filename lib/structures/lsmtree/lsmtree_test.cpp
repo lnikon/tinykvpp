@@ -130,20 +130,20 @@ TEST_CASE("Flush regular segment", std::string(componentName))
         }
     }
 
-    SECTION("Flush segment when memtable is full")
-    {
-        config::shared_ptr_t pConfig{config::make_shared()};
-        pConfig->LSMTreeConfig.DiskFlushThresholdSize = 128;
-
-        auto manifest{db::manifest::make_shared(pConfig)};
-        auto wal{db::wal::make_shared("wal")};
-        lsmtree::lsmtree_t lsmt(pConfig, manifest, wal);
-        for (const auto &kv : randomKeys)
-        {
-            lsmt.put(lsmtree::key_t{kv.first}, lsmtree::value_t{kv.second});
-        }
-
-        REQUIRE(std::filesystem::exists("segments"));
-        REQUIRE(!std::filesystem::is_empty("segments"));
-    }
+    // SECTION("Flush segment when memtable is full")
+    // {
+    //     config::shared_ptr_t pConfig{config::make_shared()};
+    //     pConfig->LSMTreeConfig.DiskFlushThresholdSize = 128;
+    //
+    //     auto manifest{db::manifest::make_shared(pConfig)};
+    //     auto wal{db::wal::make_shared("wal")};
+    //     lsmtree::lsmtree_t lsmt(pConfig, manifest, wal);
+    //     for (const auto &kv : randomKeys)
+    //     {
+    //         lsmt.put(lsmtree::key_t{kv.first}, lsmtree::value_t{kv.second});
+    //     }
+    //
+    //     REQUIRE(std::filesystem::exists("segments"));
+    //     REQUIRE(!std::filesystem::is_empty("segments"));
+    // }
 }

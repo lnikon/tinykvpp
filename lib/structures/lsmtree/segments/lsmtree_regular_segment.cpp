@@ -139,6 +139,12 @@ std::optional<record_t::key_t> regular_segment_t::max() const noexcept
     return m_memtable->max();
 }
 
+auto regular_segment_t::num_of_bytes_used() const -> std::size_t
+{
+    assert(m_memtable.has_value());
+    return m_hashIndex.num_of_bytes_used() + m_memtable->num_of_bytes_used();
+}
+
 types::name_t regular_segment_t::get_name() const
 {
     return m_name;

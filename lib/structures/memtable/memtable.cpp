@@ -142,6 +142,7 @@ void memtable_t::emplace(memtable_t::record_t record)
 {
     m_size += record.size();
     m_count++;
+    m_num_of_bytes += record.size();
     m_data.emplace(std::move(record));
 }
 
@@ -153,6 +154,11 @@ auto memtable_t::find(const memtable_t::record_t::key_t &key) -> std::optional<m
 auto memtable_t::size() const -> std::size_t
 {
     return m_size;
+}
+
+auto memtable_t::num_of_bytes_used() const -> std::size_t
+{
+    return m_num_of_bytes;
 }
 
 auto memtable_t::count() const -> std::size_t
