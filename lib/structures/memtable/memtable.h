@@ -32,13 +32,7 @@ class memtable_t
             using storage_type_t = std::string;
 
             explicit key_t(storage_type_t key);
-
             key_t() = default;
-            key_t(const key_t &other) = default;
-            auto operator=(const key_t &other) -> key_t & = default;
-            key_t(key_t &&other) = default;
-            auto operator=(key_t &&other) -> key_t & = default;
-            ~key_t() = default;
 
             auto operator<(const key_t &other) const -> bool;
             auto operator>(const key_t &other) const -> bool;
@@ -49,8 +43,6 @@ class memtable_t
 
             [[nodiscard]] auto size() const -> std::size_t;
 
-            static void swap(key_t &lhs, key_t &rhs) noexcept;
-
             storage_type_t m_key;
         };
 
@@ -59,13 +51,7 @@ class memtable_t
             using storage_type_t = std::string;
 
             explicit value_t(storage_type_t value);
-
             value_t() = default;
-            value_t(const value_t &other) = default;
-            auto operator=(const value_t &other) -> value_t & = default;
-            value_t(value_t &&other) = default;
-            auto operator=(value_t &&other) -> value_t & = default;
-            ~value_t() = default;
 
             auto operator==(const value_t &other) const -> bool;
 
@@ -73,8 +59,6 @@ class memtable_t
             template <typename stream_gt> void read(stream_gt &outStream);
 
             [[nodiscard]] auto size() const -> std::size_t;
-
-            static void swap(value_t &lhs, value_t &rhs);
 
             storage_type_t m_value;
         };
@@ -87,24 +71,18 @@ class memtable_t
 
             timestamp_t();
 
-            template <typename stream_gt> void write(stream_gt &outStream) const;
-            template <typename stream_gt> void read(stream_gt &outStream);
-
             auto operator<(const timestamp_t &other) const -> bool;
 
             static void swap(timestamp_t &lhs, timestamp_t &rhs);
+
+            template <typename stream_gt> void write(stream_gt &outStream) const;
+            template <typename stream_gt> void read(stream_gt &outStream);
 
             underlying_value_type_t m_value;
         };
 
         record_t(key_t key, value_t value);
-
         record_t() = default;
-        record_t(const record_t &other);
-        auto operator=(const record_t &other) -> record_t &;
-        record_t(record_t &&other) = default;
-        auto operator=(record_t &&other) -> record_t & = default;
-        ~record_t() = default;
 
         auto operator<(const record_t &record) const -> bool;
         auto operator>(const record_t &record) const -> bool;

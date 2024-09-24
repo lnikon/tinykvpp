@@ -15,12 +15,6 @@ memtable_t::record_t::key_t::key_t(record_t::key_t::storage_type_t key)
 {
 }
 
-void memtable_t::record_t::key_t::swap(memtable_t::record_t::key_t &lhs, memtable_t::record_t::key_t &rhs) noexcept
-{
-    using std::swap;
-    std::swap(lhs.m_key, rhs.m_key);
-}
-
 auto memtable_t::record_t::key_t::size() const -> std::size_t
 {
     return m_key.size();
@@ -59,12 +53,6 @@ auto memtable_t::record_t::value_t::operator==(const memtable_t::record_t::value
     return m_value == other.m_value;
 }
 
-void memtable_t::record_t::value_t::swap(memtable_t::record_t::value_t &lhs, memtable_t::record_t::value_t &rhs)
-{
-    using std::swap;
-    swap(lhs.m_value, rhs.m_value);
-}
-
 // ----------------------------------------------------
 // memtable_t::record_t::timestamp_t
 // ----------------------------------------------------
@@ -91,27 +79,6 @@ memtable_t::record_t::record_t(memtable_t::record_t::key_t key, memtable_t::reco
     : m_key(std::move(key)),
       m_value(std::move(value))
 {
-}
-
-memtable_t::record_t::record_t(const memtable_t::record_t &other)
-    : m_key(other.m_key),
-      m_value(other.m_value)
-{
-}
-
-auto memtable_t::record_t::operator=(const memtable_t::record_t &other) -> memtable_t::record_t &
-{
-    if (this == &other)
-    {
-        return *this;
-    }
-
-    record_t tmp(other);
-    record_t::key_t::swap(m_key, tmp.m_key);
-    record_t::value_t::swap(m_value, tmp.m_value);
-    record_t::timestamp_t::swap(m_timestamp, tmp.m_timestamp);
-
-    return *this;
 }
 
 auto memtable_t::record_t::operator<(const memtable_t::record_t &record) const -> bool
