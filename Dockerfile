@@ -1,5 +1,5 @@
 ARG TARGET=gcc
-FROM ${TARGET}:14.2.0 AS build
+FROM ${TARGET} AS build
 
 # Install necessary packages for development
 RUN apt-get update && \
