@@ -1,5 +1,5 @@
-ARG TARGET=gcc:latest
-FROM ${TARGET} as build
+ARG TARGET=gcc
+FROM ${TARGET}:14.2.0 AS build
 
 # Install necessary packages for development
 RUN apt-get update && \
@@ -7,17 +7,18 @@ RUN apt-get update && \
     cmake \
     python3 \
     python3-pip \
-    python3-virtualenv
+    python3-virtualenv \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*
 
 # Start preparing the workspace
 WORKDIR /workspaces
 
 # Create venv for the conan
 ENV VIRTUAL_ENV=/opt/venv
-RUN python3 -m virtualenv $VIRTUAL_ENV
+RUN python3 -m virtualenv "$VIRTUAL_ENV"
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
-RUN python3 -m pip install --upgrade pip
-RUN python3 -m pip install conan
+RUN python3 -m pip install --upgrade pip conan
 
 # Setup conan profiles
 COPY conanfile.txt conanfile.txt
@@ -29,6 +30,7 @@ RUN cp -f ./build/CMakePresets.json .
 
 # Copy project files
 COPY CMakeLists.txt CMakeLists.txt
+COPY bench bench
 COPY lib lib
 COPY src src
 COPY app app
@@ -41,7 +43,7 @@ RUN cmake --preset conan-release
 RUN cmake --build ./build
 
 # Run tests
-FROM build as test
+FROM build AS test
 WORKDIR /workspaces
 COPY --from=build /workspaces/build/DBTest build/DBTest
 COPY --from=build /workspaces/build/LSMTreeTest build/LSMTreeTest

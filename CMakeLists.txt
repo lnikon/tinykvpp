@@ -11,6 +11,8 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}")
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}")
 
+include(CTest)
+
 find_package(Catch2 REQUIRED)
 find_package(spdlog REQUIRED)
 find_package(fmt REQUIRED)
@@ -29,3 +31,9 @@ add_subdirectory(app)
 add_subdirectory(src)
 add_subdirectory(bench)
 # add_subdirectory(grpcapp)
+
+# Custom targets to build docker images and run tests
+add_custom_target(build_gcc_release
+    COMMAND sh -c "docker build --build-arg TARGET=gcc . --file Dockerfile --tag tinykvpp-clang"
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+)

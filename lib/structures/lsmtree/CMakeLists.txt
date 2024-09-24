@@ -30,4 +30,10 @@ target_link_libraries(
         Config
         HashIndex
         FS
-        DB)
+        DB
+)
+
+# Register Catch2 tests with CTest
+# include(CTest)
+include(Catch)
+catch_discover_tests(LSMTreeTest)

@@ -17,3 +17,9 @@ target_link_libraries(
   MemTable
 	Config
   SortedVector)
+
+
+# Register Catch2 tests with CTest
+# include(CTest)
+include(Catch)
+catch_discover_tests(SortedVectorTest)

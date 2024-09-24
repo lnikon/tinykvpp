@@ -19,4 +19,10 @@ target_link_libraries(
         SkipList
         MemTable
         Config
-        -fsanitize=address)
+        -fsanitize=address
+)
+
+# Register Catch2 tests with CTest
+# include(CTest)
+include(Catch)
+catch_discover_tests(SkipListTest)

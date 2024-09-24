@@ -44,7 +44,7 @@ void wal_t::reset()
 {
     m_log.close();
     fs::stdfs::remove(m_path);
-    if (!m_log.open())
+    if (!m_log.open(m_path))
     {
         throw std::runtime_error("unable to reset wal " + m_path.string());
     }

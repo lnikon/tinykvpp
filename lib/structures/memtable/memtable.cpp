@@ -153,9 +153,10 @@ auto memtable_t::min() const noexcept -> std::optional<memtable_t::record_t::key
     return m_data.size() > 0 ? std::make_optional(m_data.cbegin()->m_key) : std::nullopt;
 }
 
+// TODO(lnikon): Should have horrible performace! Refactor this!
 auto memtable_t::max() const noexcept -> std::optional<memtable_t::record_t::key_t>
 {
-    storage_t::const_iterator beforeEnd{nullptr};
+    storage_t::const_iterator beforeEnd{m_data.cbegin()};
     auto idx{0};
     for (auto begin{m_data.cbegin()}; begin != m_data.cend(); ++begin)
     {

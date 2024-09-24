@@ -120,15 +120,8 @@ auto level_t::compact() const noexcept -> segments::regular_segment::shared_ptr_
             memtables.emplace_back(mm);
         }
 
-        int i{0};
         for (auto &memtable : memtables)
         {
-            spdlog::info("memtable {}", i);
-            for (auto rec : memtable)
-            {
-                spdlog::info("VAGAG {}", rec.m_key.m_key);
-            }
-            i++;
             minHeap.emplace(memtable.begin(), memtable.end());
         }
 
