@@ -21,6 +21,5 @@ target_link_libraries(
         HashIndex)
 
 # Register Catch2 tests with CTest
-# include(CTest)
 include(Catch)
 catch_discover_tests(DBTest)

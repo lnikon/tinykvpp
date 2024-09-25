@@ -34,6 +34,5 @@ target_link_libraries(
 )
 
 # Register Catch2 tests with CTest
-# include(CTest)
 include(Catch)
 catch_discover_tests(LSMTreeTest)

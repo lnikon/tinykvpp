@@ -11,12 +11,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Build the Docker image
-        run: docker build --build-arg "TARGET=jetbrains/qodana-clang:2024.2-eap-clang18" . --file Dockerfile --tag tinykvpp-clang:$(date +%s)
+      - name: tinykvpp - RelBuild - Clang
+        run: cmake --build --preset conan-release --target BuildClangReleaseDockerImage
 
   build-gcc:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Build the Docker image
-        run: docker build --build-arg "TARGET=gcc" . --file Dockerfile --tag tinykvpp-gcc:$(date +%s)
+      - name: tinykvpp - RelBuild - GCC
+        run: cmake --build --preset conan-release --target BuildGCCReleaseDockerImage
