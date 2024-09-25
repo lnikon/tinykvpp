@@ -6,11 +6,12 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 
 namespace db::manifest
 {
 
-static constexpr const std::string current_filename("current");
+static constexpr const std::string_view current_filename("current");
 
 // Manifest file will be periodically rotated to we need a unique filename every time
 auto manifest_filename() -> std::string
