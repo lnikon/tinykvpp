@@ -12,11 +12,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: tinykvpp - RelBuild - Clang
-        run: cmake --build --preset conan-release --target BuildClangReleaseDockerImage
+        run: sh ./scripts/build_clang_release_docker_image.sh
 
   build-gcc:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: tinykvpp - RelBuild - GCC
-        run: cmake --build --preset conan-release --target BuildGCCReleaseDockerImage
+        run: sh ./scripts/build_gcc_release_docker_image.sh
