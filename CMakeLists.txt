@@ -34,11 +34,11 @@ add_subdirectory(bench)
 
 # Custom targets to build docker images and run tests
 add_custom_target(BuildGCCReleaseDockerImage
-    COMMAND sh -c "docker build --build-arg TARGET=gcc:latest . --file Dockerfile --tag tinykvpp-clang"
+    COMMAND sh scripts/build_gcc_release_docker_image.sh
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
 )
 
 add_custom_target(BuildClangReleaseDockerImage
-    COMMAND sh -c "docker build --build-arg TARGET=silkeh/clang:latest . --file Dockerfile --tag tinykvpp-clang"
+    COMMAND sh scripts/build_clang_release_docker_image.sh
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
 )

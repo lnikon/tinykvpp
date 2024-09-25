@@ -24,7 +24,7 @@ jobs:
         os: [ubuntu-latest]
         build_type: [Release]
         c_compiler: [gcc, clang]
-        container: ["gcc:14", "jetbrains/qodana-clang:2024.2-eap-clang18"]
+        container: ["gcc:14", "silkeh/clang:latest"]
         include:
           - os: ubuntu-latest
             c_compiler: gcc
@@ -33,11 +33,11 @@ jobs:
           - os: ubuntu-latest
             c_compiler: clang
             cpp_compiler: clang++
-            container: "jetbrains/qodana-clang:2024.2-eap-clang18"
+            container: "silkeh/clang:latest"
         exclude:
           - os: ubuntu-latest
             c_compiler: gcc
-            container: "jetbrains/qodana-clang:2024.2-eap-clang18"
+            container: "silkeh/clang:latest"
           - os: ubuntu-latest
             c_compiler: clang
             container: "gcc:14"
@@ -51,12 +51,6 @@ jobs:
       shell: bash
       run: |
         echo "build-output-dir=${{ github.workspace }}/build" >> "$GITHUB_OUTPUT"
-
-    # - name: Install gcc14
-    #   run: |
-    #     sudo add-apt-repository "deb http://archive.ubuntu.com/ubuntu $(lsb_release -sc) universe"
-    #     sudo apt-get update
-    #     sudo apt-get install gcc-13
 
     - name: Install CMake
       run: |
