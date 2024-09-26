@@ -166,13 +166,13 @@ void level_t::merge(const segments::regular_segment::shared_ptr_t &pSegment) noe
                                                                 pSegment->max().value() < pSegment->max().value();
                                                      });
 
-    std::vector<memtable_t::record_t> overlappingSegmentsRecords{};
     std::size_t overlappingSegmentsRecordsSize{};
     for (auto &outStream : overlappingSegmentsView)
     {
         overlappingSegmentsRecordsSize += outStream->memtable().value().size();
     }
 
+    std::vector<memtable_t::record_t> overlappingSegmentsRecords{};
     overlappingSegmentsRecords.reserve(overlappingSegmentsRecordsSize);
     for (auto &overlappingSegment : overlappingSegmentsView)
     {

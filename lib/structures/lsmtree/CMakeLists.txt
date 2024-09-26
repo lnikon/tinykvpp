@@ -11,7 +11,7 @@ add_library(
         "segments/types.h"
         "levels/levels.cpp"
         "levels/level.cpp"
-        "compactation/level_zero_compactation.cpp")
+)
 
 set_target_properties(LSMTree PROPERTIES CXX_STANDARD 23)
 target_include_directories(LSMTree INTERFACE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/segments)
