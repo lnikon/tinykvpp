@@ -94,68 +94,64 @@ template <typename T, typename U = T> struct IteratorCompare
 
 auto level_t::compact() const noexcept -> segments::regular_segment::shared_ptr_t
 {
-    std::size_t num_of_bytes_used{0};
-    for (auto begin{m_pStorage->begin()}; begin != m_pStorage->end(); ++begin)
-    {
-        num_of_bytes_used += (*begin)->num_of_bytes_used();
-    }
+    const auto bytesUsedForLevel{bytes_used()};
 
     // If level size hasn't reached the size limit then skip the compaction
-    if ((index() == 0 && num_of_bytes_used >= m_pConfig->LSMTreeConfig.LevelZeroCompactionThreshold) ||
+    if ((index() == 0 && bytesUsedForLevel < m_pConfig->LSMTreeConfig.LevelZeroCompactionThreshold) ||
         (index() != 0 &&
-         num_of_bytes_used >= m_pConfig->LSMTreeConfig.LevelNonZeroCompactionThreshold * std::pow(10, index())))
+         bytesUsedForLevel < m_pConfig->LSMTreeConfig.LevelNonZeroCompactionThreshold * std::pow(10, index())))
     {
-        std::priority_queue<
-            std::pair<typename memtable::memtable_t::const_iterator, typename memtable::memtable_t::const_iterator>,
-            std::vector<std::pair<typename memtable::memtable_t::const_iterator,
-                                  typename memtable::memtable_t::const_iterator>>,
-            IteratorCompare<memtable_t, memtable_t>>
-            minHeap;
-
-        std::vector<memtable_t> memtables;
-        memtables.reserve(m_pStorage->size());
-        for (auto it{m_pStorage->begin()}, end{m_pStorage->end()}; it != end; ++it)
-        {
-            auto mm = (*it)->memtable().value();
-            memtables.emplace_back(mm);
-        }
-
-        for (auto &memtable : memtables)
-        {
-            minHeap.emplace(memtable.begin(), memtable.end());
-        }
-
-        auto memtable{memtable::memtable_t{}};
-        auto lastKey{memtable::memtable_t::record_t::key_t{}};
-        while (!minHeap.empty())
-        {
-            auto current = minHeap.top();
-            minHeap.pop();
-
-            // Add the smallest element to the merged sequence.
-            // If two elements have the same key, then choose the one with the greatest timestamp
-            if (memtable.empty() || lastKey != current.first->m_key)
-            {
-                memtable.emplace(*current.first);
-                lastKey = current.first->m_key;
-            }
-
-            // Move to the next element in the current sequence
-            auto next = std::next(current.first);
-            if (next != current.second)
-            {
-                minHeap.emplace(next, current.second);
-            }
-        }
-
-        // Create a new segment from the compacted segment.
-        // The postfix "_compacted" signals that the segment is an intermediate result
-        auto name{fmt::format("{}_{}_compacted", helpers::segment_name(), index())};
-        return segments::factories::lsmtree_segment_factory(
-            name, helpers::segment_path(m_pConfig->datadir_path(), name), memtable);
+        return nullptr;
     }
 
-    return nullptr;
+    std::priority_queue<
+        std::pair<typename memtable::memtable_t::const_iterator, typename memtable::memtable_t::const_iterator>,
+        std::vector<std::pair<typename memtable::memtable_t::const_iterator,
+                              typename memtable::memtable_t::const_iterator>>,
+        IteratorCompare<memtable_t, memtable_t>>
+        minHeap;
+
+    std::vector<memtable_t> memtables;
+    memtables.reserve(m_pStorage->size());
+    for (const auto &segment : *m_pStorage)
+    {
+        auto currentMemtable = segment->memtable().value();
+        memtables.emplace_back(currentMemtable);
+    }
+
+    for (auto &memtable : memtables)
+    {
+        minHeap.emplace(memtable.begin(), memtable.end());
+    }
+
+    auto mergedMemtable{memtable::memtable_t{}};
+    auto lastKey{memtable::memtable_t::record_t::key_t{}};
+    while (!minHeap.empty())
+    {
+        auto current = minHeap.top();
+        minHeap.pop();
+
+        // Add the smallest element to the merged sequence.
+        // If two elements have the same key, then choose the one with the greatest timestamp
+        if (mergedMemtable.empty() || lastKey != current.first->m_key)
+        {
+            mergedMemtable.emplace(*current.first);
+            lastKey = current.first->m_key;
+        }
+
+        // Move to the next element in the current sequence
+        auto next = std::next(current.first);
+        if (next != current.second)
+        {
+            minHeap.emplace(next, current.second);
+        }
+    }
+
+    // Create a new segment from the compacted segment.
+    // The postfix "_compacted" signals that the segment is an intermediate result
+    auto name{fmt::format("{}_{}_compacted", helpers::segment_name(), index())};
+    return segments::factories::lsmtree_segment_factory(
+        name, helpers::segment_path(m_pConfig->datadir_path(), name), mergedMemtable);
 }
 
 void level_t::merge(const segments::regular_segment::shared_ptr_t &pSegment) noexcept
@@ -283,6 +279,16 @@ auto level_t::index() const noexcept -> level_t::level_index_type_t
 {
     return m_levelIndex;
 }
+
+auto level_t::bytes_used() const noexcept -> std::size_t
+{
+    std::size_t result{0};
+    for (auto begin{m_pStorage->begin()}; begin != m_pStorage->end(); ++begin)
+    {
+        result += (*begin)->num_of_bytes_used();
+    }
+    return result;
+} 
 
 auto level_t::storage() -> segments::storage::shared_ptr_t
 {

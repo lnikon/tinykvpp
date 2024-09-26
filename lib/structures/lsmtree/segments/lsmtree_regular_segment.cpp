@@ -47,7 +47,6 @@ std::optional<record_t> regular_segment_t::record(const hashindex::hashindex_t::
 
 void regular_segment_t::flush()
 {
-    // random_access_file_t
     // Skip execution if for some reason the memtable is empty
     if (m_memtable.has_value() && m_memtable->empty())
     {
@@ -71,9 +70,6 @@ void regular_segment_t::flush()
         cursor += length;
     }
 
-    // Calcuate datablock size
-    // const auto dataBlockSize{ss.tellp() - dataBlockOffset};
-
     // Serialize hashindex
     const auto hashIndexBlockOffset{stringStream.tellp()};
     for (const auto &[key, offset] : m_hashIndex)
@@ -88,7 +84,6 @@ void regular_segment_t::flush()
     const auto footerBlockOffset{stringStream.tellp()};
 
     // Serialize footer
-    // TODO(lnikon): First "big enough" number that came to my mind :)
     stringStream << hashIndexBlockOffset << ' ' << hashIndexBlockSize << std::endl;
 
     const auto footerPaddingSize{footerSize - (stringStream.tellp() - footerBlockOffset)};
@@ -105,10 +100,7 @@ void regular_segment_t::flush()
     stream << stringStream.str();
     stream.flush();
 
-    // std::cout << "[regular_segment_t::flush]: "
-    //   << "Successfully flushed segment: \"" << get_path() << "\"" << std::endl;
-
-    // Free the memory occupied by the segment on successful flush
+    // TODO(lnikon): Free the memory occupied by the segment on successful flush
     // m_memtablea = memtable_t{};
 }
 

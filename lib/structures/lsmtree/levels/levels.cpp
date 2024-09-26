@@ -3,6 +3,7 @@
 //
 
 #include "levels.h"
+#include <cassert>
 #include <db/manifest/manifest.h>
 
 #include <spdlog/spdlog.h>
@@ -26,14 +27,14 @@ levels_t::levels_t(config::shared_ptr_t pConfig, db::manifest::shared_ptr_t mani
 
 // 1. Create a new segment(in-memory representation of the on-disk SST) based on received @memtable
 // 2. Push that segment into level0
-// 3. Set i=0, check whether leveli is ready for compaction(e.g. number of segments >= LevelZeroCompactionThreshold)
+// 3. Set i=0, check whether level_i is ready for compaction(e.g. number of segments >= LevelZeroCompactionThreshold)
 // 4. If no, then function ends here
 // 5. Otherwise, compact the level0 into @compactedCurrentLevelSegment
 // 6. Check whether next level exists, if no - create
 // 7. Find segments from the @nextLevel overlapping with the @compactedCurrentLevelSegment
 // 8. If no overlaps are found, then push @compactedCurrentLevelSegment into next level
 // 9. Otherwise, merge @compactedCurrentLevelSegment with overlapping segment
-// 10. Create new segments based on merge results, push them into leveli
+// 10. Create new segments based on merge results, push them into level_i
 // 11. Remove now old overlapping segments
 // 12. Continue until i >= number of levels
 auto levels_t::segment(memtable::memtable_t memtable) -> segments::regular_segment::shared_ptr_t
@@ -43,11 +44,12 @@ auto levels_t::segment(memtable::memtable_t memtable) -> segments::regular_segme
     {
         m_manifest->add(db::manifest::manifest_t::level_record_t{.op = level_operation_k::add_level_k, .level = 0});
         level();
+        assert(m_levels.size() == 1);
     }
 
     // Create a new segment for the memtable that became immutable
     assert(m_levels[0]);
-    auto pSegment = m_levels[0]->segment(memtable);
+    auto pSegment = m_levels[0]->segment(std::move(memtable));
     assert(pSegment);
 
     // Update manifest with new segment
@@ -74,51 +76,45 @@ auto levels_t::segment(memtable::memtable_t memtable) -> segments::regular_segme
             continue;
         }
 
-        assert(compactedCurrentLevelSegment);
+        // Update manifest with compacted level
+        m_manifest->add(db::manifest::manifest_t::level_record_t{.op = level_operation_k::compact_level_k,
+                                                                    .level = currentLevel->index()});
 
-        // If current level is compacted, we can merge it with the nextLevel
-        if (compactedCurrentLevelSegment)
+        // Update manifest with new segment
+        m_manifest->add(db::manifest::manifest_t::segment_record_t{.op = segment_operation_k::add_segment_k,
+                                                                    .name = compactedCurrentLevelSegment->get_name(),
+                                                                    .level = currentLevel->index()});
+
+        // If computation succeeded, then flush the compacted segment into disk
+        compactedCurrentLevelSegment->flush();
+
+        // Create next level if it doesn't exist
+        level::shared_ptr_t nextLevel{nullptr};
+        if (currentLevel->index() + 1 == m_levels.size())
         {
-            // Update manifest with compacted level
-            m_manifest->add(db::manifest::manifest_t::level_record_t{.op = level_operation_k::compact_level_k,
-                                                                     .level = currentLevel->index()});
-
-            // Update manifest with new segment
-            m_manifest->add(db::manifest::manifest_t::segment_record_t{.op = segment_operation_k::add_segment_k,
-                                                                       .name = compactedCurrentLevelSegment->get_name(),
-                                                                       .level = currentLevel->index()});
-
-            // If computation succeeded, then flush the compacted segment into disk
-            compactedCurrentLevelSegment->flush();
-
-            // Create next level if it doesn't exist
-            level::shared_ptr_t nextLevel{nullptr};
-            if (currentLevel->index() + 1 == m_levels.size())
-            {
-                nextLevel = level();
-                m_manifest->add(db::manifest::manifest_t::level_record_t{.op = level_operation_k::add_level_k,
-                                                                         .level = nextLevel->index()});
-                assert(nextLevel);
-            }
-            else
-            {
-                nextLevel = level(currentLevel->index() + 1);
-            }
-
-            // Merge compacted @currentLevel into the @nextLevel
-            nextLevel->merge(compactedCurrentLevelSegment);
-
-            // Purge the segment representing the compacted level and update the manifest
-            m_manifest->add(db::manifest::manifest_t::segment_record_t{.op = segment_operation_k::remove_segment_k,
-                                                                       .name = compactedCurrentLevelSegment->get_name(),
-                                                                       .level = currentLevel->index()});
-            compactedCurrentLevelSegment->purge();
-
-            // After merging current level into the next level purge the current level and update the manifest
-            m_manifest->add(db::manifest::manifest_t::level_record_t{.op = level_operation_k::purge_level_k,
-                                                                     .level = currentLevel->index()});
-            currentLevel->purge();
+            nextLevel = level();
+            m_manifest->add(db::manifest::manifest_t::level_record_t{.op = level_operation_k::add_level_k,
+                                                                        .level = nextLevel->index()});
+            assert(nextLevel);
         }
+        else
+        {
+            nextLevel = level(currentLevel->index() + 1);
+        }
+
+        // Merge compacted @currentLevel into the @nextLevel
+        nextLevel->merge(compactedCurrentLevelSegment);
+
+        // Purge the segment representing the compacted level and update the manifest
+        m_manifest->add(db::manifest::manifest_t::segment_record_t{.op = segment_operation_k::remove_segment_k,
+                                                                    .name = compactedCurrentLevelSegment->get_name(),
+                                                                    .level = currentLevel->index()});
+        compactedCurrentLevelSegment->purge();
+
+        // After merging current level into the next level purge the current level and update the manifest
+        m_manifest->add(db::manifest::manifest_t::level_record_t{.op = level_operation_k::purge_level_k,
+                                                                    .level = currentLevel->index()});
+        currentLevel->purge();
     }
 
     // If compaction happened, then return the resulting segment

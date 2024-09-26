@@ -32,7 +32,7 @@ class level_t
     /**
      * @brief Create an immutable segment of a given type for the @pMemtable.
      *        The newly created segments is emplaced into the underlying storage
-     *        of the level, and fluhed onto the disk.
+     *        of the level, and flushed onto the disk.
      *
      * @param type
      * @param pMemtable
@@ -81,6 +81,8 @@ class level_t
      * @return An unsigned integer
      */
     [[nodiscard]] auto index() const noexcept -> level_index_type_t;
+
+    [[__nodiscard__]] auto bytes_used() const noexcept -> std::size_t;
 
   private:
     void purge(segments::storage::segment_storage_t &m_pStorage) const noexcept;
