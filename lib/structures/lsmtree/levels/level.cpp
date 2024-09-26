@@ -244,9 +244,18 @@ void level_t::purge(const segments::types::name_t &segment_name) const noexcept
     }
 }
 
+/**
+ * @brief Purges all segments from the given storage.
+ *
+ * This function clears all segments from the provided segment storage. It first
+ * copies all segments into a temporary vector, ensuring that each segment is valid.
+ * Then, it purges each segment individually. Finally, it clears the in-memory
+ * segment storage and logs the operation.
+ *
+ * @param storage Reference to the segment storage to be purged.
+ */
 void level_t::purge(segments::storage::segment_storage_t &storage) const noexcept
 {
-    // Go over the old segments and remove them from disk
     std::vector<segments::regular_segment::shared_ptr_t> segments;
     segments.reserve(storage.size());
     std::copy(std::begin(storage), std::end(storage), std::back_inserter(segments));
@@ -257,7 +266,6 @@ void level_t::purge(segments::storage::segment_storage_t &storage) const noexcep
         purge(currentSegment);
     }
 
-    // Clear the in-memory segments storage
     spdlog::info("Clear the in-memory segments storage");
     storage.clear();
 }
