@@ -26,11 +26,19 @@ regular_segment_t::regular_segment_t(fs::path_t path, types::name_t name, memtab
 [[nodiscard]] std::vector<std::optional<record_t>> regular_segment_t::record(const lsmtree::key_t &key)
 {
     assert(!m_hashIndex.empty());
+
+    const auto offsets{m_hashIndex.offset(key)};
+    if (offsets.empty()) {
+        return {};
+    }
+
     std::vector<std::optional<record_t>> result;
-    for (const auto offsets{m_hashIndex.offset(key)}; const auto &offset : offsets)
+    result.reserve(offsets.size());
+    for (const auto &offset : offsets)
     {
         result.emplace_back(record(offset));
     }
+
     return result;
 }
 
@@ -142,7 +150,7 @@ types::name_t regular_segment_t::get_name() const
     return m_name;
 }
 
-types::path_t regular_segment_t::get_path() const
+auto regular_segment_t::get_path() const -> types::path_t
 {
     return m_path;
 }

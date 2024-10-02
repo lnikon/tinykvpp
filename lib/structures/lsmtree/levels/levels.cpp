@@ -25,18 +25,22 @@ levels_t::levels_t(config::shared_ptr_t pConfig, db::manifest::shared_ptr_t mani
 {
 }
 
-// 1. Create a new segment(in-memory representation of the on-disk SST) based on received @memtable
-// 2. Push that segment into level0
-// 3. Set i=0, check whether level_i is ready for compaction(e.g. number of segments >= LevelZeroCompactionThreshold)
-// 4. If no, then function ends here
-// 5. Otherwise, compact the level0 into @compactedCurrentLevelSegment
-// 6. Check whether next level exists, if no - create
-// 7. Find segments from the @nextLevel overlapping with the @compactedCurrentLevelSegment
-// 8. If no overlaps are found, then push @compactedCurrentLevelSegment into next level
-// 9. Otherwise, merge @compactedCurrentLevelSegment with overlapping segment
-// 10. Create new segments based on merge results, push them into level_i
-// 11. Remove now old overlapping segments
-// 12. Continue until i >= number of levels
+/**
+ * @brief Creates a new segment from the provided memtable and handles compaction across levels.
+ *
+ * This function performs the following steps:
+ * 1. Ensures that level zero exists, creating it if necessary.
+ * 2. Creates a new segment for the provided memtable.
+ * 3. Updates the manifest with the new segment.
+ * 4. Attempts to compact segments across all levels, starting from level zero.
+ * 5. If compaction is successful, updates the manifest and flushes the compacted segment to disk.
+ * 6. Merges the compacted segment into the next level, creating the next level if it does not exist.
+ * 7. Purges the compacted segment and updates the manifest accordingly.
+ * 8. Returns the resulting segment from the compaction process, or the newly created segment if no compaction occurred.
+ *
+ * @param memtable The memtable to be converted into a segment.
+ * @return A shared pointer to the resulting segment.
+ */
 auto levels_t::segment(memtable::memtable_t memtable) -> segments::regular_segment::shared_ptr_t
 {
     // Create level zero if it doesn't exist

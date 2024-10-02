@@ -18,12 +18,12 @@ using level_operation_k = db::manifest::manifest_t::level_record_t::operation_k;
 using segment_operation_k = db::manifest::manifest_t::segment_record_t::operation_k;
 
 lsmtree_t::lsmtree_t(const config::shared_ptr_t pConfig,
-                     db::manifest::shared_ptr_t manifest,
-                     db::wal::shared_ptr_t wal) noexcept
+                     db::manifest::shared_ptr_t pManifest,
+                     db::wal::shared_ptr_t pWal) noexcept
     : m_pConfig{pConfig},
       m_table{std::make_optional<memtable::memtable_t>()},
-      m_manifest{manifest},
-      m_wal{wal},
+      m_manifest{pManifest},
+      m_wal{pWal},
       m_levels{pConfig, m_manifest}
 {
 }
@@ -36,11 +36,10 @@ void lsmtree_t::put(const structures::lsmtree::key_t &key, const structures::lsm
     // Record addition of the new key into the WAL and add record into memtable
     auto record{record_t{key, value}};
     m_wal->add({db::wal::wal_t::operation_k::add_k, record});
-    m_table->emplace(record);
+    m_table->emplace(std::move(record));
 
     // Check whether after addition size of the memtable increased above the
     // threshold. If so flush the memtable
-    // TODO(lnikon): This logic should be a part of
     if (m_table->size() >= m_pConfig->LSMTreeConfig.DiskFlushThresholdSize)
     {
         m_levels.segment(std::move(m_table.value()));
@@ -49,7 +48,7 @@ void lsmtree_t::put(const structures::lsmtree::key_t &key, const structures::lsm
     }
 }
 
-std::optional<record_t> lsmtree_t::get(const key_t &key) noexcept
+auto lsmtree_t::get(const key_t &key) noexcept -> std::optional<record_t>
 {
     assert(m_table);
 
