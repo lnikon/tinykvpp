@@ -23,8 +23,8 @@ namespace helpers = segments::helpers;
 
 using segment_operation_k = db::manifest::manifest_t::segment_record_t::operation_k;
 
-level_t::level_t(const level_index_type_t levelIndex,
-                 config::shared_ptr_t pConfig,
+level_t::level_t(const level_index_type_t   levelIndex,
+                 config::shared_ptr_t       pConfig,
                  db::manifest::shared_ptr_t manifest) noexcept
     : m_pConfig{std::move(pConfig)},
       m_levelIndex{levelIndex},
@@ -106,8 +106,8 @@ auto level_t::compact() const noexcept -> segments::regular_segment::shared_ptr_
 
     std::priority_queue<
         std::pair<typename memtable::memtable_t::const_iterator, typename memtable::memtable_t::const_iterator>,
-        std::vector<std::pair<typename memtable::memtable_t::const_iterator,
-                              typename memtable::memtable_t::const_iterator>>,
+        std::vector<
+            std::pair<typename memtable::memtable_t::const_iterator, typename memtable::memtable_t::const_iterator>>,
         IteratorCompare<memtable_t, memtable_t>>
         minHeap;
 
@@ -188,8 +188,8 @@ void level_t::merge(const segments::regular_segment::shared_ptr_t &pSegment) noe
         inMemtableRecords, overlappingSegmentsRecords, std::back_inserter(mergedMemtable), std::less<>{});
 
     // TODO(lnikon): Make this parameter configurable. Use measurement units(mb).
-    const std::size_t segmentSize{1024};
-    memtable::memtable_t newMemtable;
+    const std::size_t                    segmentSize{1024};
+    memtable::memtable_t                 newMemtable;
     segments::storage::segment_storage_t newSegments;
 
     for (const auto &currentRecord : mergedMemtable)
@@ -244,16 +244,6 @@ void level_t::purge(const segments::types::name_t &segment_name) const noexcept
     }
 }
 
-/**
- * @brief Purges all segments from the given storage.
- *
- * This function clears all segments from the provided segment storage. It first
- * copies all segments into a temporary vector, ensuring that each segment is valid.
- * Then, it purges each segment individually. Finally, it clears the in-memory
- * segment storage and logs the operation.
- *
- * @param storage Reference to the segment storage to be purged.
- */
 void level_t::purge(segments::storage::segment_storage_t &storage) const noexcept
 {
     std::vector<segments::regular_segment::shared_ptr_t> segments;
@@ -296,7 +286,7 @@ auto level_t::bytes_used() const noexcept -> std::size_t
         result += (*begin)->num_of_bytes_used();
     }
     return result;
-} 
+}
 
 auto level_t::storage() -> segments::storage::shared_ptr_t
 {

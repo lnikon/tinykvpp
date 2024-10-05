@@ -2,6 +2,7 @@
 #include <config/config.h>
 #include <db/db.h>
 #include <iostream>
+#include <new>
 #include <spdlog/common.h>
 #include <spdlog/spdlog.h>
 
@@ -27,9 +28,9 @@ int main(int argc, char *argv[])
     spdlog::set_level(spdlog::level::debug);
 
     auto pConfig = config::make_shared();
-    pConfig->LSMTreeConfig.DiskFlushThresholdSize = 1024;
-    pConfig->LSMTreeConfig.LevelZeroCompactionThreshold = 1024;
-    pConfig->LSMTreeConfig.LevelNonZeroCompactionThreshold = 1024;
+    pConfig->LSMTreeConfig.DiskFlushThresholdSize = 128;
+    pConfig->LSMTreeConfig.LevelZeroCompactionThreshold = 128;
+    pConfig->LSMTreeConfig.LevelNonZeroCompactionThreshold = 128;
     db::db_t db(pConfig);
     if (!db.open())
     {

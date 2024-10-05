@@ -18,8 +18,8 @@ class level_t
      *
      * @param pConfig
      */
-    explicit level_t(level_index_type_t levelIndex,
-                     config::shared_ptr_t pConfig,
+    explicit level_t(level_index_type_t         levelIndex,
+                     config::shared_ptr_t       pConfig,
                      db::manifest::shared_ptr_t manifest) noexcept;
 
     /**
@@ -85,13 +85,33 @@ class level_t
     [[__nodiscard__]] auto bytes_used() const noexcept -> std::size_t;
 
   private:
+    /**
+     * @brief Purges all segments from the given storage.
+     *
+     * This function clears all segments from the provided segment storage. It first
+     * copies all segments into a temporary vector, ensuring that each segment is valid.
+     * Then, it purges each segment individually. Finally, it clears the in-memory
+     * segment storage and logs the operation.
+     *
+     * @param storage Reference to the segment storage to be purged.
+     */
     void purge(segments::storage::segment_storage_t &m_pStorage) const noexcept;
+
+    /**
+     * @brief Purges the specified segment from the level.
+     *
+     * This function removes the given segment from the level, logs the removal,
+     * updates the manifest to reflect the removal, purges the segment, and
+     * removes it from storage.
+     *
+     * @param pSegment A shared pointer to the segment to be purged. Must not be null.
+     */
     void purge(const segments::regular_segment::shared_ptr_t &pSegment) const noexcept;
 
-    level_index_type_t m_levelIndex;
-    config::shared_ptr_t m_pConfig;
+    level_index_type_t              m_levelIndex;
+    config::shared_ptr_t            m_pConfig;
     segments::storage::shared_ptr_t m_pStorage;
-    db::manifest::shared_ptr_t m_manifest;
+    db::manifest::shared_ptr_t      m_manifest;
 };
 
 using shared_ptr_t = std::shared_ptr<level_t>;

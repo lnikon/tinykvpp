@@ -1,18 +1,19 @@
 #ifndef STRUCTURES_LSMTREE_LSMTREE_T_H
 #define STRUCTURES_LSMTREE_LSMTREE_T_H
 
+#include "structures/memtable/memtable.h"
 #include <db/manifest/manifest.h>
 #include <db/wal/wal.h>
 #include <structures/lsmtree/levels/levels.h>
 #include <structures/lsmtree/lsmtree_config.h>
 #include <structures/lsmtree/lsmtree_types.h>
+#include "concurrency/thread_safe_queue.h"
 
 #include <cassert>
 #include <optional>
 
 namespace structures::lsmtree
 {
-
 
 class lsmtree_t
 {
@@ -21,12 +22,12 @@ class lsmtree_t
      * @brief Constructs an instance of lsmtree_t.
      *
      * @param pConfig Shared pointer to the configuration object.
-     * @param manifest Shared pointer to the database manifest.
-     * @param wal Shared pointer to the write-ahead log.
+     * @param pManifest Shared pointer to the database manifest.
+     * @param pWal Shared pointer to the write-ahead log.
      */
-    explicit lsmtree_t(config::shared_ptr_t pConfig,
-                       db::manifest::shared_ptr_t pManifest,
-                       db::wal::shared_ptr_t pWal) noexcept;
+    explicit lsmtree_t(const config::shared_ptr_t &pConfig,
+                       db::manifest::shared_ptr_t  pManifest,
+                       db::wal::shared_ptr_t       pWal) noexcept;
 
     /**
      * @brief Deleted default constructor for the lsmtree_t class.
@@ -116,15 +117,43 @@ class lsmtree_t
     auto recover() noexcept -> bool;
 
   private:
+    /**
+     * @brief Restores the manifest from the persistent storage.
+     *
+     * This function iterates over the records in the manifest and applies the necessary operations
+     * to restore the state of the LSM tree. It handles both segment and level records, performing
+     * operations such as adding or removing segments and creating levels. After applying all
+     * modifications, it restores the in-memory indices for all levels.
+     *
+     * @return true if the manifest is successfully restored, false otherwise.
+     */
     auto restore_manifest() noexcept -> bool;
+
+    /**
+     * @brief Restores the Write-Ahead Log (WAL) for the LSM tree.
+     *
+     * This function iterates through the records in the WAL and applies the operations
+     * to the in-memory table (memtable). It supports adding records to the memtable
+     * but does not support recovery of delete operations.
+     *
+     * @return true if the WAL was successfully restored.
+     */
     auto restore_wal() noexcept -> bool;
 
+    // Configuration shared throughout the database
     const config::shared_ptr_t m_pConfig;
+
+    // Data storage. Protected by @m_mutex.
+    absl::Mutex                         m_mutex;
     std::optional<memtable::memtable_t> m_table;
-    db::manifest::shared_ptr_t m_manifest;
-    db::wal::shared_ptr_t m_wal;
-    levels::levels_t m_levels;
-    // TODO: bloom_filter_t m_bloom;
+    db::manifest::shared_ptr_t          m_pManifest;
+    db::wal::shared_ptr_t               m_pWal;
+    levels::levels_t                    m_levels;
+
+    // Communication channels. Thread-safe queues for inter-thread communication.
+    std::thread m_flushing_thread;
+
+    concurrency::thread_safe_queue_t<memtable::memtable_t> m_flushing_queue;
 };
 
 } // namespace structures::lsmtree

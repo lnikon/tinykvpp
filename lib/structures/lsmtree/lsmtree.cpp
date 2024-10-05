@@ -1,4 +1,5 @@
 #include "db/wal/wal.h"
+#include <absl/synchronization/mutex.h>
 #include <cassert>
 #include <db/manifest/manifest.h>
 #include <sstream>
@@ -8,6 +9,7 @@
 #include <structures/lsmtree/segments/lsmtree_segment_factory.h>
 
 #include <optional>
+#include <utility>
 
 #include <spdlog/spdlog.h>
 
@@ -17,39 +19,51 @@ namespace structures::lsmtree
 using level_operation_k = db::manifest::manifest_t::level_record_t::operation_k;
 using segment_operation_k = db::manifest::manifest_t::segment_record_t::operation_k;
 
-lsmtree_t::lsmtree_t(const config::shared_ptr_t pConfig,
-                     db::manifest::shared_ptr_t pManifest,
-                     db::wal::shared_ptr_t pWal) noexcept
+/**
+ * ============================================================================
+ * Public interface
+ * ============================================================================
+ */
+
+lsmtree_t::lsmtree_t(const config::shared_ptr_t &pConfig,
+                     db::manifest::shared_ptr_t  pManifest,
+                     db::wal::shared_ptr_t       pWal) noexcept
     : m_pConfig{pConfig},
       m_table{std::make_optional<memtable::memtable_t>()},
-      m_manifest{pManifest},
-      m_wal{pWal},
-      m_levels{pConfig, m_manifest}
+      m_pManifest{std::move(pManifest)},
+      m_pWal{std::move(pWal)},
+      m_levels{pConfig, m_pManifest}
 {
 }
 
 void lsmtree_t::put(const structures::lsmtree::key_t &key, const structures::lsmtree::value_t &value) noexcept
 {
-    assert(m_table);
     assert(m_pConfig);
+
+    absl::WriterMutexLock lock{&m_mutex};
+    assert(m_table);
 
     // Record addition of the new key into the WAL and add record into memtable
     auto record{record_t{key, value}};
-    m_wal->add({db::wal::wal_t::operation_k::add_k, record});
+    m_pWal->add({db::wal::wal_t::operation_k::add_k, record});
     m_table->emplace(std::move(record));
 
-    // Check whether after addition size of the memtable increased above the
-    // threshold. If so flush the memtable
     if (m_table->size() >= m_pConfig->LSMTreeConfig.DiskFlushThresholdSize)
     {
-        m_levels.segment(std::move(m_table.value()));
+        // Move the current memtable to the flushing queue for disk persistence
+        m_flushing_queue.push(std::move(m_table.value()));
+
+        // Create a new empty memtable to replace the old one
         m_table = std::make_optional<memtable::memtable_t>();
-        m_wal->reset();
+
+        // Reset the Write-Ahead Log (WAL) to start logging anew
+        m_pWal->reset();
     }
 }
 
 auto lsmtree_t::get(const key_t &key) noexcept -> std::optional<record_t>
 {
+    absl::ReaderMutexLock lock{&m_mutex};
     assert(m_table);
 
     // TODO(lnikon): Skip searching if record doesn't exist
@@ -76,36 +90,42 @@ auto lsmtree_t::get(const key_t &key) noexcept -> std::optional<record_t>
 auto lsmtree_t::recover() noexcept -> bool
 {
     assert(m_pConfig);
-    assert(m_manifest);
+    assert(m_pManifest);
 
     // Disable all updates to manifest in recovery phase
     // because nothing new is happening, lsmtree is re-using already
     // existing information
-    m_manifest->disable();
+    m_pManifest->disable();
 
     // Restore lsmtree structure from the manifest file
     if (!restore_manifest())
     {
-        spdlog::error("Unable to restore manifest at {}", m_manifest->path().c_str());
+        spdlog::error("Unable to restore manifest at {}", m_pManifest->path().c_str());
         return false;
     }
 
     // Restore memtable from WAL
     if (!restore_wal())
     {
-        spdlog::error("Unable to restore WAL at {}", m_wal->path().c_str());
+        spdlog::error("Unable to restore WAL at {}", m_pWal->path().c_str());
         return false;
     }
 
     // Enable updates to manifest after recovery is finished
-    m_manifest->enable();
+    m_pManifest->enable();
 
     return true;
 }
 
+/**
+ * ============================================================================
+ * Private, utility functions
+ * ============================================================================
+ */
+
 auto lsmtree_t::restore_manifest() noexcept -> bool
 {
-    const auto &records{m_manifest->records()};
+    const auto &records{m_pManifest->records()};
     for (const auto &record : records)
     {
         std::visit(
@@ -183,7 +203,7 @@ auto lsmtree_t::restore_manifest() noexcept -> bool
     // Now is that all modifications are applied to the segments storage it is time to restore segments.
     // This will repopulate indices
     spdlog::info("Restoring in-memory indices");
-    const auto level_count{m_levels.size()};
+    const auto  level_count{m_levels.size()};
     std::size_t current_level_idx{0};
     while (current_level_idx != level_count)
     {
@@ -212,7 +232,7 @@ auto lsmtree_t::restore_wal() noexcept -> bool
         return strStream.str();
     };
 
-    const auto &records{m_wal->records()};
+    const auto &records{m_pWal->records()};
     for (const auto &record : records)
     {
         switch (record.op)

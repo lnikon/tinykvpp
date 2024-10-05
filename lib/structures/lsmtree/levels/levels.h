@@ -25,7 +25,7 @@ class levels_t
      *
      * @param pConfig
      */
-    explicit levels_t(config::shared_ptr_t pConfig, db::manifest::shared_ptr_t manifest) noexcept;
+    explicit levels_t(config::shared_ptr_t pConfig, db::manifest::shared_ptr_t pManifest) noexcept;
 
     /**
      * @brief
@@ -59,9 +59,9 @@ class levels_t
     [[nodiscard]] auto size() const noexcept -> levels_storage_t::size_type;
 
   private:
-    config::shared_ptr_t m_pConfig;
-    levels_storage_t m_levels;
-    db::manifest::shared_ptr_t m_manifest;
+    config::shared_ptr_t       m_pConfig;
+    db::manifest::shared_ptr_t m_pManifest;
+    levels_storage_t           m_levels;
 };
 
 } // namespace structures::lsmtree::levels
