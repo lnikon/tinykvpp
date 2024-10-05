@@ -53,17 +53,20 @@ void level_t::emplace(const lsmtree::segments::regular_segment::shared_ptr_t &pS
 auto level_t::segment(memtable::memtable_t memtable) -> segments::regular_segment::shared_ptr_t
 {
     // Generate name for the segment
-    const auto name{fmt::format("{}_{}", helpers::segment_name(), index())};
+    auto name{fmt::format("{}_{}", helpers::segment_name(), index())};
+    return segment(std::move(memtable), name);
+}
 
+auto level_t::segment(memtable::memtable_t memtable, const std::string &name) -> segments::regular_segment::shared_ptr_t
+{
     // Generate a path for the segment, including its name, then based on @type and @pMemtable create a segment
     auto pSegment{segments::factories::lsmtree_segment_factory(
         name, helpers::segment_path(m_pConfig->datadir_path(), name), std::move(memtable))};
+    assert(pSegment);
 
-    // Store newly created segment into the storage
-    emplace(pSegment);
-
-    // Flush newly created segment
-    pSegment->flush();
+    // Add the segment to the storage and flush it to disk
+    // emplace(pSegment);
+    // pSegment->flush();
 
     return pSegment;
 }

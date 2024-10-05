@@ -5,6 +5,7 @@
         "lsmtree",
         "Memtable",
         "memtables",
-        "spdlog"
+        "spdlog",
+        "stoken"
     ]
 }

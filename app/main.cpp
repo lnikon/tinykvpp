@@ -115,5 +115,7 @@ int main(int argc, char *argv[])
         std::cout << std::endl;
     }
 
+    int *p = new int[1000000];
+
     return 0;
 }

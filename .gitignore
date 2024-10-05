@@ -1,7 +1,11 @@
 vcpkg_installed
 build
-g
+.fleet
+.idea
+current
+manifest_*
 ndows
+logs.txt
 # Windows thumbnail cache files
 Thumbs.db
 Thumbs.db:encryptable

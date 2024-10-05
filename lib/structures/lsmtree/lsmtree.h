@@ -67,6 +67,15 @@ class lsmtree_t
     lsmtree_t(lsmtree_t &&) = delete;
 
     /**
+     * @brief Destructor for the lsmtree_t class.
+     *
+     * This destructor ensures that the flushing thread is properly joined before
+     * the object is destroyed. If the flushing thread is joinable, it will be
+     * joined. If it is not joinable, an error message will be logged using spdlog.
+     */
+    ~lsmtree_t() noexcept;
+
+    /**
      * @brief Deleted move assignment operator.
      *
      * This move assignment operator is explicitly deleted to prevent
@@ -151,8 +160,7 @@ class lsmtree_t
     levels::levels_t                    m_levels;
 
     // Communication channels. Thread-safe queues for inter-thread communication.
-    std::thread m_flushing_thread;
-
+    std::jthread                                           m_flushing_thread;
     concurrency::thread_safe_queue_t<memtable::memtable_t> m_flushing_queue;
 };
 

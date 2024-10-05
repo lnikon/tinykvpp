@@ -157,7 +157,7 @@ auto memtable_t::min() const noexcept -> std::optional<memtable_t::record_t::key
 auto memtable_t::max() const noexcept -> std::optional<memtable_t::record_t::key_t>
 {
     storage_t::const_iterator beforeEnd{m_data.cbegin()};
-    auto idx{0};
+    auto                      idx{0};
     for (auto begin{m_data.cbegin()}; begin != m_data.cend(); ++begin)
     {
         if (idx++ == 0)

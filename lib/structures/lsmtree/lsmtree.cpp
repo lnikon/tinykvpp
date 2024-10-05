@@ -1,8 +1,10 @@
 #include "db/wal/wal.h"
+#include "structures/memtable/memtable.h"
 #include <absl/synchronization/mutex.h>
 #include <cassert>
 #include <db/manifest/manifest.h>
 #include <sstream>
+#include <stop_token>
 #include <structures/lsmtree/lsmtree_types.h>
 #include <structures/lsmtree/segments/helpers.h>
 #include <structures/lsmtree/lsmtree.h>
@@ -32,8 +34,32 @@ lsmtree_t::lsmtree_t(const config::shared_ptr_t &pConfig,
       m_table{std::make_optional<memtable::memtable_t>()},
       m_pManifest{std::move(pManifest)},
       m_pWal{std::move(pWal)},
-      m_levels{pConfig, m_pManifest}
+      m_levels{pConfig, m_pManifest},
+      m_flushing_thread(
+          [this](std::stop_token stoken)
+          {
+              //   return;
+              // Continuously flush memtables to disk
+              // TODO: Is it possible to do the flushing async?
+              while (true)
+              {
+                  if (stoken.stop_requested())
+                  {
+                      break;
+                  }
+
+                  if (std::optional<memtable::memtable_t> memtable = m_flushing_queue.pop(); memtable.has_value())
+                  {
+                      assert(m_levels.flush_to_level0(memtable.value()));
+                  }
+              }
+          })
 {
+}
+
+lsmtree_t::~lsmtree_t() noexcept
+{
+    m_flushing_thread.request_stop();
 }
 
 void lsmtree_t::put(const structures::lsmtree::key_t &key, const structures::lsmtree::value_t &value) noexcept

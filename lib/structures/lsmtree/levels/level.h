@@ -41,6 +41,19 @@ class level_t
     [[maybe_unused]] auto segment(memtable::memtable_t pMemtable) -> segments::regular_segment::shared_ptr_t;
 
     /**
+     * @brief Creates a new segment from the given memtable and stores it.
+     *
+     * This function generates a path for the segment using the provided name,
+     * creates a segment based on the memtable, stores the newly created segment
+     * into the storage, and then flushes the segment.
+     *
+     * @param memtable The memtable to be converted into a segment.
+     * @param name The name to be used for the segment.
+     * @return A shared pointer to the newly created segment.
+     */
+    auto segment(memtable::memtable_t memtable, const std::string &name) -> segments::regular_segment::shared_ptr_t;
+
+    /**
      * @brief
      *
      * @param key
