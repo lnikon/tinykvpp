@@ -16,6 +16,8 @@
 
 #include <spdlog/spdlog.h>
 
+#include <absl/debugging/stacktrace.h>
+
 namespace structures::lsmtree::level
 {
 
@@ -37,6 +39,7 @@ void level_t::emplace(const lsmtree::segments::regular_segment::shared_ptr_t &pS
 {
     assert(pSegment);
     spdlog::info("Adding segment {} into level {}", pSegment->get_name(), index());
+
     if (index() == 0)
     {
         m_pStorage->emplace(pSegment, segments::storage::last_write_time_comparator_t{});
@@ -65,8 +68,8 @@ auto level_t::segment(memtable::memtable_t memtable, const std::string &name) ->
     assert(pSegment);
 
     // Add the segment to the storage and flush it to disk
-    // emplace(pSegment);
-    // pSegment->flush();
+    emplace(pSegment);
+    pSegment->flush();
 
     return pSegment;
 }

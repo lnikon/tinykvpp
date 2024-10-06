@@ -1,10 +1,13 @@
 #include "memtable.h"
 #include <config/config.h>
 #include <db/db.h>
+
 #include <iostream>
-#include <new>
+
 #include <spdlog/common.h>
 #include <spdlog/spdlog.h>
+
+#include <absl/debugging/stacktrace.h>
 
 using mem_key_t = structures::memtable::memtable_t::record_t::key_t;
 using mem_value_t = structures::memtable::memtable_t::record_t::value_t;
@@ -25,12 +28,14 @@ int main(int argc, char *argv[])
     //   return 1;
     // }
 
-    spdlog::set_level(spdlog::level::debug);
+    spdlog::set_level(spdlog::level::info);
+
+    spdlog::info("HAS _GLIBCXX_HAVE_STACKTRACE");
 
     auto pConfig = config::make_shared();
-    pConfig->LSMTreeConfig.DiskFlushThresholdSize = 128;
-    pConfig->LSMTreeConfig.LevelZeroCompactionThreshold = 128;
-    pConfig->LSMTreeConfig.LevelNonZeroCompactionThreshold = 128;
+    pConfig->LSMTreeConfig.DiskFlushThresholdSize = 1024;
+    pConfig->LSMTreeConfig.LevelZeroCompactionThreshold = 1024;
+    pConfig->LSMTreeConfig.LevelNonZeroCompactionThreshold = 1024;
     db::db_t db(pConfig);
     if (!db.open())
     {
@@ -114,8 +119,6 @@ int main(int argc, char *argv[])
         recordOpt->write(std::cout);
         std::cout << std::endl;
     }
-
-    int *p = new int[1000000];
 
     return 0;
 }

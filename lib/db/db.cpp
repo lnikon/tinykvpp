@@ -30,12 +30,12 @@ auto db_t::open() -> bool
     }
 
     // Read on-disk components of lsmtree
-    // if (!m_manifest->recover())
-    // {
-    //     // TODO(lnikon): Maybe use error codes?
-    //     spdlog::error("unable to recover manifest file. path={}", m_manifest->path().string());
-    //     return false;
-    // }
+    if (!m_manifest->recover())
+    {
+        // TODO(lnikon): Maybe use error codes?
+        spdlog::error("unable to recover manifest file. path={}", m_manifest->path().string());
+        return false;
+    }
 
     // Open the WAL
     if (!m_wal->open())
@@ -45,18 +45,18 @@ auto db_t::open() -> bool
     }
 
     // Recover WAL
-    // if (!m_wal->recover())
-    // {
-    //     spdlog::error("unable to recover WAL file. path={}", m_wal->path().string());
-    //     return false;
-    // }
+    if (!m_wal->recover())
+    {
+        spdlog::error("unable to recover WAL file. path={}", m_wal->path().string());
+        return false;
+    }
 
     // Restore lsmtree based on manifest and WAL
-    // if (!m_lsmTree.recover())
-    // {
-    //     spdlog::error("Unable to restore the database at {}", m_config->DatabaseConfig.DatabasePath.c_str());
-    //     return false;
-    // }
+    if (!m_lsmTree.recover())
+    {
+        spdlog::error("Unable to restore the database at {}", m_config->DatabaseConfig.DatabasePath.c_str());
+        return false;
+    }
 
     return true;
 }

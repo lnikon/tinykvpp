@@ -23,12 +23,18 @@ regular_segment_t::regular_segment_t(fs::path_t path, types::name_t name, memtab
 {
 }
 
-[[nodiscard]] std::vector<std::optional<record_t>> regular_segment_t::record(const lsmtree::key_t &key)
+[[nodiscard]] auto regular_segment_t::record(const lsmtree::key_t &key) -> std::vector<std::optional<record_t>>
 {
-    assert(!m_hashIndex.empty());
+    if (m_hashIndex.empty())
+    {
+        spdlog::warn("Hash index is empty for segment {}", m_path.c_str());
+        // restore_index();
+        assert(!m_hashIndex.empty());
+    }
 
     const auto offsets{m_hashIndex.offset(key)};
-    if (offsets.empty()) {
+    if (offsets.empty())
+    {
         return {};
     }
 
@@ -42,7 +48,7 @@ regular_segment_t::regular_segment_t(fs::path_t path, types::name_t name, memtab
     return result;
 }
 
-std::optional<record_t> regular_segment_t::record(const hashindex::hashindex_t::offset_t &offset)
+auto regular_segment_t::record(const hashindex::hashindex_t::offset_t &offset) -> std::optional<record_t>
 {
     std::fstream ss{get_path(), std::ios::in};
     ss.seekg(offset);
@@ -56,16 +62,23 @@ std::optional<record_t> regular_segment_t::record(const hashindex::hashindex_t::
 void regular_segment_t::flush()
 {
     // Skip execution if for some reason the memtable is empty
-    if (m_memtable.has_value() && m_memtable->empty())
+    if (!m_memtable.has_value())
     {
         spdlog::warn("Can not flush empty memtable at segment {}", m_path.c_str());
         return;
     }
 
+    if (m_memtable->empty())
+    {
+        spdlog::warn("Can not flush memtable of size 0 at segment {}", m_path.c_str());
+        return;
+    }
+
     // Serialize memtable into stringstream and build hash index
     std::stringstream stringStream;
-    std::size_t cursor{0};
-    for (std::size_t recordIndex{0}; const auto &record : m_memtable.value())
+    std::size_t       cursor{0};
+    const auto       &memtable = m_memtable.value();
+    for (std::size_t recordIndex{0}; const auto &record : memtable)
     {
         std::size_t ss_before = stringStream.tellp();
         record.write(stringStream);
@@ -109,7 +122,8 @@ void regular_segment_t::flush()
     stream.flush();
 
     // TODO(lnikon): Free the memory occupied by the segment on successful flush
-    // m_memtablea = memtable_t{};
+    m_memtable = memtable_t{};
+    assert(!m_hashIndex.empty());
 }
 
 void regular_segment_t::purge()
@@ -196,7 +210,7 @@ void regular_segment_t::restore_index()
     std::fstream sst(m_path);
     if (!sst.is_open())
     {
-        // TODO(lnikon): Better way to handle this case. Wihout exceptions.
+        // TODO(lnikon): Better way to handle this case. Without exceptions.
         throw std::runtime_error("unable to open SST " + m_path.string());
     }
 
@@ -232,6 +246,12 @@ void regular_segment_t::restore_index()
         bytesRead += line.size() + 1;
 
         m_hashIndex.emplace(structures::lsmtree::record_t{key_t{key}, value_t{}}, offset);
+    }
+
+    if (m_hashIndex.empty())
+    {
+        spdlog::warn("(restore_index): Hash index is empty for segment {}", m_path.c_str());
+        assert(!m_hashIndex.empty());
     }
 }
 

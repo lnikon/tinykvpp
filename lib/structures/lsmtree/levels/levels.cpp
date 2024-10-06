@@ -3,6 +3,7 @@
 //
 
 #include "levels.h"
+#include <absl/synchronization/mutex.h>
 #include <cassert>
 #include <db/manifest/manifest.h>
 #include "../segments/helpers.h"

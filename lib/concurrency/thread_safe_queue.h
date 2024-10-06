@@ -5,6 +5,7 @@
 #include <queue>
 
 #include <absl/synchronization/mutex.h>
+#include <spdlog/spdlog.h>
 
 namespace concurrency
 {
@@ -15,6 +16,7 @@ template <typename TItem> class thread_safe_queue_t
     void push(TItem item)
     {
         absl::MutexLock lock(&m_mutex);
+        spdlog::debug("Pushing item to the queue. size={}", m_queue.size());
         m_queue.push(std::move(item));
     }
 
@@ -27,14 +29,27 @@ template <typename TItem> class thread_safe_queue_t
             return std::nullopt;
         }
 
-        auto item = std::make_optional(std::move(m_queue.front()));
+        spdlog::debug("Popping item from the queue. size={}", m_queue.size());
+        auto item = std::make_optional(m_queue.front());
         m_queue.pop();
         return item;
+    }
+
+    auto pop_all() -> std::queue<TItem>
+    {
+        absl::MutexLock lock(&m_mutex);
+        if (m_queue.empty())
+        {
+            return {};
+        }
+
+        return std::move(m_queue);
     }
 
     auto size() -> std::size_t
     {
         absl::MutexLock lock(&m_mutex);
+        spdlog::debug("Getting queue size. size={}", m_queue.size());
         return m_queue.size();
     }
 

@@ -35,22 +35,52 @@ lsmtree_t::lsmtree_t(const config::shared_ptr_t &pConfig,
       m_pManifest{std::move(pManifest)},
       m_pWal{std::move(pWal)},
       m_levels{pConfig, m_pManifest},
+      m_recovered(false),
       m_flushing_thread(
           [this](std::stop_token stoken)
           {
-              //   return;
+              // Wait until LSMTree is recovered. Important during the DB opening phase.
+              while (!m_recovered.load())
+              {
+                  if (stoken.stop_requested())
+                  {
+                      break;
+                  }
+              }
+
+              spdlog::info("LSMTree flushing thread started");
+
               // Continuously flush memtables to disk
               // TODO: Is it possible to do the flushing async?
               while (true)
               {
                   if (stoken.stop_requested())
                   {
-                      break;
+                      // Flush the remaining memtables on stop request
+                      spdlog::info("Flushing remaining memtables on stop request. queue.size={}",
+                                   m_flushing_queue.size());
+
+                      auto memtables = m_flushing_queue.pop_all();
+                      while (!memtables.empty())
+                      {
+                          auto memtable = memtables.front();
+                          memtables.pop();
+
+                          // TODO: Assert will crash the program, maybe we should return an error code?
+                          assert(m_levels.flush_to_level0(std::move(memtable)));
+                      }
+                      return;
                   }
 
-                  if (std::optional<memtable::memtable_t> memtable = m_flushing_queue.pop(); memtable.has_value())
+                  if (std::optional<memtable::memtable_t> memtable = m_flushing_queue.pop();
+                      memtable.has_value() && !memtable->empty())
                   {
-                      assert(m_levels.flush_to_level0(memtable.value()));
+                      spdlog::info("Flushing memtable to level0. memtable.size={}, flushing_queue.size={}",
+                                   memtable.value().size(),
+                                   m_flushing_queue.size());
+                      // TODO: Assert will crash the program, maybe we should return an error code?
+                      absl::WriterMutexLock lock{&m_mutex};
+                      assert(m_levels.flush_to_level0(std::move(memtable.value())));
                   }
               }
           })
@@ -60,6 +90,7 @@ lsmtree_t::lsmtree_t(const config::shared_ptr_t &pConfig,
 lsmtree_t::~lsmtree_t() noexcept
 {
     m_flushing_thread.request_stop();
+    m_flushing_thread.join();
 }
 
 void lsmtree_t::put(const structures::lsmtree::key_t &key, const structures::lsmtree::value_t &value) noexcept
@@ -74,12 +105,13 @@ void lsmtree_t::put(const structures::lsmtree::key_t &key, const structures::lsm
     m_pWal->add({db::wal::wal_t::operation_k::add_k, record});
     m_table->emplace(std::move(record));
 
+    // TODO: Most probably this if block will causes periodic latencies during reads when the condition is met
     if (m_table->size() >= m_pConfig->LSMTreeConfig.DiskFlushThresholdSize)
     {
-        // Move the current memtable to the flushing queue for disk persistence
+        // Push the memtable to the flushing queue
         m_flushing_queue.push(std::move(m_table.value()));
 
-        // Create a new empty memtable to replace the old one
+        // Create a new memtable
         m_table = std::make_optional<memtable::memtable_t>();
 
         // Reset the Write-Ahead Log (WAL) to start logging anew
@@ -124,14 +156,14 @@ auto lsmtree_t::recover() noexcept -> bool
     m_pManifest->disable();
 
     // Restore lsmtree structure from the manifest file
-    if (!restore_manifest())
+    if (!restore_from_manifest())
     {
         spdlog::error("Unable to restore manifest at {}", m_pManifest->path().c_str());
         return false;
     }
 
     // Restore memtable from WAL
-    if (!restore_wal())
+    if (!restore_from_wal())
     {
         spdlog::error("Unable to restore WAL at {}", m_pWal->path().c_str());
         return false;
@@ -139,6 +171,9 @@ auto lsmtree_t::recover() noexcept -> bool
 
     // Enable updates to manifest after recovery is finished
     m_pManifest->enable();
+
+    // Signal that recovery is finished
+    m_recovered.store(true);
 
     return true;
 }
@@ -149,7 +184,7 @@ auto lsmtree_t::recover() noexcept -> bool
  * ============================================================================
  */
 
-auto lsmtree_t::restore_manifest() noexcept -> bool
+auto lsmtree_t::restore_from_manifest() noexcept -> bool
 {
     const auto &records{m_pManifest->records()};
     for (const auto &record : records)
@@ -225,10 +260,11 @@ auto lsmtree_t::restore_manifest() noexcept -> bool
             record);
     }
 
+    spdlog::info("Restoring in-memory indices");
+
     // A little bit of printbugging :)
     // Now is that all modifications are applied to the segments storage it is time to restore segments.
     // This will repopulate indices
-    spdlog::info("Restoring in-memory indices");
     const auto  level_count{m_levels.size()};
     std::size_t current_level_idx{0};
     while (current_level_idx != level_count)
@@ -249,7 +285,7 @@ auto lsmtree_t::restore_manifest() noexcept -> bool
     return true;
 }
 
-auto lsmtree_t::restore_wal() noexcept -> bool
+auto lsmtree_t::restore_from_wal() noexcept -> bool
 {
     auto stringify_record = [](const memtable_t::record_t &record) -> std::string
     {

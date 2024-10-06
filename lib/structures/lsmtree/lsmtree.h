@@ -2,6 +2,7 @@
 #define STRUCTURES_LSMTREE_LSMTREE_T_H
 
 #include "structures/memtable/memtable.h"
+#include <atomic>
 #include <db/manifest/manifest.h>
 #include <db/wal/wal.h>
 #include <structures/lsmtree/levels/levels.h>
@@ -136,7 +137,7 @@ class lsmtree_t
      *
      * @return true if the manifest is successfully restored, false otherwise.
      */
-    auto restore_manifest() noexcept -> bool;
+    auto restore_from_manifest() noexcept -> bool;
 
     /**
      * @brief Restores the Write-Ahead Log (WAL) for the LSM tree.
@@ -147,7 +148,7 @@ class lsmtree_t
      *
      * @return true if the WAL was successfully restored.
      */
-    auto restore_wal() noexcept -> bool;
+    auto restore_from_wal() noexcept -> bool;
 
     // Configuration shared throughout the database
     const config::shared_ptr_t m_pConfig;
@@ -160,6 +161,7 @@ class lsmtree_t
     levels::levels_t                    m_levels;
 
     // Communication channels. Thread-safe queues for inter-thread communication.
+    std::atomic_bool                                       m_recovered;
     std::jthread                                           m_flushing_thread;
     concurrency::thread_safe_queue_t<memtable::memtable_t> m_flushing_queue;
 };

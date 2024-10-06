@@ -93,8 +93,8 @@ class memtable_t
         template <typename TSTream> void write(TSTream &outStream) const;
         template <typename TSTream> void read(TSTream &outStream);
 
-        key_t m_key;
-        value_t m_value;
+        key_t       m_key;
+        value_t     m_value;
         timestamp_t m_timestamp;
     };
 
@@ -192,7 +192,7 @@ class memtable_t
     template <typename TSTream> void read(TSTream &outStream);
 
   private:
-    storage_t m_data;
+    storage_t   m_data;
     std::size_t m_size{0};
     std::size_t m_count{0};
     std::size_t m_num_of_bytes{0};
