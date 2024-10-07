@@ -113,7 +113,7 @@ void memtable_t::emplace(memtable_t::record_t record)
     m_data.emplace(std::move(record));
 }
 
-auto memtable_t::find(const memtable_t::record_t::key_t &key) -> std::optional<memtable_t::record_t>
+auto memtable_t::find(const memtable_t::record_t::key_t &key) const noexcept -> std::optional<memtable_t::record_t>
 {
     return m_data.find(key);
 }

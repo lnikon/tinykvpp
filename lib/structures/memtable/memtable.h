@@ -133,7 +133,7 @@ class memtable_t
      *
      * @param key
      */
-    auto find(const record_t::key_t &key) -> std::optional<record_t>;
+    [[nodiscard]] auto find(const record_t::key_t &key) const noexcept -> std::optional<record_t>;
 
     /**
      * @brief

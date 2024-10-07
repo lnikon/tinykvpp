@@ -122,7 +122,7 @@ template <typename record_gt, typename comparator_gt> class skiplist_t
         return const_iterator(nullptr);
     }
 
-    auto find(const typename record_gt::key_t &key) -> std::optional<record_gt>
+    auto find(const typename record_gt::key_t &key) const noexcept -> std::optional<record_gt>
     {
         node_shared_ptr_t current{m_head};
         for (std::int64_t i = m_level; i >= 0; i--)

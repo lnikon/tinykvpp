@@ -64,7 +64,7 @@ lsmtree_t::lsmtree_t(const config::shared_ptr_t &pConfig,
                       while (!memtables.empty())
                       {
                           auto memtable = memtables.front();
-                          memtables.pop();
+                          memtables.pop_front();
 
                           // TODO: Assert will crash the program, maybe we should return an error code?
                           assert(m_levels.flush_to_level0(std::move(memtable)));
@@ -78,6 +78,7 @@ lsmtree_t::lsmtree_t(const config::shared_ptr_t &pConfig,
                       spdlog::info("Flushing memtable to level0. memtable.size={}, flushing_queue.size={}",
                                    memtable.value().size(),
                                    m_flushing_queue.size());
+
                       // TODO: Assert will crash the program, maybe we should return an error code?
                       absl::WriterMutexLock lock{&m_mutex};
                       assert(m_levels.flush_to_level0(std::move(memtable.value())));
@@ -134,6 +135,12 @@ auto lsmtree_t::get(const key_t &key) noexcept -> std::optional<record_t>
     // If bloom check passed, then record probably exists.
     // Lookup in-memory table for the table
     auto result{m_table->find(key)};
+
+    // Lookup in immutable memtables
+    if (!result.has_value())
+    {
+        result = m_flushing_queue.find<memtable::memtable_t::record_t>(key);
+    }
 
     // If key isn't in in-memory table, then it probably was flushed.
     // Lookup for the key in on-disk segments
