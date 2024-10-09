@@ -118,7 +118,7 @@ auto level_t::compact() const noexcept -> segments::regular_segment::shared_ptr_
         minHeap;
 
     std::vector<memtable_t> memtables;
-    memtables.reserve(m_pStorage->size());
+    // memtables.reserve(m_pStorage->size());
     for (const auto &segment : *m_pStorage)
     {
         auto currentMemtable = segment->memtable().value();

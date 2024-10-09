@@ -122,7 +122,7 @@ void regular_segment_t::flush()
     stream.flush();
 
     // TODO(lnikon): Free the memory occupied by the segment on successful flush
-    m_memtable = memtable_t{};
+    // m_memtable = memtable_t{};
     assert(!m_hashIndex.empty());
 }
 

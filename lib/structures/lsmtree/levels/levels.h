@@ -7,6 +7,9 @@
 #include <optional>
 #include <vector>
 
+#include <absl/synchronization/mutex.h>
+#include <absl/synchronization/notification.h>
+
 namespace structures::lsmtree::levels
 {
 
@@ -26,6 +29,8 @@ class levels_t
      * @param pConfig
      */
     explicit levels_t(config::shared_ptr_t pConfig, db::manifest::shared_ptr_t pManifest) noexcept;
+
+    ~levels_t() noexcept;
 
     /**
      * @brief
@@ -51,7 +56,7 @@ class levels_t
      * @param memtable The memtable to be converted into a segment.
      * @return A shared pointer to the resulting segment.
      */
-    [[maybe_unused]] auto segment() -> segments::regular_segment::shared_ptr_t;
+    [[maybe_unused]] auto compact() -> segments::regular_segment::shared_ptr_t;
 
     /**
      * @brief Creates and returns a shared pointer to a new level.
@@ -92,9 +97,14 @@ class levels_t
     flush_to_level0(memtable::memtable_t memtable) const noexcept -> segments::regular_segment::shared_ptr_t;
 
   private:
-    config::shared_ptr_t       m_pConfig;
+    config::shared_ptr_t m_pConfig;
+
+    mutable absl::Mutex        m_mutex;
     db::manifest::shared_ptr_t m_pManifest;
     levels_storage_t           m_levels;
+
+    mutable absl::Notification m_level0_segment_flushed_notification;
+    std::jthread               m_compaction_thread;
 };
 
 } // namespace structures::lsmtree::levels

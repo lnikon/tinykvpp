@@ -20,7 +20,27 @@ using segment_operation_k = db::manifest::manifest_t::segment_record_t::operatio
 
 levels_t::levels_t(config::shared_ptr_t pConfig, db::manifest::shared_ptr_t pManifest) noexcept
     : m_pConfig{std::move(pConfig)},
-      m_pManifest{std::move(std::move(pManifest))}
+      m_pManifest{std::move(std::move(pManifest))},
+      m_compaction_thread(
+          [this](std::stop_token stoken)
+          {
+              while (true)
+              {
+                  if (stoken.stop_requested())
+                  {
+                      return;
+                  }
+
+                  if (m_level0_segment_flushed_notification.WaitForNotificationWithTimeout(absl::Seconds(1)))
+                  {
+                      compact();
+                  }
+                  else
+                  {
+                      continue;
+                  }
+              }
+          })
 {
     // TODO: Make number of levels configurable
     // const std::size_t levelCount{m_pConfig->LSMTreeConfig.LevelCount};
@@ -32,8 +52,16 @@ levels_t::levels_t(config::shared_ptr_t pConfig, db::manifest::shared_ptr_t pMan
     }
 }
 
-auto levels_t::segment() -> segments::regular_segment::shared_ptr_t
+levels_t::~levels_t() noexcept
 {
+    m_compaction_thread.request_stop();
+    m_compaction_thread.join();
+}
+
+auto levels_t::compact() -> segments::regular_segment::shared_ptr_t
+{
+    absl::MutexLock lock{&m_mutex};
+
     segments::regular_segment::shared_ptr_t compactedCurrentLevelSegment{nullptr};
     for (std::size_t idx{0}; idx < m_levels.size(); idx++)
     {
@@ -73,18 +101,21 @@ auto levels_t::segment() -> segments::regular_segment::shared_ptr_t
         compactedCurrentLevelSegment->flush();
 
         // Create next level if it doesn't exist
-        level::shared_ptr_t nextLevel{nullptr};
-        if (currentLevel->index() + 1 == m_levels.size())
-        {
-            nextLevel = level();
-            m_pManifest->add(db::manifest::manifest_t::level_record_t{.op = level_operation_k::add_level_k,
-                                                                      .level = nextLevel->index()});
-            assert(nextLevel);
-        }
-        else
-        {
-            nextLevel = level(currentLevel->index() + 1);
-        }
+        level::shared_ptr_t nextLevel = m_levels[currentLevel->index() + 1];
+
+        // level::shared_ptr_t nextLevel{nullptr};
+        // if (currentLevel->index() + 1 == m_levels.size())
+        // {
+        //     nextLevel = level();
+        //     m_pManifest->add(db::manifest::manifest_t::level_record_t{.op = level_operation_k::add_level_k,
+        //                                                               .level = nextLevel->index()});
+        //     assert(nextLevel);
+        // }
+        // else
+        // {
+        //     /*nextLevel = level(currentLevel->index() + 1);*/
+        //     nextLevel = m_levels[currentLevel->index() + 1];
+        // }
 
         // Merge compacted @currentLevel into the @nextLevel
         nextLevel->merge(compactedCurrentLevelSegment);
@@ -107,6 +138,7 @@ auto levels_t::segment() -> segments::regular_segment::shared_ptr_t
 
 auto levels_t::level() noexcept -> level::shared_ptr_t
 {
+    absl::MutexLock lock{&m_mutex};
     return m_levels.emplace_back(level::make_shared(m_levels.size(), m_pConfig, m_pManifest));
 }
 
@@ -118,6 +150,8 @@ auto levels_t::level() noexcept -> level::shared_ptr_t
 
 auto levels_t::record(const key_t &key) const noexcept -> std::optional<record_t>
 {
+    absl::MutexLock lock{&m_mutex};
+
     std::optional<record_t> result{};
     for (const auto &currentLevel : m_levels)
     {
@@ -134,12 +168,15 @@ auto levels_t::record(const key_t &key) const noexcept -> std::optional<record_t
 
 auto levels_t::size() const noexcept -> levels_t::levels_storage_t::size_type
 {
+    absl::MutexLock lock{&m_mutex};
     return m_levels.size();
 }
 
 [[nodiscard]] auto
 levels_t::flush_to_level0(memtable::memtable_t memtable) const noexcept -> segments::regular_segment::shared_ptr_t
 {
+    absl::MutexLock lock{&m_mutex};
+
     assert(m_levels[0]);
 
     // Generate name for the segment and add it to the manifest
@@ -147,7 +184,15 @@ levels_t::flush_to_level0(memtable::memtable_t memtable) const noexcept -> segme
     m_pManifest->add(
         db::manifest::manifest_t::segment_record_t{.op = segment_operation_k::add_segment_k, .name = name, .level = 0});
 
-    return m_levels[0]->segment(std::move(memtable), name);
+    auto pSegement{m_levels[0]->segment(std::move(memtable), name)};
+    if (pSegement)
+    {
+        if (!m_level0_segment_flushed_notification.HasBeenNotified())
+        {
+            m_level0_segment_flushed_notification.Notify();
+        }
+    }
+    return pSegement;
 }
 
 } // namespace structures::lsmtree::levels

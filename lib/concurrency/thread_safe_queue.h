@@ -4,7 +4,6 @@
 #include <algorithm>
 #include <deque>
 #include <optional>
-#include <queue>
 
 #include <absl/synchronization/mutex.h>
 #include <spdlog/spdlog.h>
