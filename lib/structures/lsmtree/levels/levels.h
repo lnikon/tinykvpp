@@ -96,6 +96,8 @@ class levels_t
     [[nodiscard]] auto
     flush_to_level0(memtable::memtable_t memtable) const noexcept -> segments::regular_segment::shared_ptr_t;
 
+    auto restore() noexcept -> void;
+
   private:
     config::shared_ptr_t m_pConfig;
 

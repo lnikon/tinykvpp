@@ -5,6 +5,8 @@
 #include <config/config.h>
 #include <structures/lsmtree/segments/segment_storage.h>
 
+#include <absl/synchronization/mutex.h>
+
 namespace structures::lsmtree::level
 {
 
@@ -77,16 +79,16 @@ class level_t
      *
      * @return
      */
-    void purge() const noexcept;
+    void purge() noexcept;
 
     /**
      * @brief Find a segment by its name and purge it
      *
      * @return
      */
-    void purge(const segments::types::name_t &segment_name) const noexcept;
+    void purge(const segments::types::name_t &segmentName) noexcept;
 
-    auto storage() -> segments::storage::shared_ptr_t;
+    auto restore() noexcept -> void;
 
     /**
      * @brief Return index of the level.
@@ -99,18 +101,6 @@ class level_t
 
   private:
     /**
-     * @brief Purges all segments from the given storage.
-     *
-     * This function clears all segments from the provided segment storage. It first
-     * copies all segments into a temporary vector, ensuring that each segment is valid.
-     * Then, it purges each segment individually. Finally, it clears the in-memory
-     * segment storage and logs the operation.
-     *
-     * @param storage Reference to the segment storage to be purged.
-     */
-    void purge(segments::storage::segment_storage_t &m_pStorage) const noexcept;
-
-    /**
      * @brief Purges the specified segment from the level.
      *
      * This function removes the given segment from the level, logs the removal,
@@ -119,12 +109,14 @@ class level_t
      *
      * @param pSegment A shared pointer to the segment to be purged. Must not be null.
      */
-    void purge(const segments::regular_segment::shared_ptr_t &pSegment) const noexcept;
+    void purge(const segments::regular_segment::shared_ptr_t &pSegment) noexcept;
 
-    level_index_type_t              m_levelIndex;
-    config::shared_ptr_t            m_pConfig;
-    segments::storage::shared_ptr_t m_pStorage;
-    db::manifest::shared_ptr_t      m_manifest;
+    mutable absl::Mutex m_mutex;
+
+    const level_index_type_t             m_levelIndex;
+    config::shared_ptr_t                 m_pConfig;
+    segments::storage::segment_storage_t m_storage;
+    db::manifest::shared_ptr_t           m_manifest;
 };
 
 using shared_ptr_t = std::shared_ptr<level_t>;

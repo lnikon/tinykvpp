@@ -90,6 +90,7 @@ void regular_segment_t::flush()
         m_hashIndex.emplace(record, cursor);
         cursor += length;
     }
+    assert(!m_hashIndex.empty());
 
     // Serialize hashindex
     const auto hashIndexBlockOffset{stringStream.tellp()};
@@ -107,10 +108,11 @@ void regular_segment_t::flush()
     // Serialize footer
     stringStream << hashIndexBlockOffset << ' ' << hashIndexBlockSize << std::endl;
 
+    // Add padding to the footer end
     const auto footerPaddingSize{footerSize - (stringStream.tellp() - footerBlockOffset)};
     stringStream << std::string(footerPaddingSize, ' ') << std::endl;
 
-    // Flush the segment onto the disk
+    // Flush the segment into the disk
     std::fstream stream(get_path(), std::fstream::trunc | std::fstream::out);
     if (!stream.is_open())
     {
@@ -120,13 +122,9 @@ void regular_segment_t::flush()
     assert(!stringStream.str().empty());
     stream << stringStream.str();
     stream.flush();
-
-    // TODO(lnikon): Free the memory occupied by the segment on successful flush
-    // m_memtable = memtable_t{};
-    assert(!m_hashIndex.empty());
 }
 
-void regular_segment_t::purge()
+void regular_segment_t::remove_from_disk() const noexcept
 {
     if (std::filesystem::exists(get_path()))
     {
@@ -142,7 +140,7 @@ std::filesystem::file_time_type regular_segment_t::last_write_time()
                                                : std::filesystem::file_time_type::min();
 }
 
-std::optional<record_t::key_t> regular_segment_t::min() const noexcept
+auto regular_segment_t::min() const noexcept -> std::optional<record_t::key_t>
 {
     return m_memtable->min();
 }
@@ -169,12 +167,12 @@ auto regular_segment_t::get_path() const -> types::path_t
     return m_path;
 }
 
-std::optional<memtable::memtable_t> &regular_segment_t::memtable()
+auto regular_segment_t::memtable() -> std::optional<memtable::memtable_t> &
 {
     return m_memtable;
 }
 
-std::optional<memtable::memtable_t> regular_segment_t::moved_memtable()
+auto regular_segment_t::moved_memtable() -> std::optional<memtable::memtable_t>
 {
     return m_memtable.has_value() ? std::move(m_memtable) : std::nullopt;
 }

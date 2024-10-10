@@ -8,9 +8,9 @@
 #include <db/manifest/manifest.h>
 #include "../segments/helpers.h"
 
-#include <spdlog/spdlog.h>
-
 #include <utility>
+
+#include <spdlog/spdlog.h>
 
 namespace structures::lsmtree::levels
 {
@@ -100,31 +100,20 @@ auto levels_t::compact() -> segments::regular_segment::shared_ptr_t
         // If computation succeeded, then flush the compacted segment into disk
         compactedCurrentLevelSegment->flush();
 
-        // Create next level if it doesn't exist
+        // Get the next level
         level::shared_ptr_t nextLevel = m_levels[currentLevel->index() + 1];
+        assert(nextLevel);
 
-        // level::shared_ptr_t nextLevel{nullptr};
-        // if (currentLevel->index() + 1 == m_levels.size())
-        // {
-        //     nextLevel = level();
-        //     m_pManifest->add(db::manifest::manifest_t::level_record_t{.op = level_operation_k::add_level_k,
-        //                                                               .level = nextLevel->index()});
-        //     assert(nextLevel);
-        // }
-        // else
-        // {
-        //     /*nextLevel = level(currentLevel->index() + 1);*/
-        //     nextLevel = m_levels[currentLevel->index() + 1];
-        // }
-
-        // Merge compacted @currentLevel into the @nextLevel
-        nextLevel->merge(compactedCurrentLevelSegment);
+        // Lock the next level and merge current compacted level into it
+        {
+            nextLevel->merge(compactedCurrentLevelSegment);
+        }
 
         // Purge the segment representing the compacted level and update the manifest
         m_pManifest->add(db::manifest::manifest_t::segment_record_t{.op = segment_operation_k::remove_segment_k,
                                                                     .name = compactedCurrentLevelSegment->get_name(),
                                                                     .level = currentLevel->index()});
-        compactedCurrentLevelSegment->purge();
+        compactedCurrentLevelSegment->remove_from_disk();
 
         // After merging current level into the next level purge the current level and update the manifest
         m_pManifest->add(db::manifest::manifest_t::level_record_t{.op = level_operation_k::purge_level_k,
@@ -193,6 +182,14 @@ levels_t::flush_to_level0(memtable::memtable_t memtable) const noexcept -> segme
         }
     }
     return pSegement;
+}
+
+auto levels_t::restore() noexcept -> void
+{
+    absl::WriterMutexLock lock{&m_mutex};
+    for (auto& level : m_levels) {
+        level->restore();
+    }
 }
 
 } // namespace structures::lsmtree::levels

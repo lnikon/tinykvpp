@@ -267,26 +267,8 @@ auto lsmtree_t::restore_from_manifest() noexcept -> bool
             record);
     }
 
-    spdlog::info("Restoring in-memory indices");
-
-    // A little bit of printbugging :)
-    // Now is that all modifications are applied to the segments storage it is time to restore segments.
-    // This will repopulate indices
-    const auto  level_count{m_levels.size()};
-    std::size_t current_level_idx{0};
-    while (current_level_idx != level_count)
-    {
-        spdlog::info("Restoring level {} segments", current_level_idx);
-        auto storage{m_levels.level(current_level_idx)->storage()};
-        for (const auto &pSegment : *storage)
-        {
-            spdlog::debug("Segment name {}", pSegment->get_name());
-            pSegment->restore();
-        }
-
-        current_level_idx++;
-    }
-    spdlog::info("In-memory index restoration finished");
+    spdlog::info("Restoring levels");
+    m_levels.restore();
     spdlog::info("Recovery finished");
 
     return true;
