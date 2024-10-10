@@ -35,8 +35,8 @@ template <typename Data, typename Comparator = std::less<Data>> class sorted_vec
     auto begin() -> iterator;
     auto end() -> iterator;
 
-    [[nodiscard]] auto begin() const -> iterator;
-    [[nodiscard]] auto end() const -> iterator;
+    [[nodiscard]] auto begin() const -> const_iterator;
+    [[nodiscard]] auto end() const -> const_iterator;
 
     auto rbegin() -> reverse_iterator;
     auto rend() -> reverse_iterator;
@@ -104,15 +104,15 @@ auto sorted_vector_t<Data, Comparator>::end() -> typename sorted_vector_t<Data, 
 }
 
 template <typename Data, typename Comparator>
-auto sorted_vector_t<Data, Comparator>::begin() const -> typename sorted_vector_t<Data, Comparator>::iterator
+auto sorted_vector_t<Data, Comparator>::begin() const -> typename sorted_vector_t<Data, Comparator>::const_iterator
 {
-    return m_data.begin();
+    return m_data.cbegin();
 }
 
 template <typename Data, typename Comparator>
-auto sorted_vector_t<Data, Comparator>::end() const -> typename sorted_vector_t<Data, Comparator>::iterator
+auto sorted_vector_t<Data, Comparator>::end() const -> typename sorted_vector_t<Data, Comparator>::const_iterator
 {
-    return m_data.end();
+    return m_data.cend();
 }
 
 template <typename Data, typename Comparator>

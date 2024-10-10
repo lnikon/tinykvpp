@@ -38,8 +38,8 @@ class memtable_t
             auto operator>(const key_t &other) const -> bool;
             auto operator==(const key_t &other) const -> bool;
 
-            template <typename stream_gt> void write(stream_gt &outStream) const;
-            template <typename stream_gt> void read(stream_gt &outStream);
+            template <typename TSTream> void write(TSTream &outStream) const;
+            template <typename TSTream> void read(TSTream &outStream);
 
             [[nodiscard]] auto size() const -> std::size_t;
 
@@ -55,8 +55,8 @@ class memtable_t
 
             auto operator==(const value_t &other) const -> bool;
 
-            template <typename stream_gt> void write(stream_gt &outStream) const;
-            template <typename stream_gt> void read(stream_gt &outStream);
+            template <typename TSTream> void write(TSTream &outStream) const;
+            template <typename TSTream> void read(TSTream &outStream);
 
             [[nodiscard]] auto size() const -> std::size_t;
 
@@ -75,8 +75,8 @@ class memtable_t
 
             static void swap(timestamp_t &lhs, timestamp_t &rhs);
 
-            template <typename stream_gt> void write(stream_gt &outStream) const;
-            template <typename stream_gt> void read(stream_gt &outStream);
+            template <typename TSTream> void write(TSTream &outStream) const;
+            template <typename TSTream> void read(TSTream &outStream);
 
             underlying_value_type_t m_value;
         };
@@ -90,11 +90,11 @@ class memtable_t
 
         [[nodiscard]] auto size() const -> std::size_t;
 
-        template <typename stream_gt> void write(stream_gt &outStream) const;
-        template <typename stream_gt> void read(stream_gt &outStream);
+        template <typename TSTream> void write(TSTream &outStream) const;
+        template <typename TSTream> void read(TSTream &outStream);
 
-        key_t m_key;
-        value_t m_value;
+        key_t       m_key;
+        value_t     m_value;
         timestamp_t m_timestamp;
     };
 
@@ -133,7 +133,7 @@ class memtable_t
      *
      * @param key
      */
-    auto find(const record_t::key_t &key) -> std::optional<record_t>;
+    [[nodiscard]] auto find(const record_t::key_t &key) const noexcept -> std::optional<record_t>;
 
     /**
      * @brief
@@ -188,11 +188,11 @@ class memtable_t
      */
     auto operator<(const memtable_t &other) const -> bool;
 
-    template <typename stream_gt> void write(stream_gt &outStream) const;
-    template <typename stream_gt> void read(stream_gt &outStream);
+    template <typename TSTream> void write(TSTream &outStream) const;
+    template <typename TSTream> void read(TSTream &outStream);
 
   private:
-    storage_t m_data;
+    storage_t   m_data;
     std::size_t m_size{0};
     std::size_t m_count{0};
     std::size_t m_num_of_bytes{0};
@@ -201,13 +201,13 @@ class memtable_t
 // ------------------------------------------------
 // memtable_t::record_t::key_t
 // ------------------------------------------------
-template <typename stream_gt> void memtable_t::record_t::key_t::write(stream_gt &outStream) const
+template <typename TStream> void memtable_t::record_t::key_t::write(TStream &outStream) const
 {
     auto size = m_key.size();
     outStream << m_key.size() << ' ' << m_key;
 }
 
-template <typename stream_gt> void memtable_t::record_t::key_t::read(stream_gt &outStream)
+template <typename TSTream> void memtable_t::record_t::key_t::read(TSTream &outStream)
 {
     std::size_t size{0};
     outStream >> size;
@@ -218,12 +218,12 @@ template <typename stream_gt> void memtable_t::record_t::key_t::read(stream_gt &
 // ------------------------------------------------
 // memtable_t::record_t::value_t
 // ------------------------------------------------
-template <typename stream_gt> void memtable_t::record_t::value_t::write(stream_gt &outStream) const
+template <typename TSTream> void memtable_t::record_t::value_t::write(TSTream &outStream) const
 {
     outStream << size() << ' ' << m_value;
 }
 
-template <typename stream_gt> void memtable_t::record_t::value_t::read(stream_gt &outStream)
+template <typename TSTream> void memtable_t::record_t::value_t::read(TSTream &outStream)
 {
     std::size_t size{0};
     outStream >> size;
@@ -234,12 +234,12 @@ template <typename stream_gt> void memtable_t::record_t::value_t::read(stream_gt
 // ------------------------------------------------
 // memtable_t::record_t::timestamp_t
 // ------------------------------------------------
-template <typename stream_gt> void memtable_t::record_t::timestamp_t::write(stream_gt &outStream) const
+template <typename TSTream> void memtable_t::record_t::timestamp_t::write(TSTream &outStream) const
 {
     outStream << m_value.time_since_epoch().count();
 }
 
-template <typename stream_gt> void memtable_t::record_t::timestamp_t::read(stream_gt &outStream)
+template <typename TSTream> void memtable_t::record_t::timestamp_t::read(TSTream &outStream)
 {
     clock_t::rep count = 0;
     outStream >> count;
@@ -249,7 +249,7 @@ template <typename stream_gt> void memtable_t::record_t::timestamp_t::read(strea
 // ------------------------------------------------
 // memtable_t::record_t
 // ------------------------------------------------
-template <typename stream_gt> void memtable_t::record_t::write(stream_gt &outStream) const
+template <typename TSTream> void memtable_t::record_t::write(TSTream &outStream) const
 {
     m_key.write(outStream);
     outStream << ' ';
@@ -258,14 +258,14 @@ template <typename stream_gt> void memtable_t::record_t::write(stream_gt &outStr
     m_timestamp.write(outStream);
 }
 
-template <typename stream_gt> void memtable_t::record_t::read(stream_gt &outStream)
+template <typename TSTream> void memtable_t::record_t::read(TSTream &outStream)
 {
     m_key.read(outStream);
     m_value.read(outStream);
     m_timestamp.read(outStream);
 }
 
-template <typename stream_gt> void memtable_t::write(stream_gt &outStream) const
+template <typename TSTream> void memtable_t::write(TSTream &outStream) const
 {
     for (auto rec : *this)
     {
@@ -274,7 +274,7 @@ template <typename stream_gt> void memtable_t::write(stream_gt &outStream) const
     }
 }
 
-template <typename stream_gt> void memtable_t::read(stream_gt &outStream)
+template <typename TSTream> void memtable_t::read(TSTream &outStream)
 {
     // TODO(lnikon): Implement deserialization
 }
