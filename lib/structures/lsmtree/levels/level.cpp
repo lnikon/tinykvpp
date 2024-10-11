@@ -235,16 +235,19 @@ void level_t::purge() noexcept
 {
     absl::WriterMutexLock lock{&m_mutex};
     spdlog::info("Purging level {} with {} segments", index(), m_storage.size());
+    const auto idx{index()};
     for (auto &pSegment : m_storage)
     {
         pSegment->remove_from_disk();
+
+        m_manifest->add(db::manifest::manifest_t::segment_record_t{
+            .op = segment_operation_k::remove_segment_k, .name = pSegment->get_name(), .level = idx});
     }
     m_storage.clear();
 }
 
 auto level_t::purge(const segments::types::name_t &segmentName) noexcept -> void
 {
-    absl::WriterMutexLock lock{&m_mutex};
     if (auto pSegment{m_storage.find(segmentName)}; pSegment)
     {
         purge(pSegment);
@@ -277,7 +280,7 @@ auto level_t::index() const noexcept -> level_t::level_index_type_t
 auto level_t::bytes_used() const noexcept -> std::size_t
 {
     /*absl::ReaderMutexLock lock{&m_mutex};*/
-    std::size_t           result{0};
+    std::size_t result{0};
     for (const auto &pSegment : m_storage)
     {
         result += pSegment->num_of_bytes_used();
