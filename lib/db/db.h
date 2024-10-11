@@ -48,9 +48,9 @@ class db_t
   private:
     auto prepare_directory_structure() -> bool;
 
-    config::shared_ptr_t m_config;
-    manifest::shared_ptr_t m_manifest;
-    wal::shared_ptr_t m_wal;
+    config::shared_ptr_t           m_config;
+    manifest::shared_ptr_t         m_manifest;
+    wal::shared_ptr_t              m_wal;
     structures::lsmtree::lsmtree_t m_lsmTree;
 };
 

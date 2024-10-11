@@ -5,6 +5,8 @@
 #include <config/config.h>
 #include <structures/lsmtree/segments/segment_storage.h>
 
+#include <absl/synchronization/mutex.h>
+
 namespace structures::lsmtree::level
 {
 
@@ -18,8 +20,8 @@ class level_t
      *
      * @param pConfig
      */
-    explicit level_t(level_index_type_t levelIndex,
-                     config::shared_ptr_t pConfig,
+    explicit level_t(level_index_type_t         levelIndex,
+                     config::shared_ptr_t       pConfig,
                      db::manifest::shared_ptr_t manifest) noexcept;
 
     /**
@@ -39,6 +41,19 @@ class level_t
      * @return owning pointer to the newly created segment
      */
     [[maybe_unused]] auto segment(memtable::memtable_t pMemtable) -> segments::regular_segment::shared_ptr_t;
+
+    /**
+     * @brief Creates a new segment from the given memtable and stores it.
+     *
+     * This function generates a path for the segment using the provided name,
+     * creates a segment based on the memtable, stores the newly created segment
+     * into the storage, and then flushes the segment.
+     *
+     * @param memtable The memtable to be converted into a segment.
+     * @param name The name to be used for the segment.
+     * @return A shared pointer to the newly created segment.
+     */
+    auto segment(memtable::memtable_t memtable, const std::string &name) -> segments::regular_segment::shared_ptr_t;
 
     /**
      * @brief
@@ -64,16 +79,16 @@ class level_t
      *
      * @return
      */
-    void purge() const noexcept;
+    void purge() noexcept;
 
     /**
      * @brief Find a segment by its name and purge it
      *
      * @return
      */
-    void purge(const segments::types::name_t &segment_name) const noexcept;
+    void purge(const segments::types::name_t &segmentName) noexcept;
 
-    auto storage() -> segments::storage::shared_ptr_t;
+    auto restore() noexcept -> void;
 
     /**
      * @brief Return index of the level.
@@ -85,13 +100,23 @@ class level_t
     [[__nodiscard__]] auto bytes_used() const noexcept -> std::size_t;
 
   private:
-    void purge(segments::storage::segment_storage_t &m_pStorage) const noexcept;
-    void purge(const segments::regular_segment::shared_ptr_t &pSegment) const noexcept;
+    /**
+     * @brief Purges the specified segment from the level.
+     *
+     * This function removes the given segment from the level, logs the removal,
+     * updates the manifest to reflect the removal, purges the segment, and
+     * removes it from storage.
+     *
+     * @param pSegment A shared pointer to the segment to be purged. Must not be null.
+     */
+    void purge(const segments::regular_segment::shared_ptr_t &pSegment) noexcept;
 
-    level_index_type_t m_levelIndex;
-    config::shared_ptr_t m_pConfig;
-    segments::storage::shared_ptr_t m_pStorage;
-    db::manifest::shared_ptr_t m_manifest;
+    mutable absl::Mutex m_mutex;
+
+    const level_index_type_t             m_levelIndex;
+    config::shared_ptr_t                 m_pConfig;
+    segments::storage::segment_storage_t m_storage;
+    db::manifest::shared_ptr_t           m_manifest;
 };
 
 using shared_ptr_t = std::shared_ptr<level_t>;
