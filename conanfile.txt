@@ -7,6 +7,7 @@ json-schema-validator/2.3.0
 cxxopts/3.2.0
 stduuid/1.2.3
 benchmark/1.8.4
+abseil/20240722.0
 
 [generators]
 CMakeDeps

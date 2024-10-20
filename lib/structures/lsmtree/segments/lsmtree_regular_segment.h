@@ -75,7 +75,7 @@ class regular_segment_t final
     /**
      * @brief
      */
-    void purge();
+    void remove_from_disk() const noexcept;
 
     /**
      * @brief

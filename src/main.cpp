@@ -275,7 +275,6 @@ auto main(int argc, char *argv[]) -> int
 {
     try
     {
-
         cxxopts::Options options("tinykvpp", "A tiny database, powering big ideas");
         options.add_options()("c,config", "Path to JSON configuration of database", cxxopts::value<std::string>())(
             "help", "Print help");
@@ -288,7 +287,7 @@ auto main(int argc, char *argv[]) -> int
         }
 
         const auto configPath = parsedOptions["config"].as<std::string>();
-        auto configJson = loadConfigJson(configPath);
+        auto       configJson = loadConfigJson(configPath);
 
         json_validator validator;
         validator.set_root_schema(database_config_schema);
