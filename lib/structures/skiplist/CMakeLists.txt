@@ -19,7 +19,6 @@ target_link_libraries(
         SkipList
         MemTable
         Config
-        -fsanitize=address
 )
 
 # Register Catch2 tests with CTest

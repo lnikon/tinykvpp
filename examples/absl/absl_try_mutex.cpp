@@ -1,7 +1,10 @@
+#include <condition_variable>
 #include <iostream>
 #include <optional>
+#include <queue>
 #include <thread>
 #include <vector>
+#include <mutex>
 
 #include <absl/synchronization/mutex.h>
 
@@ -45,40 +48,70 @@ template <typename TItem> class thread_safe_queue_t
     std::vector<TItem> m_queue;
 };
 
-void producer(thread_safe_queue_t<int> &queue)
+class std_thq
+{
+  public:
+    void push(int i)
+    {
+        std::lock_guard lock(m_mutex);
+        m_queue.push(i);
+        m_cv.notify_one();
+    }
+
+    std::optional<int> pop()
+    {
+        std::unique_lock<std::mutex> lock(m_mutex);
+        if (!m_cv.wait_for(lock, std::chrono::seconds(1), [this] { return !m_queue.empty(); }))
+        {
+            return std::nullopt;
+        }
+        int res = m_queue.front();
+        m_queue.pop();
+        return res;
+    }
+
+  private:
+    std::mutex              m_mutex;
+    std::condition_variable m_cv;
+    std::queue<int>         m_queue;
+};
+
+void producer(std_thq &queue)
 {
     int i{0};
     while (true)
     {
         queue.push(i++);
 
-        if (i == 1'000'000)
+        if (i == 1'00)
         {
             break;
         }
     }
 }
 
-void consumer(thread_safe_queue_t<int> &queue)
+void consumer(std_thq &queue)
 {
     for (;;)
     {
         auto item = queue.pop();
-        if (item.has_value() && item.value() % 13 == 0)
+        if (item.has_value())
         {
             std::cout << "Consumed: " << item.value() << std::endl;
+        }
+        else
+        {
+            break;
         }
     }
 }
 
 auto main() -> int
 {
-    thread_safe_queue_t<int> queue;
+    std_thq queue;
 
     auto producerThread = std::thread(producer, std::ref(queue));
     auto consumerThread = std::thread(consumer, std::ref(queue));
-
-    queue.print();
 
     producerThread.join();
     consumerThread.join();

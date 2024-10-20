@@ -10,9 +10,9 @@ set(CMAKE_CXX_EXTENSIONS Off)
 # Enable ASAN for all targets
 # set(CMAKE_BUILD_TYPE "Debug")
 # -std=c++23 -Wall -Wextra -pedantic-errors -stdlib=libstdc++ -lstdc++_libbacktrace -fsized-deallocation -no-pie
-# set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fno-omit-frame-pointer -fsanitize=address -Wall -Wextra -pedantic-errors -llibbacktrace -fsized-deallocation -no-pie")
-# set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-omit-frame-pointer -fsanitize=address -Wall -Wextra -pedantic-errors -llibbacktrace -fsized-deallocation -no-pie")
-# set(CMAKE_LINKER_FLAGS "${CMAKE_LINKER_FLAGS} -fno-omit-frame-pointer -fsanitize=address -Wall -Wextra -pedantic-errors -stdlib=libstdc++ -lstdc++_libbacktrace -fsized-deallocation -no-pie")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fno-omit-frame-pointer -fsanitize=thread  -Wall -Wextra -pedantic-errors")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-omit-frame-pointer -fsanitize=thread  -Wall -Wextra -pedantic-errors")
+set(CMAKE_LINKER_FLAGS "${CMAKE_LINKER_FLAGS} -fno-omit-frame-pointer -fsanitize=thread  -Wall -Wextra -pedantic-errors")
 
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}")
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}")
