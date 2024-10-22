@@ -29,7 +29,7 @@ template <typename record_gt, typename comparator_gt> class skiplist_t
         {
         }
 
-        record_gt record;
+        record_gt                      record;
         std::vector<node_shared_ptr_t> forward;
     };
 
@@ -122,7 +122,7 @@ template <typename record_gt, typename comparator_gt> class skiplist_t
         return const_iterator(nullptr);
     }
 
-    auto find(const typename record_gt::key_t &key) -> std::optional<record_gt>
+    auto find(const typename record_gt::key_t &key) const noexcept -> std::optional<record_gt>
     {
         node_shared_ptr_t current{m_head};
         for (std::int64_t i = m_level; i >= 0; i--)
@@ -142,7 +142,7 @@ template <typename record_gt, typename comparator_gt> class skiplist_t
         return std::nullopt;
     }
 
-    void emplace(record_gt&& record)
+    void emplace(record_gt &&record)
     {
         const auto newLevel{random_level()};
         if (newLevel > m_level)
@@ -204,8 +204,8 @@ template <typename record_gt, typename comparator_gt> class skiplist_t
     }
 
     node_shared_ptr_t m_head = std::make_shared<node_t>(record_gt{}, max_height);
-    std::int64_t m_level{0};
-    std::size_t m_size{0};
+    std::int64_t      m_level{0};
+    std::size_t       m_size{0};
 };
 
 } // namespace structures::skiplist

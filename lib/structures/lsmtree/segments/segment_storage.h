@@ -2,8 +2,9 @@
 
 #include "structures/lsmtree/segments/lsmtree_regular_segment.h"
 #include <functional>
-#include <structures/lsmtree/segments/types.h>
 #include <structures/sorted_vector/sorted_vector.h>
+
+#include <absl/synchronization/mutex.h>
 
 #include <memory>
 #include <unordered_map>
@@ -20,7 +21,7 @@ namespace types = lsmtree::segments::types;
  */
 struct last_write_time_comparator_t
 {
-    auto operator()(const regular_segment::shared_ptr_t& lhs, const regular_segment::shared_ptr_t& rhs) -> bool
+    auto operator()(const regular_segment::shared_ptr_t &lhs, const regular_segment::shared_ptr_t &rhs) -> bool
     {
         return lhs->last_write_time() <= rhs->last_write_time();
     }
@@ -33,7 +34,7 @@ struct last_write_time_comparator_t
  */
 struct key_range_comparator_t
 {
-    auto operator()(const regular_segment::shared_ptr_t& lhs, const regular_segment::shared_ptr_t& rhs) -> bool
+    auto operator()(const regular_segment::shared_ptr_t &lhs, const regular_segment::shared_ptr_t &rhs) -> bool
     {
         return lhs->max() < rhs->min();
     }
@@ -61,6 +62,9 @@ class segment_storage_t : public std::enable_shared_from_this<segment_storage_t>
     [[nodiscard]] auto begin() noexcept -> iterator;
     [[nodiscard]] auto end() noexcept -> iterator;
 
+    [[nodiscard]] auto begin() const noexcept -> const_iterator;
+    [[nodiscard]] auto end() const noexcept -> const_iterator;
+
     [[nodiscard]] auto cbegin() const noexcept -> const_iterator;
     [[nodiscard]] auto cend() const noexcept -> const_iterator;
 
@@ -70,11 +74,14 @@ class segment_storage_t : public std::enable_shared_from_this<segment_storage_t>
     void emplace(regular_segment::shared_ptr_t pSegment, segment_comp_t comp);
     void clear() noexcept;
     void remove(regular_segment::shared_ptr_t pSegment);
+    auto find(const std::string& name) const noexcept -> regular_segment::shared_ptr_t;
 
   private:
-    mutable std::mutex m_mutex; // TODO(lnikon): Use clang's mutex borrow checker
+    // TODO(lnikon): Use thread annotations
+    mutable absl::Mutex m_mutex;
+    // TODO(lnikon): Use std::set to keep segment names
     segment_map_t m_segmentsMap;
-    storage_t m_segmentsVector;
+    storage_t     m_segmentsVector;
 };
 
 using shared_ptr_t = std::shared_ptr<segment_storage_t>;

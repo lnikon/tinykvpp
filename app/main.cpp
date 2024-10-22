@@ -1,21 +1,18 @@
 #include "memtable.h"
 #include <config/config.h>
 #include <db/db.h>
+
 #include <iostream>
+
 #include <spdlog/common.h>
 #include <spdlog/spdlog.h>
+
+#include <absl/debugging/stacktrace.h>
+#include <thread>
 
 using mem_key_t = structures::memtable::memtable_t::record_t::key_t;
 using mem_value_t = structures::memtable::memtable_t::record_t::value_t;
 
-/**
- * TODO(lnikon): Add following arguments.
- * * db-path: string = "."
- * * segments-path: string = "segments"
- * * segments-size-mb: integer = "64mb"
- * TODO(lnikon): Support loading arguments from the command line.
- * TODO(lnikon): Support loading arguments from the JSON config file.
- */
 int main(int argc, char *argv[])
 {
     // TODO(lnikon): This is temp arg handling. Refactor.
@@ -24,7 +21,9 @@ int main(int argc, char *argv[])
     //   return 1;
     // }
 
-    spdlog::set_level(spdlog::level::debug);
+    spdlog::set_level(spdlog::level::info);
+
+    spdlog::info("HAS _GLIBCXX_HAVE_STACKTRACE");
 
     auto pConfig = config::make_shared();
     pConfig->LSMTreeConfig.DiskFlushThresholdSize = 1024;
@@ -57,8 +56,13 @@ int main(int argc, char *argv[])
         db.put(mem_key_t{"cccccc1"}, mem_value_t{"aaaa1"});
         db.put(mem_key_t{"aaaaaa"}, mem_value_t{"version12"});
         db.put(mem_key_t{"aaaaaa2"}, mem_value_t{"version13"});
-        db.put(mem_key_t{"aaaaaa"}, mem_value_t{"version13"});
+        db.put(mem_key_t{"ddddd1"}, mem_value_t{"version13"});
     }
+
+    // Debugging trick:
+    // Wait for the flushing thread to flush all memtables into the segments.
+    // This will trick the db to search the segments for the records.
+    // std::this_thread::sleep_for(std::chrono::seconds(5));
 
     if (auto recordOpt{db.get(mem_key_t{"aaaaaa"})}; recordOpt)
     {

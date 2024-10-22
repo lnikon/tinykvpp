@@ -92,10 +92,10 @@ struct manifest_t
             outStream >> level;
         }
 
-        record_type_k type{record_type_k::segment_k};
-        operation_k op{operation_k::undefined_k};
+        record_type_k  type{record_type_k::segment_k};
+        operation_k    op{operation_k::undefined_k};
         segment_name_t name;
-        level_index_t level{};
+        level_index_t  level{};
     };
 
     /**
@@ -160,7 +160,7 @@ struct manifest_t
         }
 
         record_type_k type{record_type_k::level_k};
-        operation_k op{operation_k::undefined_k};
+        operation_k   op{operation_k::undefined_k};
         level_index_t level{};
     };
 
@@ -231,12 +231,12 @@ struct manifest_t
     void disable();
 
   private:
-    config::shared_ptr_t m_config;
-    std::string m_name;
-    fs::path_t m_path;
-    storage_t m_records;
+    config::shared_ptr_t   m_config;
+    std::string            m_name;
+    fs::path_t             m_path;
+    storage_t              m_records;
     fs::append_only_file_t m_log;
-    bool m_enabled{true};
+    bool                   m_enabled{false};
 };
 
 using shared_ptr_t = std::shared_ptr<manifest_t>;

@@ -1,9 +1,11 @@
 {
     "cSpell.words": [
+        "absl",
         "lnikon",
         "lsmtree",
         "Memtable",
         "memtables",
-        "spdlog"
+        "spdlog",
+        "stoken"
     ]
 }

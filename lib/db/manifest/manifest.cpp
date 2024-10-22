@@ -101,9 +101,11 @@ inline auto trim(std::string &s) -> std::string &
 auto manifest_t::recover() -> bool
 {
     spdlog::info("Manifest recovery started");
-    auto stringStream = m_log.stream();
+
     std::int32_t record_type_int{0};
-    std::string line;
+    std::string  line;
+
+    auto stringStream = m_log.stream();
     while (std::getline(stringStream, line))
     {
         if (trim(line).empty())

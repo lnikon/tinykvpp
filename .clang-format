@@ -16,3 +16,4 @@ ExperimentalAutoDetectBinPacking: false
 AllowAllParametersOfDeclarationOnNextLine: true
 IncludeBlocks: Preserve
 SortIncludes: Never
+AlignConsecutiveDeclarations: true
