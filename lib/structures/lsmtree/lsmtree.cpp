@@ -1,17 +1,16 @@
 #include "db/wal/wal.h"
 #include "structures/memtable/memtable.h"
 #include <absl/synchronization/mutex.h>
-#include <cassert>
 #include <db/manifest/manifest.h>
-#include <sstream>
-#include <stop_token>
 #include <structures/lsmtree/lsmtree_types.h>
 #include <structures/lsmtree/segments/helpers.h>
 #include <structures/lsmtree/lsmtree.h>
 #include <structures/lsmtree/segments/lsmtree_segment_factory.h>
 
 #include <optional>
-#include <utility>
+#include <stop_token>
+#include <sstream>
+#include <cassert>
 
 #include <spdlog/spdlog.h>
 

@@ -14,44 +14,37 @@
 
 class TinyKVPPServiceImpl final : public TinyKVPPService::Service
 {
-   public:
+  public:
     TinyKVPPServiceImpl(db::db_t &db)
         : m_db(db)
     {
     }
 
-    grpc::Status Put(grpc::ServerContext *pContext,
-                     const PutRequest *pRequest,
-                     PutResponse *pResponse)
+    auto Put(grpc::ServerContext *pContext, const PutRequest *pRequest, PutResponse *pResponse) -> grpc::Status override
     {
-        m_db.put(structures::lsmtree::key_t{pRequest->key()},
-                 structures::lsmtree::value_t{pRequest->value()});
-        pResponse->set_status(std::string("status message not implemented"));
+        m_db.put(structures::lsmtree::key_t{pRequest->key()}, structures::lsmtree::value_t{pRequest->value()});
+        pResponse->set_status(std::string("OK"));
         return grpc::Status::OK;
     }
 
-    grpc::Status Get(grpc::ServerContext *pContext,
-                     const GetRequest *pRequest,
-                     GetResponse *pResponse)
+    grpc::Status Get(grpc::ServerContext *pContext, const GetRequest *pRequest, GetResponse *pResponse) override
     {
-        const auto &record =
-            m_db.get(structures::lsmtree::key_t{pRequest->key()});
+        const auto &record = m_db.get(structures::lsmtree::key_t{pRequest->key()});
         if (record)
         {
-            pResponse->set_value(
-                std::get<std::string>(record.value().m_value.m_value));
+            pResponse->set_value(record.value().m_value.m_value);
         }
         return grpc::Status::OK;
     }
 
-   private:
+  private:
     db::db_t &m_db;
 };
 
 void RunServer(db::db_t &db)
 {
     static constexpr const std::string serverAddress("0.0.0.0:50051");
-    TinyKVPPServiceImpl service(db);
+    TinyKVPPServiceImpl                service(db);
 
     grpc::ServerBuilder builder;
     builder.AddListeningPort(serverAddress, grpc::InsecureServerCredentials());
@@ -63,8 +56,13 @@ void RunServer(db::db_t &db)
 
 int main(int argc, char *argv[])
 {
+    spdlog::set_level(spdlog::level::debug);
+
     auto pConfig = config::make_shared();
-    pConfig->LSMTreeConfig.DiskFlushThresholdSize = 10;
+    pConfig->LSMTreeConfig.DiskFlushThresholdSize = 1024;
+    pConfig->LSMTreeConfig.LevelZeroCompactionThreshold = 1024;
+    pConfig->LSMTreeConfig.LevelNonZeroCompactionThreshold = 1024;
+
     db::db_t db(pConfig);
     if (!db.open())
     {
@@ -73,7 +71,5 @@ int main(int argc, char *argv[])
 
     RunServer(db);
 
-    int* a = nullptr;
-    *a = 4;
     return 0;
 }

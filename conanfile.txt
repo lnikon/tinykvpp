@@ -7,7 +7,13 @@ json-schema-validator/2.3.0
 cxxopts/3.2.0
 stduuid/1.2.3
 benchmark/1.8.4
-abseil/20240722.0
+abseil/20240116.2
+celero/2.9.0
+protobuf/5.27.0
+grpc/1.67.1
+
+[tool_requires]
+protobuf/5.27.0
 
 [generators]
 CMakeDeps

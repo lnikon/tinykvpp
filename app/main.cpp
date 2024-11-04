@@ -23,8 +23,6 @@ int main(int argc, char *argv[])
 
     spdlog::set_level(spdlog::level::info);
 
-    spdlog::info("HAS _GLIBCXX_HAVE_STACKTRACE");
-
     auto pConfig = config::make_shared();
     pConfig->LSMTreeConfig.DiskFlushThresholdSize = 1024;
     pConfig->LSMTreeConfig.LevelZeroCompactionThreshold = 1024;
