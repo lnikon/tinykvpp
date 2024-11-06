@@ -187,7 +187,8 @@ levels_t::flush_to_level0(memtable::memtable_t memtable) const noexcept -> segme
 auto levels_t::restore() noexcept -> void
 {
     absl::WriterMutexLock lock{&m_mutex};
-    for (auto& level : m_levels) {
+    for (auto &level : m_levels)
+    {
         level->restore();
     }
 }

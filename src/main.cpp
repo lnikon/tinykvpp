@@ -21,103 +21,119 @@ using nlohmann::json_schema::json_validator;
 // The schema is defined based upon a string literal
 static json database_config_schema = R"(
 {
-  "$id": "https://json-schema.hyperjump.io/schema",
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$title": "Schema for tinykvpp's JSON config",
-  "type": "object",
-  "properties": {
-    "logging": {
-        "type": "object",
-        "properties": {
-            "loggingLevel": {
-                "$ref": "#/$defs/loggingLevel"
-            }
+    "$id": "https://json-schema.hyperjump.io/schema",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$title": "Schema for tinykvpp's JSON config",
+    "type": "object",
+    "properties": {
+        "logging": {
+            "type": "object",
+            "properties": {
+                "loggingLevel": {
+                    "$ref": "#/$defs/loggingLevel"
+                }
+            },
+            "required": [
+                "loggingLevel"
+            ]
         },
-        "required": [
-                     "loggingLevel"
-                     ]
-    },
-    "database": {
-        "type": "object",
-        "properties": {
-            "path": {
-                "type": "string"
+        "database": {
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string"
+                },
+                "walFilename": {
+                    "type": "string"
+                },
+                "manifestFilenamePrefix": {
+                    "type": "string"
+                }
             },
-            "walFilename": {
-                "type": "string"
-            },
-            "manifestFilenamePrefix": {
-                "type": "string"
-            }
+            "required": [
+                "path",
+                "walFilename",
+                "manifestFilenamePrefix"
+            ]
         },
-        "required": [
-                     "path",
-                     "walFilename",
-                     "manifestFilenamePrefix"
-                     ]
-    },
-    "lsmtree": {
-        "type": "object",
-        "properties": {
-            "memtableFlushThreshold": {
-                "type": "number"
+        "lsmtree": {
+            "type": "object",
+            "properties": {
+                "memtableFlushThreshold": {
+                    "type": "number"
+                },
+                "maximumLevels": {
+                    "type": "number"
+                },
+                "levelZeroCompaction": {
+                    "$ref": "#/$defs/compaction"
+                },
+                "levelNonZeroCompaction": {
+                    "$ref": "#/$defs/compaction"
+                }
             },
-            "maximumLevels": {
-                "type": "number"
-            },
-            "levelZeroCompaction": {
-                "$ref": "#/$defs/compaction"
-            },
-            "levelNonZeroCompaction": {
-                "$ref": "#/$defs/compaction"
-            }
+            "required": [
+                "memtableFlushThreshold",
+                "maximumLevels",
+                "levelZeroCompaction",
+                "levelNonZeroCompaction"
+            ]
         },
-        "required": [
-                     "memtableFlushThreshold",
-                     "maximumLevels",
-                     "levelZeroCompaction",
-                     "levelNonZeroCompaction"
-                     ]
-    }
+        "server": {
+            "type": "object",
+            "properties": {
+                "transport": {
+                    "$ref": "#/$defs/serverTransport"
+                }
+            },
+            "required": [
+                "transport"
+            ]
+        }
 },
-"required": [
-             "database",
-             "lsmtree"
-             ],
-"$defs": {
-    "loggingLevel": {
-        "type": "string",
-        "enum": [
-                 "info",
-                 "debug"
-                 ]
-    },
-    "compactionStrategy": {
-        "type": "string",
-        "enum": [
-                 "levelled",
-                 "tiered"
-                 ]
-    },
-    "compaction": {
-        "type": "object",
-        "properties": {
-            "compactionStrategy": {
-                "$ref": "#/$defs/compactionStrategy"
-            },
-            "compactionThreshold": {
-                "type": "number"
-            }
+    "required": [
+        "database",
+        "lsmtree",
+        "server"
+    ],
+    "$defs": {
+        "serverTransport": {
+            "type": "string",
+            "enum": [
+                "grpc"
+            ]
         },
-        "required": [
-                     "logging,",
-                     "compactionStrategy",
-                     "compactionThreshold"
-                     ]
+        "loggingLevel": {
+            "type": "string",
+            "enum": [
+                "info",
+            "debug"
+            ]
+        },
+        "compactionStrategy": {
+            "type": "string",
+            "enum": [
+                "levelled",
+            "tiered"
+            ]
+        },
+        "compaction": {
+            "type": "object",
+            "properties": {
+                "compactionStrategy": {
+                    "$ref": "#/$defs/compactionStrategy"
+                },
+                "compactionThreshold": {
+                    "type": "number"
+                }
+            },
+            "required": [
+                "compactionStrategy",
+            "compactionThreshold"
+            ]
+        }
     }
 }
-}
-
 )"_json;
 
 using json = nlohmann::json;

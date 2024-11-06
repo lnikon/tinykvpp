@@ -97,7 +97,7 @@ void lsmtree_t::put(const structures::lsmtree::key_t &key, const structures::lsm
 {
     assert(m_pConfig);
 
-    absl::WriterMutexLock lock{&m_mutex};
+    absl::MutexLock lock{&m_mutex};
     assert(m_table);
 
     // Record addition of the new key into the WAL and add record into memtable
@@ -121,7 +121,7 @@ void lsmtree_t::put(const structures::lsmtree::key_t &key, const structures::lsm
 
 auto lsmtree_t::get(const key_t &key) noexcept -> std::optional<record_t>
 {
-    absl::ReaderMutexLock lock{&m_mutex};
+    absl::MutexLock lock{&m_mutex};
     assert(m_table);
 
     // TODO(lnikon): Skip searching if record doesn't exist

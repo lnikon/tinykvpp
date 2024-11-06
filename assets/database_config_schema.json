@@ -1,97 +1,114 @@
 {
-  "$id": "https://json-schema.hyperjump.io/schema",
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$title": "Schema for tinykvpp's JSON config",
-  "type": "object",
-  "properties": {
-    "logging": {
-      "type": "object",
-      "properties": {
+    "$id": "https://json-schema.hyperjump.io/schema",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$title": "Schema for tinykvpp's JSON config",
+    "type": "object",
+    "properties": {
+        "logging": {
+            "type": "object",
+            "properties": {
+                "loggingLevel": {
+                    "$ref": "#/$defs/loggingLevel"
+                }
+            },
+            "required": [
+                "loggingLevel"
+            ]
+        },
+        "database": {
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string"
+                },
+                "walFilename": {
+                    "type": "string"
+                },
+                "manifestFilenamePrefix": {
+                    "type": "string"
+                }
+            },
+            "required": [
+                "path",
+                "walFilename",
+                "manifestFilenamePrefix"
+            ]
+        },
+        "lsmtree": {
+            "type": "object",
+            "properties": {
+                "memtableFlushThreshold": {
+                    "type": "number"
+                },
+                "maximumLevels": {
+                    "type": "number"
+                },
+                "levelZeroCompaction": {
+                    "$ref": "#/$defs/compaction"
+                },
+                "levelNonZeroCompaction": {
+                    "$ref": "#/$defs/compaction"
+                }
+            },
+            "required": [
+                "memtableFlushThreshold",
+                "maximumLevels",
+                "levelZeroCompaction",
+                "levelNonZeroCompaction"
+            ]
+        },
+        "server": {
+            "type": "object",
+            "properties": {
+                "transport": {
+                    "$ref": "#/$defs/serverTransport"
+                }
+            },
+            "required": [
+                "transport"
+            ]
+        }
+    },
+    "required": [
+        "database",
+        "lsmtree",
+        "server"
+    ],
+    "$defs": {
+        "serverTransport": {
+            "type": "string",
+            "enum": [
+                "grpc"
+            ]
+        },
         "loggingLevel": {
-          "$ref": "#/$defs/loggingLevel"
-        }
-      },
-      "required": [
-        "loggingLevel"
-      ]
-    },
-    "database": {
-      "type": "object",
-      "properties": {
-        "path": {
-          "type": "string"
+            "type": "string",
+            "enum": [
+                "info",
+                "debug"
+            ]
         },
-        "walFilename": {
-          "type": "string"
-        },
-        "manifestFilenamePrefix": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "path",
-        "walFilename",
-        "manifestFilenamePrefix"
-      ]
-    },
-    "lsmtree": {
-      "type": "object",
-      "properties": {
-        "memtableFlushThreshold": {
-          "type": "number"
-        },
-        "maximumLevels": {
-          "type": "number"
-        },
-        "levelZeroCompaction": {
-          "$ref": "#/$defs/compaction"
-        },
-        "levelNonZeroCompaction": {
-          "$ref": "#/$defs/compaction"
-        }
-      },
-      "required": [
-        "memtableFlushThreshold",
-        "maximumLevels",
-        "levelZeroCompaction",
-        "levelNonZeroCompaction"
-      ]
-    }
-  },
-  "required": [
-    "database",
-    "lsmtree"
-  ],
-  "$defs": {
-    "loggingLevel": {
-      "type": "string",
-      "enum": [
-        "info",
-        "debug"
-      ]
-    },
-    "compactionStrategy": {
-      "type": "string",
-      "enum": [
-        "levelled",
-        "tiered"
-      ]
-    },
-    "compaction": {
-      "type": "object",
-      "properties": {
         "compactionStrategy": {
-          "$ref": "#/$defs/compactionStrategy"
+            "type": "string",
+            "enum": [
+                "levelled",
+                "tiered"
+            ]
         },
-        "compactionThreshold": {
-          "type": "number"
+        "compaction": {
+            "type": "object",
+            "properties": {
+                "compactionStrategy": {
+                    "$ref": "#/$defs/compactionStrategy"
+                },
+                "compactionThreshold": {
+                    "type": "number"
+                }
+            },
+            "required": [
+                "compactionStrategy",
+                "compactionThreshold"
+            ]
         }
-      },
-      "required": [
-        "logging,",
-        "compactionStrategy",
-        "compactionThreshold"
-      ]
     }
-  }
 }
