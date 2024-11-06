@@ -20,6 +20,8 @@
     }
   },
   "server": {
-      "transport": "grpc"
+    "transport": "grpc",
+    "host": "localhost",
+    "port": 9000
   }
 }

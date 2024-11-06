@@ -159,6 +159,7 @@ auto lsmtree_t::recover() noexcept -> bool
     // Disable all updates to manifest in recovery phase
     // because nothing new is happening, lsmtree is re-using already
     // existing information
+    spdlog::info("Manifest path: {}", m_pManifest->path().c_str());
     m_pManifest->disable();
 
     // Restore lsmtree structure from the manifest file

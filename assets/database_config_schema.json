@@ -62,10 +62,18 @@
             "properties": {
                 "transport": {
                     "$ref": "#/$defs/serverTransport"
+                },
+                "host": {
+                    "type": "string"
+                },
+                "port": {
+                    "type": "number"
                 }
             },
             "required": [
-                "transport"
+                "transport",
+                "host",
+                "port"
             ]
         }
     },
@@ -112,3 +120,4 @@
         }
     }
 }
+

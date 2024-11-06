@@ -47,7 +47,6 @@ levels_t::levels_t(config::shared_ptr_t pConfig, db::manifest::shared_ptr_t pMan
     const std::size_t levelCount{7};
     for (std::size_t idx{0}; idx < levelCount; idx++)
     {
-        m_pManifest->add(db::manifest::manifest_t::level_record_t{.op = level_operation_k::add_level_k, .level = idx});
         level();
     }
 }
