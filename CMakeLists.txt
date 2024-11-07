@@ -39,7 +39,6 @@ add_subdirectory(app)
 add_subdirectory(src)
 add_subdirectory(bench)
 add_subdirectory(examples)
-add_subdirectory(grpcapp)
 
 # Custom targets to build docker images and run tests
 add_custom_target(BuildGCCReleaseDockerImage
