@@ -1,3 +1,4 @@
+#include <cstddef>
 #include <spdlog/common.h>
 
 #include <celero/Benchmark.h>
@@ -15,13 +16,14 @@
 using mem_key_t = structures::memtable::memtable_t::record_t::key_t;
 using mem_value_t = structures::memtable::memtable_t::record_t::value_t;
 
-auto generateRandomString(int length) -> std::string
+auto generateRandomString(std::size_t length) -> std::string
 {
-    std::mt19937                       generator(time(nullptr)); // Mersenne Twister random number generator
-    std::uniform_int_distribution<int> distribution(32, 126);    // ASCII printable range
+    std::random_device                 rng;
+    std::mt19937                       generator(rng());      // Mersenne Twister random number generator
+    std::uniform_int_distribution<int> distribution(32, 126); // ASCII printable range
 
     std::string result;
-    for (int i = 0; i < length; ++i)
+    for (auto i = 0U; i < length; ++i)
     {
         char randomChar = static_cast<char>(distribution(generator));
         result += randomChar;
@@ -35,8 +37,6 @@ auto generateRandomString(int length) -> std::string
 /// You can write your own, or use this macro to insert the standard one into the project.
 ///
 CELERO_MAIN
-
-constexpr int Multiple = 2112;
 
 ///
 /// \class	DemoTransformFixture
@@ -66,7 +66,7 @@ class DemoTransformFixture : public celero::TestFixture
     {
         spdlog::set_level(spdlog::level::off);
 
-        if (m_pDb)
+        if (m_pDb != nullptr)
         {
             return;
         }
@@ -91,6 +91,7 @@ class DemoTransformFixture : public celero::TestFixture
         // Each one growing by a power of 2.
         const int totalNumberOfTests = 12;
 
+        problemSpaceValues.reserve(totalNumberOfTests);
         for (int i = 0; i < totalNumberOfTests; i++)
         {
             // ExperimentValues is part of the base class and allows us to specify
@@ -136,8 +137,6 @@ class DemoTransformFixture : public celero::TestFixture
     std::size_t                                    valueSize = 1024;
     std::vector<std::pair<mem_key_t, mem_value_t>> m_records;
 };
-
-const std::size_t arraySize = 1024;
 
 db::db_t *DemoTransformFixture::m_pDb = nullptr;
 

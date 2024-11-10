@@ -37,8 +37,8 @@ template <typename T, typename U = T> struct IteratorCompare
 level_t::level_t(const level_index_type_t   levelIndex,
                  config::shared_ptr_t       pConfig,
                  db::manifest::shared_ptr_t manifest) noexcept
-    : m_pConfig{std::move(pConfig)},
-      m_levelIndex{levelIndex},
+    : m_levelIndex{levelIndex},
+      m_pConfig{std::move(pConfig)},
       m_manifest{std::move(std::move(manifest))}
 {
 }

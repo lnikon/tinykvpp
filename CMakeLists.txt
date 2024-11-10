@@ -7,12 +7,8 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED On)
 set(CMAKE_CXX_EXTENSIONS Off)
 
-# Enable ASAN for all targets
-# set(CMAKE_BUILD_TYPE "Debug")
-# -std=c++23 -Wall -Wextra -pedantic-errors -stdlib=libstdc++ -lstdc++_libbacktrace -fsized-deallocation -no-pie
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fno-omit-frame-pointer   -Wall -Wextra -pedantic-errors")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-omit-frame-pointer   -Wall -Wextra -pedantic-errors")
-set(CMAKE_LINKER_FLAGS "${CMAKE_LINKER_FLAGS} -fno-omit-frame-pointer   -Wall -Wextra -pedantic-errors")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=c++23 -Wall -Wextra -pedantic-errors")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++23 -Wall -Wextra -pedantic-errors")
 
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}")
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}")
@@ -35,18 +31,17 @@ find_package(gRPC CONFIG REQUIRED)
 include_directories(lib)
 
 add_subdirectory(lib)
-add_subdirectory(app)
 add_subdirectory(src)
 add_subdirectory(bench)
 add_subdirectory(examples)
 
 # Custom targets to build docker images and run tests
-add_custom_target(BuildGCCReleaseDockerImage
+add_custom_target(GCCReleaseDockerImage
     COMMAND sh scripts/build_gcc_release_docker_image.sh
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
 )
 
-add_custom_target(BuildClangReleaseDockerImage
+add_custom_target(ClangReleaseDockerImage
     COMMAND sh scripts/build_clang_release_docker_image.sh
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
 )

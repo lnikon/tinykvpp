@@ -1,30 +1,25 @@
 #include "config.h"
 #include "db.h"
 #include "memtable.h"
+#include "server/server.h"
+#include "server/server_kind.h"
 
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <exception>
 #include <fstream>
+#include <string>
 
 #include <nlohmann/json.hpp>
 #include <nlohmann/json-schema.hpp>
 
 #include <cxxopts.hpp>
 
+#include <fmt/format.h>
+
 #include <spdlog/common.h>
 #include <spdlog/spdlog.h>
-
-#include <grpc/grpc.h>
-#include <grpcpp/security/server_credentials.h>
-#include <grpcpp/server.h>
-#include <grpcpp/server_builder.h>
-#include <grpcpp/server_context.h>
-#include <grpcpp/support/status.h>
-#include <string>
-
-#include "TinyKVPP.grpc.pb.h"
-#include "TinyKVPP.pb.h"
 
 using tk_key_t = structures::memtable::memtable_t::record_t::key_t;
 using tk_value_t = structures::memtable::memtable_t::record_t::value_t;
@@ -165,7 +160,7 @@ auto loadConfigJson(const std::string &configPath) -> json
     std::fstream configStream(configPath, std::fstream::in);
     if (!configStream.is_open())
     {
-        throw std::runtime_error(std::format("Unable to open config file: %s", configPath));
+        throw std::runtime_error(fmt::format("Unable to open config file: %s", configPath));
     }
     return json::parse(configStream);
 }
@@ -178,7 +173,7 @@ void validateConfigJson(const json &configJson, json_validator &validator)
     }
     catch (const std::exception &e)
     {
-        throw std::runtime_error(std::format("Config validation failed: %s", e.what()));
+        throw std::runtime_error(fmt::format("Config validation failed: %s", e.what()));
     }
 }
 
@@ -199,7 +194,7 @@ void configureLogging(const std::string &loggingLevel)
     }
     else
     {
-        throw std::runtime_error(std::format("Unknown logging level: %s", loggingLevel));
+        throw std::runtime_error(fmt::format("Unknown logging level: %s", loggingLevel));
     }
 }
 
@@ -298,7 +293,28 @@ void loadLSMTreeConfig(const json &lsmtreeConfig, config::shared_ptr_t dbConfig,
     }
 }
 
-auto initializeDatabase(const json &configJson, const std::string &configPath) -> config::shared_ptr_t
+auto loadServerConfig(const json &configJson, config::shared_ptr_t dbConfig)
+{
+    if (configJson.contains("host"))
+    {
+        dbConfig->ServerConfig.host = configJson["host"].get<std::string>();
+    }
+    else
+    {
+        throw std::runtime_error("\"port\" is not specified in the config");
+    }
+
+    if (configJson.contains("port"))
+    {
+        dbConfig->ServerConfig.port = configJson["port"].get<uint32_t>();
+    }
+    else
+    {
+        throw std::runtime_error("\"server\" is not specified in the config");
+    }
+}
+
+auto initializeDatabaseConfig(const json &configJson, const std::string &configPath) -> config::shared_ptr_t
 {
     auto dbConfig = loadDatabaseConfig(configJson);
 
@@ -311,52 +327,16 @@ auto initializeDatabase(const json &configJson, const std::string &configPath) -
         throw std::runtime_error("\"lsmtree\" is not specified in config: " + configPath);
     }
 
+    if (configJson.contains("server"))
+    {
+        loadServerConfig(configJson["server"], dbConfig);
+    }
+    else
+    {
+        throw std::runtime_error("\"server\" is not specified in config: " + configPath);
+    }
+
     return dbConfig;
-}
-
-class TinyKVPPServiceImpl final : public TinyKVPPService::Service
-{
-  public:
-    TinyKVPPServiceImpl(db::db_t &db)
-        : m_db(db)
-    {
-    }
-
-    auto Put(grpc::ServerContext *pContext, const PutRequest *pRequest, PutResponse *pResponse) -> grpc::Status override
-    {
-        (void)pContext;
-
-        m_db.put(structures::lsmtree::key_t{pRequest->key()}, structures::lsmtree::value_t{pRequest->value()});
-        pResponse->set_status(std::string("OK"));
-        return grpc::Status::OK;
-    }
-
-    auto Get(grpc::ServerContext *pContext, const GetRequest *pRequest, GetResponse *pResponse) -> grpc::Status override
-    {
-        (void)pContext;
-
-        const auto &record = m_db.get(structures::lsmtree::key_t{pRequest->key()});
-        if (record)
-        {
-            pResponse->set_value(record.value().m_value.m_value);
-        }
-        return grpc::Status::OK;
-    }
-
-  private:
-    db::db_t &m_db;
-};
-
-void RunServer(db::db_t &db, const std::string &serverAddress)
-{
-    TinyKVPPServiceImpl service(db);
-
-    grpc::ServerBuilder builder;
-    builder.AddListeningPort(serverAddress, grpc::InsecureServerCredentials());
-    builder.RegisterService(&service);
-    std::unique_ptr<grpc::Server> server(builder.BuildAndStart());
-    spdlog::info("Server listening on {}", serverAddress);
-    server->Wait();
 }
 
 auto main(int argc, char *argv[]) -> int
@@ -383,7 +363,7 @@ auto main(int argc, char *argv[]) -> int
 
         configureLogging(configJson["logging"]["loggingLevel"].get<std::string>());
 
-        auto dbConfig = initializeDatabase(configJson, configPath);
+        auto dbConfig = initializeDatabaseConfig(configJson, configPath);
         auto db = db::db_t(dbConfig);
         if (!db.open())
         {
@@ -395,12 +375,8 @@ auto main(int argc, char *argv[]) -> int
         const auto serverTransport{configJson["server"]["transport"].get<std::string>()};
         if (serverTransport == "grpc")
         {
-            RunServer(db,
-                      std::format("{}:{}",
-                                  configJson["server"]["host"].get<std::string>(),
-                                  configJson["server"]["port"].get<int32_t>()));
+            mainServer<CommunicationStrategyKind::GRPC>(db);
         }
-
         return EXIT_SUCCESS;
     }
     catch (const std::exception &e)

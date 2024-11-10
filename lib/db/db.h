@@ -45,6 +45,8 @@ class db_t
      */
     auto get(const structures::lsmtree::key_t &key) -> std::optional<structures::memtable::memtable_t::record_t>;
 
+    auto config() const noexcept -> config::shared_ptr_t ;
+
   private:
     auto prepare_directory_structure() -> bool;
 

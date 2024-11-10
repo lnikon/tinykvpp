@@ -9,8 +9,9 @@ using mem_value_t = structures::memtable::memtable_t::record_t::value_t;
 
 auto generateRandomString(int length) -> std::string
 {
-    std::mt19937                       generator(time(nullptr)); // Mersenne Twister random number generator
-    std::uniform_int_distribution<int> distribution(32, 126);    // ASCII printable range
+    std::random_device                 rng;
+    std::mt19937                       generator(rng());      // Mersenne Twister random number generator
+    std::uniform_int_distribution<int> distribution(32, 126); // ASCII printable range
 
     std::string result;
     for (int i = 0; i < length; ++i)
@@ -22,7 +23,7 @@ auto generateRandomString(int length) -> std::string
     return result;
 }
 
-auto main(int argc, char **argv) -> int
+auto main() -> int
 {
     using std::chrono::duration;
     using std::chrono::duration_cast;

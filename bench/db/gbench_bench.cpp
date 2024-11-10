@@ -27,8 +27,9 @@ class DatabaseFixture : public benchmark::Fixture
   public:
     void SetUp(::benchmark::State &state) override
     {
+        (void)state;
         spdlog::set_level(spdlog::level::off);
-        if (!m_pDb)
+        if (m_pDb == nullptr)
         {
             auto pConfig = config::make_shared();
             pConfig->LSMTreeConfig.DiskFlushThresholdSize = 1024 * 1024 * 1024;
@@ -40,6 +41,7 @@ class DatabaseFixture : public benchmark::Fixture
 
     void TearDown(::benchmark::State &state) override
     {
+        (void)state;
     }
 
     static db::db_t *m_pDb;
@@ -68,12 +70,6 @@ BENCHMARK_DEFINE_F(DatabaseFixture, PutTest)(benchmark::State &st)
         }
     }
 }
-BENCHMARK_REGISTER_F(DatabaseFixture, PutTest)
-    ->Arg(8)
-    ->Arg(64)
-    ->Arg(512)
-    ->Arg(4 << 10)
-    ->Arg(8 << 10)
-    ->Arg(16 << 10);
+BENCHMARK_REGISTER_F(DatabaseFixture, PutTest)->Arg(8)->Arg(64)->Arg(512)->Arg(4 << 10)->Arg(8 << 10)->Arg(16 << 10);
 
 BENCHMARK_MAIN();

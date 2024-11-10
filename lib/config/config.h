@@ -3,6 +3,7 @@
 #include <db/db_config.h>
 #include <structures/lsmtree/lsmtree_config.h>
 #include <structures/lsmtree/segments/segment_config.h>
+#include "server/server_config.h"
 
 namespace config
 {
@@ -12,6 +13,7 @@ struct config_t
     db::db_config_t DatabaseConfig;
     structures::lsmtree::lsmtree_config_t LSMTreeConfig;
     structures::lsmtree::segments::segment_config_t SegmentConfig;
+    server_config_t ServerConfig;
 
     [[nodiscard]] auto datadir_path() const -> std::filesystem::path;
 };
