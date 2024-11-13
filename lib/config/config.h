@@ -13,7 +13,7 @@ struct config_t
     db::db_config_t DatabaseConfig;
     structures::lsmtree::lsmtree_config_t LSMTreeConfig;
     structures::lsmtree::segments::segment_config_t SegmentConfig;
-    server_config_t ServerConfig;
+    server::config::server_config_t ServerConfig;
 
     [[nodiscard]] auto datadir_path() const -> std::filesystem::path;
 };

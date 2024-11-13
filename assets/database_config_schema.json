@@ -86,7 +86,8 @@
         "serverTransport": {
             "type": "string",
             "enum": [
-                "grpc"
+                "grpc",
+                "tcp"
             ]
         },
         "loggingLevel": {

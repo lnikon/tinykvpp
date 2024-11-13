@@ -1,12 +1,16 @@
 #pragma once
 
 #include "server_factory.h"
+
 #include <utility>
 
-template <CommunicationStrategy Strategy> class Server
+namespace server
+{
+
+template <communication_strategy_t Strategy> class server_t
 {
   public:
-    Server(Strategy server)
+    server_t(Strategy server)
         : m_impl{std::move(server)}
     {
     }
@@ -20,9 +24,11 @@ template <CommunicationStrategy Strategy> class Server
     Strategy m_impl;
 };
 
-template <CommunicationStrategyKind Type> void mainServer(db::db_t &db)
+template <communication_strategy_kind_k Type> void main_server(db::db_t &db)
 {
-    auto   communicationStrategy = factory<Type>();
-    Server server(std::move(communicationStrategy));
+    auto     communicationStrategy = factory<Type>();
+    server_t server(std::move(communicationStrategy));
     server.start(db);
 }
+
+} // namespace server

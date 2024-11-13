@@ -117,7 +117,8 @@ static json database_config_schema = R"(
         "serverTransport": {
             "type": "string",
             "enum": [
-                "grpc"
+                "grpc",
+                "tcp"
             ]
         },
         "loggingLevel": {
@@ -173,7 +174,7 @@ void validateConfigJson(const json &configJson, json_validator &validator)
     }
     catch (const std::exception &e)
     {
-        throw std::runtime_error(fmt::format("Config validation failed: %s", e.what()));
+        throw std::runtime_error(fmt::format("Config validation failed: {}", e.what()));
     }
 }
 
@@ -312,6 +313,15 @@ auto loadServerConfig(const json &configJson, config::shared_ptr_t dbConfig)
     {
         throw std::runtime_error("\"server\" is not specified in the config");
     }
+
+    if (configJson.contains("transport"))
+    {
+        dbConfig->ServerConfig.transport = configJson["transport"].get<std::string>();
+    }
+    else
+    {
+        throw std::runtime_error("\"transport\" is not specified in the config");
+    }
 }
 
 auto initializeDatabaseConfig(const json &configJson, const std::string &configPath) -> config::shared_ptr_t
@@ -371,13 +381,21 @@ auto main(int argc, char *argv[]) -> int
             return EXIT_FAILURE;
         }
 
-        // TODO: Introduce ServerConfig
-        const auto serverTransport{configJson["server"]["transport"].get<std::string>()};
-        if (serverTransport == "grpc")
+        const auto kind{server::from_string(dbConfig->ServerConfig.transport)};
+        if (kind == server::communication_strategy_kind_k::grpc_k)
         {
-            mainServer<CommunicationStrategyKind::GRPC>(db);
+            server::main_server<server::communication_strategy_kind_k::grpc_k>(db);
         }
-        return EXIT_SUCCESS;
+        else if (kind == server::communication_strategy_kind_k::tcp_k)
+        {
+            spdlog::warn("{} server is not supported. Exiting", server::to_string(kind));
+            return EXIT_SUCCESS;
+        }
+        else
+        {
+            spdlog::info("\"transport\" is not determined. Exiting");
+            return EXIT_SUCCESS;
+        }
     }
     catch (const std::exception &e)
     {

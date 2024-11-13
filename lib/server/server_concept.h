@@ -4,7 +4,12 @@
 
 #include <concepts>
 
+namespace server
+{
+
 template <typename T>
-concept CommunicationStrategy = requires(T strategy, db::db_t &db) {
+concept communication_strategy_t = requires(T strategy, db::db_t &db) {
     { strategy.start(db) } -> std::same_as<void>;
 };
+
+} // namespace server
