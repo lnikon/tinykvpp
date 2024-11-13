@@ -84,11 +84,11 @@ void segment_storage_t::remove(regular_segment::shared_ptr_t pSegment)
     m_segmentsMap.erase(pSegment->get_name());
     const auto newSize = m_segmentsVector.size();
 
-    spdlog::info("({}): Removed {}, old size {}, new size {}",
-                 "segment_storage_t::remove",
-                 pSegment->get_name(),
-                 oldSize,
-                 newSize);
+    spdlog::debug("({}): Removed {}, old size {}, new size {}",
+                  "segment_storage_t::remove",
+                  pSegment->get_name(),
+                  oldSize,
+                  newSize);
 }
 
 auto segment_storage_t::find(const std::string &name) const noexcept -> regular_segment::shared_ptr_t

@@ -1,6 +1,6 @@
 {
   "logging": {
-    "loggingLevel": "info"
+    "loggingLevel": "debug"
   },
   "database": {
     "path": "/home/nikon/var/tkvpp",

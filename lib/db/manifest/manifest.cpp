@@ -68,7 +68,7 @@ void manifest_t::add(record_t info)
 {
     if (!m_enabled)
     {
-        spdlog::info("Manifest at {} is disabled", m_path.c_str());
+        spdlog::debug("Manifest at {} is disabled", m_path.c_str());
         return;
     }
 
@@ -122,7 +122,7 @@ auto manifest_t::recover() -> bool
         {
             segment_record_t record;
             record.read(lineStream);
-            spdlog::info("recovered segment_record={}", record.ToString());
+            spdlog::debug("recovered segment_record={}", record.ToString());
             m_records.emplace_back(record);
             break;
         }
@@ -130,7 +130,7 @@ auto manifest_t::recover() -> bool
         {
             level_record_t record;
             record.read(lineStream);
-            spdlog::info("recovered level_record={}", record.ToString());
+            spdlog::debug("recovered level_record={}", record.ToString());
             m_records.emplace_back(record);
             break;
         }
@@ -159,12 +159,12 @@ auto manifest_t::records() const noexcept -> std::vector<record_t>
 void manifest_t::enable()
 {
     m_enabled = true;
-    spdlog::info("Manifest at {} enabled", m_path.c_str());
+    spdlog::debug("Manifest at {} enabled", m_path.c_str());
 }
 
 void manifest_t::disable()
 {
     m_enabled = false;
-    spdlog::info("Manifest at {} disabled", m_path.c_str());
+    spdlog::debug("Manifest at {} disabled", m_path.c_str());
 }
 } // namespace db::manifest

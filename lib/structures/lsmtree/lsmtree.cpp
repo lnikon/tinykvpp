@@ -47,7 +47,7 @@ lsmtree_t::lsmtree_t(const config::shared_ptr_t &pConfig,
                   }
               }
 
-              spdlog::info("LSMTree flushing thread started");
+              spdlog::info("Flushing thread started");
 
               // Continuously flush memtables to disk
               // TODO: Is it possible to do the flushing async?
@@ -56,8 +56,8 @@ lsmtree_t::lsmtree_t(const config::shared_ptr_t &pConfig,
                   if (stoken.stop_requested())
                   {
                       // Flush the remaining memtables on stop request
-                      spdlog::info("Flushing remaining memtables on stop request. queue.size={}",
-                                   m_flushing_queue.size());
+                      spdlog::debug("Flushing remaining memtables on stop request. queue.size={}",
+                                    m_flushing_queue.size());
 
                       auto memtables = m_flushing_queue.pop_all();
                       while (!memtables.empty())
@@ -74,9 +74,9 @@ lsmtree_t::lsmtree_t(const config::shared_ptr_t &pConfig,
                   if (std::optional<memtable::memtable_t> memtable = m_flushing_queue.pop();
                       memtable.has_value() && !memtable->empty())
                   {
-                      spdlog::info("Flushing memtable to level0. memtable.size={}, flushing_queue.size={}",
-                                   memtable.value().size(),
-                                   m_flushing_queue.size());
+                      spdlog::debug("Flushing memtable to level0. memtable.size={}, flushing_queue.size={}",
+                                    memtable.value().size(),
+                                    m_flushing_queue.size());
 
                       // TODO: Assert will crash the program, maybe we should return an error code?
                       absl::WriterMutexLock lock{&m_mutex};
@@ -159,7 +159,6 @@ auto lsmtree_t::recover() noexcept -> bool
     // Disable all updates to manifest in recovery phase
     // because nothing new is happening, lsmtree is re-using already
     // existing information
-    spdlog::info("Manifest path: {}", m_pManifest->path().c_str());
     m_pManifest->disable();
 
     // Restore lsmtree structure from the manifest file
@@ -217,7 +216,7 @@ auto lsmtree_t::restore_from_manifest() noexcept -> bool
                     case segment_operation_k::remove_segment_k:
                     {
                         m_levels.level(record.level)->purge(record.name);
-                        spdlog::info("Segment {} removed from level {} during recovery", record.name, record.level);
+                        spdlog::debug("Segment {} removed from level {} during recovery", record.name, record.level);
                         break;
                     }
                     default:
@@ -234,19 +233,19 @@ auto lsmtree_t::restore_from_manifest() noexcept -> bool
                     case level_operation_k::add_level_k:
                     {
                         m_levels.level();
-                        spdlog::info("Level {} created during recovery", record.level);
+                        spdlog::debug("Level {} created during recovery", record.level);
                         break;
                     }
                     case level_operation_k::compact_level_k:
                     {
-                        spdlog::info(
+                        spdlog::debug(
                             "Ignoring {} during recovery",
                             db::manifest::manifest_t::level_record_t::ToString(level_operation_k::compact_level_k));
                         break;
                     }
                     case level_operation_k::purge_level_k:
                     {
-                        spdlog::info(
+                        spdlog::debug(
                             "Ignoring {} during recovery",
                             db::manifest::manifest_t::level_record_t::ToString(level_operation_k::purge_level_k));
                         break;
@@ -267,9 +266,9 @@ auto lsmtree_t::restore_from_manifest() noexcept -> bool
             record);
     }
 
-    spdlog::info("Restoring levels");
+    spdlog::debug("Restoring levels");
     m_levels.restore();
-    spdlog::info("Recovery finished");
+    spdlog::debug("Recovery finished");
 
     return true;
 }
