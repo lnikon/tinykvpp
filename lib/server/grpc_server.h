@@ -13,7 +13,7 @@ namespace server::grpc_communication
 class tinykvpp_service_impl_t final : public TinyKVPPService::Service
 {
   public:
-    tinykvpp_service_impl_t(db::db_t &db);
+    explicit tinykvpp_service_impl_t(db::db_t &db);
 
     auto
     Put(grpc::ServerContext *pContext, const PutRequest *pRequest, PutResponse *pResponse) -> grpc::Status override;
