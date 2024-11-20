@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <fmt/format.h>
 #include <fstream>
+#include <spdlog/spdlog.h>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -66,17 +67,25 @@ auto manifest_t::path() -> fs::path_t
 
 void manifest_t::add(record_t info)
 {
+    auto infoToString = [](auto &&info) -> std::string
+    {
+        std::stringstream stringStream;
+        info.write(stringStream);
+        return stringStream.str();
+    };
+
     if (!m_enabled)
     {
-        spdlog::debug("Manifest at {} is disabled", m_path.c_str());
+        spdlog::info("Manifest at {} is disabled - skipping record addition", m_path.c_str());
+        if (spdlog::get_level() == spdlog::level::debug)
+        {
+            spdlog::debug("Skipped record details: {}", std::visit(infoToString, info));
+        }
         return;
     }
 
     m_records.emplace_back(info);
-
-    std::stringstream stringStream;
-    std::visit([&stringStream](auto &&record) { record.write(stringStream); }, info);
-    m_log.write(stringStream.str());
+    m_log.write(std::visit(infoToString, info));
 }
 
 // trim from start (in place)

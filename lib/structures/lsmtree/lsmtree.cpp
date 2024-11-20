@@ -102,7 +102,7 @@ void lsmtree_t::put(const structures::lsmtree::key_t &key, const structures::lsm
 
     // Record addition of the new key into the WAL and add record into memtable
     auto record{record_t{key, value}};
-    m_pWal->add({db::wal::wal_t::operation_k::add_k, record});
+    m_pWal->add({.op=db::wal::wal_t::operation_k::add_k, .kv=record});
     m_table->emplace(std::move(record));
 
     // TODO: Most probably this if block will causes periodic latencies during reads when the condition is met

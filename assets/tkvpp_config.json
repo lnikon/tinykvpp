@@ -1,9 +1,9 @@
 {
   "logging": {
-    "loggingLevel": "info"
+    "loggingLevel": "debug"
   },
   "database": {
-    "path": "/home/nikon/var/tkvpp",
+    "path": "./var/tkvpp",
     "walFilename": "wal",
     "manifestFilenamePrefix": "manifest_"
   },

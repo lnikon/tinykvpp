@@ -1,26 +1,10 @@
 #include <benchmark/benchmark.h>
 
-#include "db/db.h"
-
 #include <spdlog/spdlog.h>
 
-using mem_key_t = structures::memtable::memtable_t::record_t::key_t;
-using mem_value_t = structures::memtable::memtable_t::record_t::value_t;
-
-auto generateRandomString(int length) -> std::string
-{
-    std::mt19937                       generator(time(nullptr)); // Mersenne Twister random number generator
-    std::uniform_int_distribution<int> distribution(32, 126);    // ASCII printable range
-
-    std::string result;
-    for (int i = 0; i < length; ++i)
-    {
-        char randomChar = static_cast<char>(distribution(generator));
-        result += randomChar;
-    }
-
-    return result;
-}
+#include "common.h"
+#include "db/db.h"
+#include "config/config.h"
 
 class DatabaseFixture : public benchmark::Fixture
 {
@@ -52,15 +36,16 @@ db::db_t *DatabaseFixture::m_pDb = nullptr;
 // Defines and registers `PutTest` using the class `DatabaseFixture`.
 BENCHMARK_DEFINE_F(DatabaseFixture, PutTest)(benchmark::State &st)
 {
-    std::vector<std::pair<mem_key_t, mem_value_t>> records;
+    std::vector<std::pair<bench::mem_key_t, bench::mem_value_t>> records;
     for (auto _ : st)
     {
-        st.PauseTiming();
         const std::size_t recordNum{1024};
+
+        st.PauseTiming();
         records.reserve(recordNum);
         for (std::size_t i = 0; i < recordNum; i++)
         {
-            records.emplace_back(generateRandomString(st.range(0)), generateRandomString(st.range(0)));
+            records.emplace_back(bench::generateRandomString(st.range(0)), bench::generateRandomString(st.range(0)));
         }
         st.ResumeTiming();
 

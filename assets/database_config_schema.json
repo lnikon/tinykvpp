@@ -17,15 +17,19 @@
         },
         "database": {
             "type": "object",
+            "description": "Core database configuration settings",
             "properties": {
                 "path": {
-                    "type": "string"
+                    "type": "string",
+                    "description": "Database storage directory path"
                 },
                 "walFilename": {
-                    "type": "string"
+                    "type": "string",
+                    "description": "Write-ahead log filename"
                 },
                 "manifestFilenamePrefix": {
-                    "type": "string"
+                    "type": "string",
+                    "description": "Prefix for manifest files"
                 }
             },
             "required": [
@@ -38,10 +42,9 @@
             "type": "object",
             "properties": {
                 "memtableFlushThreshold": {
-                    "type": "number"
-                },
-                "maximumLevels": {
-                    "type": "number"
+                    "type": "number",
+                    "description": "The threshold of bytes at which the memtable should be flushed",
+                    "default": 1024
                 },
                 "levelZeroCompaction": {
                     "$ref": "#/$defs/compaction"
@@ -59,15 +62,20 @@
         },
         "server": {
             "type": "object",
+            "description": "Server configuration settings",
             "properties": {
                 "transport": {
                     "$ref": "#/$defs/serverTransport"
                 },
                 "host": {
-                    "type": "string"
+                    "type": "string",
+                    "description": "Server host address"
                 },
                 "port": {
-                    "type": "number"
+                    "type": "number",
+                    "description": "Server port number",
+                    "minimum": 1024,
+                    "maximum": 65535
                 }
             },
             "required": [
@@ -94,7 +102,9 @@
             "type": "string",
             "enum": [
                 "info",
-                "debug"
+                "debug",
+                "trace",
+                "off"
             ]
         },
         "compactionStrategy": {
@@ -111,7 +121,9 @@
                     "$ref": "#/$defs/compactionStrategy"
                 },
                 "compactionThreshold": {
-                    "type": "number"
+                    "type": "number",
+                    "description": "Number of files that trigger compaction",
+                    "minimum": 1
                 }
             },
             "required": [
@@ -121,4 +133,3 @@
         }
     }
 }
-

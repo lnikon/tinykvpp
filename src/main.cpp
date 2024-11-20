@@ -48,15 +48,19 @@ static json database_config_schema = R"(
         },
         "database": {
             "type": "object",
+            "description": "Core database configuration settings",
             "properties": {
                 "path": {
-                    "type": "string"
+                    "type": "string",
+                    "description": "Database storage directory path"
                 },
                 "walFilename": {
-                    "type": "string"
+                    "type": "string",
+                    "description": "Write-ahead log filename"
                 },
                 "manifestFilenamePrefix": {
-                    "type": "string"
+                    "type": "string",
+                    "description": "Prefix for manifest files"
                 }
             },
             "required": [
@@ -69,10 +73,9 @@ static json database_config_schema = R"(
             "type": "object",
             "properties": {
                 "memtableFlushThreshold": {
-                    "type": "number"
-                },
-                "maximumLevels": {
-                    "type": "number"
+                    "type": "number",
+                    "description": "The threshold of bytes at which the memtable should be flushed",
+                    "default": 1024
                 },
                 "levelZeroCompaction": {
                     "$ref": "#/$defs/compaction"
@@ -90,24 +93,29 @@ static json database_config_schema = R"(
         },
         "server": {
             "type": "object",
+            "description": "Server configuration settings",
             "properties": {
                 "transport": {
                     "$ref": "#/$defs/serverTransport"
                 },
                 "host": {
-                    "type": "string"
+                    "type": "string",
+                    "description": "Server host address"
                 },
                 "port": {
-                    "type": "number"
-}
-},
-    "required": [
-        "transport",
-        "host",
-        "port"
-    ]
-    }
-},
+                    "type": "number",
+                    "description": "Server port number",
+                    "minimum": 1024,
+                    "maximum": 65535
+                }
+            },
+            "required": [
+                "transport",
+                "host",
+                "port"
+            ]
+        }
+    },
     "required": [
         "database",
         "lsmtree",
@@ -125,14 +133,16 @@ static json database_config_schema = R"(
             "type": "string",
             "enum": [
                 "info",
-            "debug"
+                "debug",
+                "trace",
+                "off"
             ]
         },
         "compactionStrategy": {
             "type": "string",
             "enum": [
                 "levelled",
-            "tiered"
+                "tiered"
             ]
         },
         "compaction": {
@@ -142,12 +152,14 @@ static json database_config_schema = R"(
                     "$ref": "#/$defs/compactionStrategy"
                 },
                 "compactionThreshold": {
-                    "type": "number"
+                    "type": "number",
+                    "description": "Number of files that trigger compaction",
+                    "minimum": 1
                 }
             },
             "required": [
                 "compactionStrategy",
-            "compactionThreshold"
+                "compactionThreshold"
             ]
         }
     }
@@ -188,6 +200,10 @@ void configureLogging(const std::string &loggingLevel)
     else if (loggingLevel == SPDLOG_LEVEL_NAME_DEBUG)
     {
         spdlog::set_level(spdlog::level::debug);
+    }
+    else if (loggingLevel == SPDLOG_LEVEL_NAME_TRACE)
+    {
+        spdlog::set_level(spdlog::level::trace);
     }
     else if (loggingLevel == SPDLOG_LEVEL_NAME_OFF)
     {
@@ -302,7 +318,7 @@ auto loadServerConfig(const json &configJson, config::shared_ptr_t dbConfig)
     }
     else
     {
-        throw std::runtime_error("\"port\" is not specified in the config");
+        throw std::runtime_error("\"host\" is not specified in the config");
     }
 
     if (configJson.contains("port"))
@@ -311,7 +327,7 @@ auto loadServerConfig(const json &configJson, config::shared_ptr_t dbConfig)
     }
     else
     {
-        throw std::runtime_error("\"server\" is not specified in the config");
+        throw std::runtime_error("\"port\" is not specified in the config");
     }
 
     if (configJson.contains("transport"))

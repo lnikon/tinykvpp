@@ -80,7 +80,7 @@
             "name": "Debug - Main",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/debug-build/Main", // Path to the compiled executable
+            "program": "${workspaceFolder}/build/Main", // Path to the compiled executable
             "args": [
                 "-c",
                 "./assets/tkvpp_config.json"
