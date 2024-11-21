@@ -4,6 +4,7 @@
 #include "server_concept.h"
 #include "tcp_server.h"
 #include "grpc_server.h"
+#include <spdlog/spdlog.h>
 
 namespace server
 {
@@ -25,9 +26,17 @@ template <> struct CommunicationFactory<grpc_communication_t::kind>
     using type = grpc_communication_t;
 };
 
-template <communication_strategy_kind_k kind> auto factory()
+template <communication_strategy_kind_k kind> [[nodiscard]] auto factory() noexcept
 {
-    return typename CommunicationFactory<kind>::type();
+    try
+    {
+        return typename CommunicationFactory<kind>::type();
+    }
+    catch (std::exception &e)
+    {
+        spdlog::error("Exception happened during communication creation. {}", e.what());
+        throw;
+    }
 }
 
 } // namespace server

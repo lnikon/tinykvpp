@@ -20,15 +20,21 @@ template <communication_strategy_t Strategy> class server_t
         m_impl.start(db);
     }
 
+    void shutdown()
+    {
+        m_impl.shutdown();
+    }
+
   private:
     Strategy m_impl;
 };
 
-template <communication_strategy_kind_k Type> void main_server(db::db_t &db)
+template <communication_strategy_kind_k Type> auto main_server(db::db_t &db)
 {
     auto     communicationStrategy = factory<Type>();
     server_t server(std::move(communicationStrategy));
     server.start(db);
+    return server;
 }
 
 } // namespace server

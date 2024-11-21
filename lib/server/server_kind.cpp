@@ -1,22 +1,23 @@
 #include "server/server_kind.h"
+#include <optional>
 
 namespace server
 {
 
-auto to_string(const communication_strategy_kind_k kind) noexcept -> std::string
+auto to_string(const communication_strategy_kind_k kind) noexcept -> std::optional<std::string>
 {
     switch (kind)
     {
     case communication_strategy_kind_k::grpc_k:
-        return {GRPC_STR_VIEW.data(), GRPC_STR_VIEW.size()};
+        return std::string{GRPC_STR_VIEW.data(), GRPC_STR_VIEW.size()};
     case communication_strategy_kind_k::tcp_k:
-        return {TCP_STR_VIEW.data(), TCP_STR_VIEW.size()};
-    case communication_strategy_kind_k::undefined_k:
-        return {UNDEFINED_STR_VIEW.data(), UNDEFINED_STR_VIEW.size()};
+        return std::string{TCP_STR_VIEW.data(), TCP_STR_VIEW.size()};
+    default:
+        return std::nullopt;
     }
 }
 
-auto from_string(const std::string_view kind) noexcept -> communication_strategy_kind_k
+auto from_string(const std::string_view kind) noexcept -> std::optional<communication_strategy_kind_k>
 {
     if (kind == GRPC_STR_VIEW)
     {
@@ -28,7 +29,7 @@ auto from_string(const std::string_view kind) noexcept -> communication_strategy
         return communication_strategy_kind_k::tcp_k;
     }
 
-    return communication_strategy_kind_k::undefined_k;
+    return std::nullopt;
 }
 
 } // namespace server

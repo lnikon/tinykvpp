@@ -20,6 +20,7 @@
 
 #include <spdlog/common.h>
 #include <spdlog/spdlog.h>
+#include <variant>
 
 using tk_key_t = structures::memtable::memtable_t::record_t::key_t;
 using tk_value_t = structures::memtable::memtable_t::record_t::value_t;
@@ -398,20 +399,37 @@ auto main(int argc, char *argv[]) -> int
         }
 
         const auto kind{server::from_string(dbConfig->ServerConfig.transport)};
-        if (kind == server::communication_strategy_kind_k::grpc_k)
-        {
-            server::main_server<server::communication_strategy_kind_k::grpc_k>(db);
-        }
-        else if (kind == server::communication_strategy_kind_k::tcp_k)
-        {
-            spdlog::warn("{} server is not supported. Exiting", server::to_string(kind));
-            return EXIT_SUCCESS;
-        }
-        else
+        if (!kind.has_value())
         {
             spdlog::info("\"transport\" is not determined. Exiting");
             return EXIT_SUCCESS;
         }
+
+        std::variant<std::monostate, server::server_t<server::grpc_communication_t>> server;
+        if (kind == server::communication_strategy_kind_k::grpc_k)
+        {
+            server = server::main_server<server::communication_strategy_kind_k::grpc_k>(db);
+        }
+        else if (kind == server::communication_strategy_kind_k::tcp_k)
+        {
+            spdlog::warn("{} server is not supported. Exiting", server::to_string(kind.value()).value());
+            return EXIT_SUCCESS;
+        }
+
+        std::visit(
+            [](auto &server)
+            {
+                using T = std::decay_t<decltype(server)>;
+                if constexpr (std::is_same_v<T, std::monostate>)
+                {
+                    return;
+                }
+                else
+                {
+                    server.shutdown();
+                }
+            },
+            server);
     }
     catch (const std::exception &e)
     {

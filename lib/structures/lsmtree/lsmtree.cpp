@@ -97,12 +97,12 @@ void lsmtree_t::put(const structures::lsmtree::key_t &key, const structures::lsm
 {
     assert(m_pConfig);
 
-    absl::MutexLock lock{&m_mutex};
+    absl::WriterMutexLock lock{&m_mutex};
     assert(m_table);
 
     // Record addition of the new key into the WAL and add record into memtable
     auto record{record_t{key, value}};
-    m_pWal->add({.op=db::wal::wal_t::operation_k::add_k, .kv=record});
+    m_pWal->add({.op = db::wal::wal_t::operation_k::add_k, .kv = record});
     m_table->emplace(std::move(record));
 
     // TODO: Most probably this if block will causes periodic latencies during reads when the condition is met
@@ -121,7 +121,7 @@ void lsmtree_t::put(const structures::lsmtree::key_t &key, const structures::lsm
 
 auto lsmtree_t::get(const key_t &key) noexcept -> std::optional<record_t>
 {
-    absl::MutexLock lock{&m_mutex};
+    absl::ReaderMutexLock lock{&m_mutex};
     assert(m_table);
 
     // TODO(lnikon): Skip searching if record doesn't exist

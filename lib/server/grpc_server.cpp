@@ -1,12 +1,13 @@
 #include "server/grpc_server.h"
 
+#include <cstdlib>
 #include <fmt/core.h>
+#include <memory>
 #include <spdlog/common.h>
 #include <spdlog/spdlog.h>
 
 #include <grpc/grpc.h>
 #include <grpcpp/security/server_credentials.h>
-#include <grpcpp/server.h>
 #include <grpcpp/server_builder.h>
 #include <grpcpp/server_context.h>
 #include <grpcpp/support/status.h>
@@ -41,18 +42,50 @@ auto tinykvpp_service_impl_t::Get(grpc::ServerContext *pContext, const GetReques
     }
     return grpc::Status::OK;
 }
-void grpc_communication_t::start(db::db_t &db) const noexcept
+
+void grpc_communication_t::start(db::db_t &db) noexcept
 {
+    if (m_server)
+    {
+        spdlog::warn("gRPC already started");
+        return;
+    }
+
     spdlog::info("Starting gRPC communication...");
-    tinykvpp_service_impl_t service(db);
-    grpc::ServerBuilder     builder;
-    const auto              dbConfig{db.config()};
-    const auto serverAddress{fmt::format("{}:{}", dbConfig->ServerConfig.host, dbConfig->ServerConfig.port)};
-    builder.AddListeningPort(serverAddress, grpc::InsecureServerCredentials());
-    builder.RegisterService(&service);
-    std::unique_ptr<grpc::Server> server(builder.BuildAndStart());
-    spdlog::info("Server listening on {}", serverAddress);
-    server->Wait();
+
+    const auto serverAddress{fmt::format("{}:{}", db.config()->ServerConfig.host, db.config()->ServerConfig.port)};
+
+    try
+    {
+        grpc::ServerBuilder builder;
+        builder.AddListeningPort(serverAddress, grpc::InsecureServerCredentials());
+
+        tinykvpp_service_impl_t service(db);
+        builder.RegisterService(&service);
+
+        m_server = std::unique_ptr<grpc::Server>(builder.BuildAndStart());
+        spdlog::info("Server listening on {}", serverAddress);
+        m_server->Wait();
+    }
+    catch (std::exception &e)
+    {
+        spdlog::error("Excetion occured while creating gRPC server. {}", e.what());
+        exit(EXIT_FAILURE);
+    }
+}
+
+void grpc_communication_t::shutdown() noexcept
+{
+    try
+    {
+        m_server->Shutdown();
+    }
+    catch (std::exception &e)
+    {
+
+        spdlog::error("Excetion occured while shutting down gRPC server. {}", e.what());
+        exit(EXIT_FAILURE);
+    }
 }
 
 } // namespace server::grpc_communication

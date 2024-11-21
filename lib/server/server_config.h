@@ -9,7 +9,7 @@ namespace server::config
 struct server_config_t
 {
     std::string host;
-    uint32_t    port;
+    uint16_t    port;
     std::string transport;
 };
 
