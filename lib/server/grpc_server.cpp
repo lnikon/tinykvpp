@@ -25,27 +25,44 @@ auto tinykvpp_service_impl_t::Put(grpc::ServerContext *pContext, const PutReques
 {
     (void)pContext;
 
-    m_db.put(structures::lsmtree::key_t{pRequest->key()}, structures::lsmtree::value_t{pRequest->value()});
-    pResponse->set_status(std::string("OK"));
-    return grpc::Status::OK;
+    try
+    {
+        m_db.put(structures::lsmtree::key_t{pRequest->key()}, structures::lsmtree::value_t{pRequest->value()});
+        pResponse->set_status(std::string("OK"));
+        return grpc::Status::OK;
+    }
+    catch (std::exception &e)
+    {
+        auto msg{fmt::format("Failed to put key-value pair: {}", e.what())};
+        spdlog::error(msg);
+        return {grpc::StatusCode::INTERNAL, msg};
+    }
 }
 
 auto tinykvpp_service_impl_t::Get(grpc::ServerContext *pContext, const GetRequest *pRequest, GetResponse *pResponse)
     -> grpc::Status
 {
     (void)pContext;
-
-    const auto &record = m_db.get(structures::lsmtree::key_t{pRequest->key()});
-    if (record)
+    try
     {
-        pResponse->set_value(record.value().m_value.m_value);
+        const auto &record = m_db.get(structures::lsmtree::key_t{pRequest->key()});
+        if (record)
+        {
+            pResponse->set_value(record.value().m_value.m_value);
+        }
+        return grpc::Status::OK;
     }
-    return grpc::Status::OK;
+    catch (std::exception &e)
+    {
+        auto msg{fmt::format("Failed to get key-value pair: {}", e.what())};
+        spdlog::error(msg);
+        return {grpc::StatusCode::INTERNAL, msg};
+    }
 }
 
 void grpc_communication_t::start(db::db_t &db) noexcept
 {
-    if (m_server)
+    if (m_service || m_server)
     {
         spdlog::warn("gRPC already started");
         return;
@@ -60,8 +77,8 @@ void grpc_communication_t::start(db::db_t &db) noexcept
         grpc::ServerBuilder builder;
         builder.AddListeningPort(serverAddress, grpc::InsecureServerCredentials());
 
-        tinykvpp_service_impl_t service(db);
-        builder.RegisterService(&service);
+        m_service = std::make_unique<tinykvpp_service_impl_t>(db);
+        builder.RegisterService(m_service.get());
 
         m_server = std::unique_ptr<grpc::Server>(builder.BuildAndStart());
         spdlog::info("Server listening on {}", serverAddress);

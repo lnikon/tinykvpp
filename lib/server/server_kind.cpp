@@ -4,14 +4,14 @@
 namespace server
 {
 
-auto to_string(const communication_strategy_kind_k kind) noexcept -> std::optional<std::string>
+auto to_string(const communication_strategy_kind_k kind) noexcept -> std::optional<std::string_view>
 {
     switch (kind)
     {
     case communication_strategy_kind_k::grpc_k:
-        return std::string{GRPC_STR_VIEW.data(), GRPC_STR_VIEW.size()};
+        return GRPC_STR_VIEW;
     case communication_strategy_kind_k::tcp_k:
-        return std::string{TCP_STR_VIEW.data(), TCP_STR_VIEW.size()};
+        return TCP_STR_VIEW;
     default:
         return std::nullopt;
     }

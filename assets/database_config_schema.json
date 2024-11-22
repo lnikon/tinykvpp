@@ -42,8 +42,9 @@
             "type": "object",
             "properties": {
                 "memtableFlushThreshold": {
-                    "type": "number",
+                    "type": "integer",
                     "description": "The threshold of bytes at which the memtable should be flushed",
+                    "minimum": 1,
                     "default": 1024
                 },
                 "levelZeroCompaction": {
@@ -72,7 +73,7 @@
                     "description": "Server host address"
                 },
                 "port": {
-                    "type": "number",
+                    "type": "integer",
                     "description": "Server port number",
                     "minimum": 1024,
                     "maximum": 65535
@@ -121,7 +122,7 @@
                     "$ref": "#/$defs/compactionStrategy"
                 },
                 "compactionThreshold": {
-                    "type": "number",
+                    "type": "integer",
                     "description": "Number of files that trigger compaction",
                     "minimum": 1
                 }

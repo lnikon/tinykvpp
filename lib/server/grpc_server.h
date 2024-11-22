@@ -36,7 +36,8 @@ class grpc_communication_t final
     void shutdown() noexcept;
 
   private:
-    std::unique_ptr<grpc::Server> m_server{nullptr};
+    std::unique_ptr<grpc::Server>            m_server{nullptr};
+    std::unique_ptr<tinykvpp_service_impl_t> m_service{nullptr};
 };
 
 static_assert(communication_strategy_t<grpc_communication_t>,

@@ -168,12 +168,14 @@ auto manifest_t::records() const noexcept -> std::vector<record_t>
 void manifest_t::enable()
 {
     m_enabled = true;
-    spdlog::debug("Manifest at {} enabled", m_path.c_str());
+    spdlog::info("Manifest at {} enabled - ready to record changes", m_path.c_str());
+    spdlog::debug("Manifest enable triggered with {} pending records", m_records.size());
 }
 
 void manifest_t::disable()
 {
     m_enabled = false;
-    spdlog::debug("Manifest at {} disabled", m_path.c_str());
+    spdlog::info("Manifest at {} disabled - changes will not be recorded", m_path.c_str());
+    spdlog::debug("Manifest disable triggered with {} pending records", m_records.size());
 }
 } // namespace db::manifest

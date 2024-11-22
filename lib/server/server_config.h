@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <string>
 
-namespace server::config
+namespace server
 {
 
 struct server_config_t
@@ -13,4 +13,4 @@ struct server_config_t
     std::string transport;
 };
 
-} // namespace server::config
+} // namespace server

@@ -17,7 +17,7 @@ enum class communication_strategy_kind_k : uint8_t
     grpc_k
 };
 
-[[nodiscard]] auto to_string(const communication_strategy_kind_k kind) noexcept -> std::optional<std::string>;
+[[nodiscard]] auto to_string(const communication_strategy_kind_k kind) noexcept -> std::optional<std::string_view>;
 
 [[nodiscard]] auto from_string(const std::string_view kind) noexcept -> std::optional<communication_strategy_kind_k>;
 
