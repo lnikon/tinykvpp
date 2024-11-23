@@ -15,19 +15,21 @@
 namespace server::grpc_communication
 {
 
-tinykvpp_service_impl_t::tinykvpp_service_impl_t(db::db_t &db)
-    : m_db(db)
+tinykvpp_service_impl_t::tinykvpp_service_impl_t(db::shared_ptr_t db)
+    : m_database(db)
 {
 }
 
-auto tinykvpp_service_impl_t::Put(grpc::ServerContext *pContext, const PutRequest *pRequest, PutResponse *pResponse)
-    -> grpc::Status
+auto tinykvpp_service_impl_t::Put(grpc::ServerContext *pContext,
+                                  const PutRequest    *pRequest,
+                                  PutResponse *pResponse) -> grpc::Status
 {
     (void)pContext;
 
     try
     {
-        m_db.put(structures::lsmtree::key_t{pRequest->key()}, structures::lsmtree::value_t{pRequest->value()});
+        m_database->put(structures::lsmtree::key_t{pRequest->key()},
+                        structures::lsmtree::value_t{pRequest->value()});
         pResponse->set_status(std::string("OK"));
         return grpc::Status::OK;
     }
@@ -39,13 +41,15 @@ auto tinykvpp_service_impl_t::Put(grpc::ServerContext *pContext, const PutReques
     }
 }
 
-auto tinykvpp_service_impl_t::Get(grpc::ServerContext *pContext, const GetRequest *pRequest, GetResponse *pResponse)
-    -> grpc::Status
+auto tinykvpp_service_impl_t::Get(grpc::ServerContext *pContext,
+                                  const GetRequest    *pRequest,
+                                  GetResponse *pResponse) -> grpc::Status
 {
     (void)pContext;
     try
     {
-        const auto &record = m_db.get(structures::lsmtree::key_t{pRequest->key()});
+        const auto &record =
+            m_database->get(structures::lsmtree::key_t{pRequest->key()});
         if (record)
         {
             pResponse->set_value(record.value().m_value.m_value);
@@ -60,33 +64,62 @@ auto tinykvpp_service_impl_t::Get(grpc::ServerContext *pContext, const GetReques
     }
 }
 
-void grpc_communication_t::start(db::db_t &db) noexcept
+void grpc_communication_t::start(db::shared_ptr_t database) noexcept
 {
-    if (m_service || m_server)
+    if (m_service && m_server)
     {
         spdlog::warn("gRPC already started");
         return;
     }
 
+    if (!m_service && m_server)
+    {
+        spdlog::error("gRPC service is not initialized");
+        exit(EXIT_FAILURE);
+    }
+
+    if (!m_server && m_service)
+    {
+        spdlog::error("gRPC server is not initialized");
+        exit(EXIT_FAILURE);
+    }
+
+    if (!database)
+    {
+        spdlog::error("Database is not initialized");
+        exit(EXIT_FAILURE);
+    }
+
     spdlog::info("Starting gRPC communication...");
 
-    const auto serverAddress{fmt::format("{}:{}", db.config()->ServerConfig.host, db.config()->ServerConfig.port)};
+    const auto serverAddress{
+        fmt::format("{}:{}",
+                    database->config()->ServerConfig.host,
+                    database->config()->ServerConfig.port)};
 
     try
     {
         grpc::ServerBuilder builder;
-        builder.AddListeningPort(serverAddress, grpc::InsecureServerCredentials());
+        builder.AddListeningPort(serverAddress,
+                                 grpc::InsecureServerCredentials());
 
-        m_service = std::make_unique<tinykvpp_service_impl_t>(db);
+        m_service = std::make_unique<tinykvpp_service_impl_t>(database);
         builder.RegisterService(m_service.get());
 
         m_server = std::unique_ptr<grpc::Server>(builder.BuildAndStart());
+        if (!m_server)
+        {
+            spdlog::error("Failed to create gRPC server on {}", serverAddress);
+            exit(EXIT_FAILURE);
+        }
+
         spdlog::info("Server listening on {}", serverAddress);
         m_server->Wait();
     }
     catch (std::exception &e)
     {
-        spdlog::error("Excetion occured while creating gRPC server. {}", e.what());
+        spdlog::error("Excetion occured while creating gRPC server. {}",
+                      e.what());
         exit(EXIT_FAILURE);
     }
 }
@@ -100,7 +133,8 @@ void grpc_communication_t::shutdown() noexcept
     catch (std::exception &e)
     {
 
-        spdlog::error("Excetion occured while shutting down gRPC server. {}", e.what());
+        spdlog::error("Excetion occured while shutting down gRPC server. {}",
+                      e.what());
         exit(EXIT_FAILURE);
     }
 }

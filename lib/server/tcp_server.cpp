@@ -3,9 +3,9 @@
 namespace server::tcp_communication
 {
 
-void tcp_communication_t::start(db::db_t &db) const noexcept
+void tcp_communication_t::start(db::shared_ptr_t database) const noexcept
 {
-    (void)db;
+    (void)database;
     spdlog::error("TCP server is not implemented yet");
 }
 

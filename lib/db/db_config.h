@@ -2,7 +2,6 @@
 
 #include <structures/lsmtree/lsmtree_config.h>
 
-#include <filesystem>
 #include "fs/types.h"
 
 namespace db
@@ -10,7 +9,7 @@ namespace db
 
 struct db_config_t
 {
-    fs::path_t DatabasePath{"."};
+    fs::path_t  DatabasePath{"."};
     std::string WalFilename{"wal"};
     std::string ManifestFilenamePrefix{"manifest_"};
 };

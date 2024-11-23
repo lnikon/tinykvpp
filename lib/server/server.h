@@ -15,7 +15,7 @@ template <communication_strategy_t Strategy> class server_t
     {
     }
 
-    void start(db::db_t &db)
+    void start(db::shared_ptr_t &db)
     {
         m_impl.start(db);
     }
@@ -29,7 +29,8 @@ template <communication_strategy_t Strategy> class server_t
     Strategy m_impl;
 };
 
-template <communication_strategy_kind_k Type> auto main_server(db::db_t &db)
+template <communication_strategy_kind_k Type>
+auto main_server(db::shared_ptr_t &db)
 {
     auto     communicationStrategy = factory<Type>();
     server_t server(std::move(communicationStrategy));
