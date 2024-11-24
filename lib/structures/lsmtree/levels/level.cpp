@@ -37,8 +37,8 @@ template <typename T, typename U = T> struct IteratorCompare
 level_t::level_t(const level_index_type_t   levelIndex,
                  config::shared_ptr_t       pConfig,
                  db::manifest::shared_ptr_t manifest) noexcept
-    : m_pConfig{std::move(pConfig)},
-      m_levelIndex{levelIndex},
+    : m_levelIndex{levelIndex},
+      m_pConfig{std::move(pConfig)},
       m_manifest{std::move(std::move(manifest))}
 {
 }
@@ -46,7 +46,7 @@ level_t::level_t(const level_index_type_t   levelIndex,
 void level_t::emplace(const lsmtree::segments::regular_segment::shared_ptr_t &pSegment) noexcept
 {
     assert(pSegment);
-    spdlog::info("Adding segment {} into level {}", pSegment->get_name(), index());
+    spdlog::debug("Adding segment {} into level {}", pSegment->get_name(), index());
 
     if (index() == 0)
     {
@@ -91,7 +91,7 @@ auto level_t::record(const key_t &key) const noexcept -> std::optional<memtable:
     {
         if (const auto &result = pSegment->record(key); !result.empty())
         {
-            spdlog::info("Found record {} at level {} in segment {}", key.m_key, index(), pSegment->get_name());
+            spdlog::debug("Found record {} at level {} in segment {}", key.m_key, index(), pSegment->get_name());
             return result[0];
         }
     }
@@ -234,7 +234,7 @@ void level_t::merge(const segments::regular_segment::shared_ptr_t &pSegment) noe
 void level_t::purge() noexcept
 {
     absl::WriterMutexLock lock{&m_mutex};
-    spdlog::info("Purging level {} with {} segments", index(), m_storage.size());
+    spdlog::debug("Purging level {} with {} segments", index(), m_storage.size());
     const auto idx{index()};
     for (auto &pSegment : m_storage)
     {
@@ -263,7 +263,7 @@ void level_t::purge(const segments::regular_segment::shared_ptr_t &pSegment) noe
     absl::WriterMutexLock lock{&m_mutex};
     assert(pSegment);
 
-    spdlog::info("Removing segment {} from level {}", pSegment->get_name(), index());
+    spdlog::debug("Removing segment {} from level {}", pSegment->get_name(), index());
 
     m_manifest->add(db::manifest::manifest_t::segment_record_t{
         .op = segment_operation_k::remove_segment_k, .name = pSegment->get_name(), .level = index()});

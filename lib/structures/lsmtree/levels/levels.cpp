@@ -47,7 +47,6 @@ levels_t::levels_t(config::shared_ptr_t pConfig, db::manifest::shared_ptr_t pMan
     const std::size_t levelCount{7};
     for (std::size_t idx{0}; idx < levelCount; idx++)
     {
-        m_pManifest->add(db::manifest::manifest_t::level_record_t{.op = level_operation_k::add_level_k, .level = idx});
         level();
     }
 }
@@ -148,7 +147,7 @@ auto levels_t::record(const key_t &key) const noexcept -> std::optional<record_t
         result = currentLevel->record(key);
         if (result)
         {
-            spdlog::info("Found key {} at level {}", key.m_key, currentLevel->index());
+            spdlog::debug("Found key {} at level {}", key.m_key, currentLevel->index());
             break;
         }
     }
@@ -187,7 +186,8 @@ levels_t::flush_to_level0(memtable::memtable_t memtable) const noexcept -> segme
 auto levels_t::restore() noexcept -> void
 {
     absl::WriterMutexLock lock{&m_mutex};
-    for (auto& level : m_levels) {
+    for (auto &level : m_levels)
+    {
         level->restore();
     }
 }

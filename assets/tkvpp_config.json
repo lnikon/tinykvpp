@@ -3,7 +3,7 @@
     "loggingLevel": "info"
   },
   "database": {
-    "path": "/home/nikon/tkvpp",
+    "path": "./var/tkvpp",
     "walFilename": "wal",
     "manifestFilenamePrefix": "manifest_"
   },
@@ -12,11 +12,16 @@
     "maximumLevels": 12,
     "levelZeroCompaction": {
       "compactionStrategy": "levelled",
-      "compactionThreshold": 4
+      "compactionThreshold": 1024
     },
     "levelNonZeroCompaction": {
       "compactionStrategy": "tiered",
-      "compactionThreshold": 8
+      "compactionThreshold": 1024
     }
+  },
+  "server": {
+    "transport": "grpc",
+    "host": "localhost",
+    "port": 9000
   }
 }

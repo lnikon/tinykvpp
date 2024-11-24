@@ -75,6 +75,45 @@
                 ],
                 "debuggerPath": "/usr/bin/gdb"
             },
+        },
+        {
+            "name": "Debug - Main",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/Main", // Path to the compiled executable
+            "args": [
+                "-c",
+                "./assets/tkvpp_config.json"
+            ], // Arguments to pass to the program
+            "stopAtEntry": false, // Set to true to stop at the program's entry point
+            "cwd": "${workspaceFolder}", // Current working directory
+            "environment": [],
+            "externalConsole": false, // Set to true if you want to use an external terminal
+            "MIMode": "gdb", // Use "lldb" if you're using clang on macOS
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ],
+            "preLaunchTask": "build", // Ensure your program is built before launching
+            "miDebuggerPath": "/usr/bin/gdb", // Path to the gdb or lldb debugger
+            "logging": {
+                "trace": true, // Enable trace for debugging the launch.json config
+                "traceResponse": true,
+                "engineLogging": false
+            },
+            "launchCompleteCommand": "exec-run",
+            "targetArchitecture": "x86_64",
+            "pipeTransport": {
+                "pipeCwd": "",
+                "pipeProgram": "/bin/bash",
+                "pipeArgs": [
+                    "-c"
+                ],
+                "debuggerPath": "/usr/bin/gdb"
+            },
         }
     ]
 }

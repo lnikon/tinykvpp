@@ -2,6 +2,7 @@
 // Created by nikon on 3/8/24.
 //
 
+#include <algorithm>
 #include <iterator>
 #include <structures/lsmtree/segments/helpers.h>
 
@@ -18,10 +19,12 @@ auto uuid() -> std::string
 {
     std::random_device rnd;
     auto               seed_data = std::array<int, std::mt19937::state_size>{};
-    std::generate(std::begin(seed_data), std::end(seed_data), std::ref(rnd));
+    std::ranges::generate(seed_data, std::ref(rnd));
+
     std::seed_seq                seq(std::begin(seed_data), std::end(seed_data));
     std::mt19937                 generator(seq);
     uuids::uuid_random_generator gen{generator};
+
     return to_string(uuids::basic_uuid_random_generator{gen}());
 }
 

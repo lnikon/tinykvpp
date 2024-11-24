@@ -1,12 +1,11 @@
 cmake_minimum_required(VERSION 3.25)
 project(zkv)
 
-add_executable(basic_bench "basic_bench.cpp")
-target_link_libraries(basic_bench benchmark::benchmark DB MemTable LSMTree Config HashIndex)
+add_executable(BasicBench basic_bench.cpp common.cpp)
+target_link_libraries(BasicBench benchmark::benchmark DB)
 
-add_executable(celero_bench "celero_bench.cpp")
-target_link_libraries(celero_bench celero spdlog::spdlog DB MemTable LSMTree Config HashIndex)
+add_executable(CeleroBench celero_bench.cpp common.cpp)
+target_link_libraries(CeleroBench celero spdlog::spdlog DB)
 
-add_executable(gbench_bench "gbench_bench.cpp")
-target_link_libraries(gbench_bench benchmark::benchmark spdlog::spdlog DB MemTable LSMTree Config HashIndex)
-
+add_executable(GoogleBench gbench_bench.cpp common.cpp)
+target_link_libraries(GoogleBench benchmark::benchmark spdlog::spdlog DB)

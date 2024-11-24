@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.25)
 project(zkv)
 
-add_library(Concurrency thread_safe_queue.h thread_safe_queue.cpp)
+add_library(Concurrency "thread_safe_queue.h" "thread_safe_queue.cpp")
 
 set_target_properties(Concurrency PROPERTIES CXX_STANDARD 23)
 target_include_directories(Concurrency INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})

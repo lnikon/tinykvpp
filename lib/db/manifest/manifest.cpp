@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <fmt/format.h>
 #include <fstream>
+#include <spdlog/spdlog.h>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -66,17 +67,25 @@ auto manifest_t::path() -> fs::path_t
 
 void manifest_t::add(record_t info)
 {
+    auto infoToString = [](auto &&info) -> std::string
+    {
+        std::stringstream stringStream;
+        info.write(stringStream);
+        return stringStream.str();
+    };
+
     if (!m_enabled)
     {
-        spdlog::info("Manifest at {} is disabled", m_path.c_str());
+        spdlog::info("Manifest at {} is disabled - skipping record addition", m_path.c_str());
+        if (spdlog::get_level() == spdlog::level::debug)
+        {
+            spdlog::debug("Skipped record details: {}", std::visit(infoToString, info));
+        }
         return;
     }
 
     m_records.emplace_back(info);
-
-    std::stringstream stringStream;
-    std::visit([&stringStream](auto &&record) { record.write(stringStream); }, info);
-    m_log.write(stringStream.str());
+    m_log.write(std::visit(infoToString, info));
 }
 
 // trim from start (in place)
@@ -122,7 +131,7 @@ auto manifest_t::recover() -> bool
         {
             segment_record_t record;
             record.read(lineStream);
-            spdlog::info("recovered segment_record={}", record.ToString());
+            spdlog::debug("recovered segment_record={}", record.ToString());
             m_records.emplace_back(record);
             break;
         }
@@ -130,7 +139,7 @@ auto manifest_t::recover() -> bool
         {
             level_record_t record;
             record.read(lineStream);
-            spdlog::info("recovered level_record={}", record.ToString());
+            spdlog::debug("recovered level_record={}", record.ToString());
             m_records.emplace_back(record);
             break;
         }
@@ -159,12 +168,14 @@ auto manifest_t::records() const noexcept -> std::vector<record_t>
 void manifest_t::enable()
 {
     m_enabled = true;
-    spdlog::info("Manifest at {} enabled", m_path.c_str());
+    spdlog::info("Manifest at {} enabled - ready to record changes", m_path.c_str());
+    spdlog::debug("Manifest enable triggered with {} pending records", m_records.size());
 }
 
 void manifest_t::disable()
 {
     m_enabled = false;
-    spdlog::info("Manifest at {} disabled", m_path.c_str());
+    spdlog::info("Manifest at {} disabled - changes will not be recorded", m_path.c_str());
+    spdlog::debug("Manifest disable triggered with {} pending records", m_records.size());
 }
 } // namespace db::manifest

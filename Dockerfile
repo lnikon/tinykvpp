@@ -1,6 +1,9 @@
 ARG TARGET=gcc
 FROM ${TARGET} AS build
 
+ARG COMPILER=gcc
+ARG BUILD_TYPE=release
+
 # Install necessary packages for development in a single step to reduce layers and leverage caching
 RUN apt-get update && \
     apt-get -y install \
@@ -23,15 +26,19 @@ RUN python3 -m virtualenv "$VIRTUAL_ENV" && \
 
 # Setup Conan profiles and install dependencies
 COPY conanfile.txt .
-RUN conan profile detect && \
-    conan install . --output-folder=build --build=missing
+COPY conan conan
+RUN test -f "conan/profiles/release-${COMPILER}" || (echo "Error: No Conan profile found for compiler ${COMPILER}" && exit 1)
+RUN conan install . --output-folder=build \
+    --profile:build=conan/profiles/${BUILD_TYPE}-${COMPILER} \
+    --profile:host=conan/profiles/${BUILD_TYPE}-${COMPILER} \
+    --build=missing
 
 # Copy project files after dependencies to maximize caching
 COPY . .
 
 # Generate and build the project
 RUN cp -f ./build/CMakePresets.json . && \
-    cmake --preset conan-release && \
+    cmake --preset conan-${BUILD_TYPE} && \
     cmake --build ./build
 
 # Test stage for running tests

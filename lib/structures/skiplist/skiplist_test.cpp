@@ -16,7 +16,7 @@ struct test_record_t
     using key_t = std::string;
     using value_t = std::string;
 
-    key_t m_key;
+    key_t   m_key;
     value_t m_value;
 };
 
@@ -55,7 +55,7 @@ TEST_CASE("Calculate size using iterators", "[SkipList]")
     sl.emplace({"rec3", "val3"});
     sl.emplace({"rec2", "val2"});
 
-    auto size{0};
+    auto size{0U};
     for (auto begin{sl.begin()}; begin != sl.end(); ++begin)
     {
         spdlog::info("key={} info={}", begin->m_key, begin->m_value);

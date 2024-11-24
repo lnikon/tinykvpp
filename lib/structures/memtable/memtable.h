@@ -203,7 +203,6 @@ class memtable_t
 // ------------------------------------------------
 template <typename TStream> void memtable_t::record_t::key_t::write(TStream &outStream) const
 {
-    auto size = m_key.size();
     outStream << m_key.size() << ' ' << m_key;
 }
 
@@ -276,7 +275,7 @@ template <typename TSTream> void memtable_t::write(TSTream &outStream) const
 
 template <typename TSTream> void memtable_t::read(TSTream &outStream)
 {
-    // TODO(lnikon): Implement deserialization
+    (void)outStream;
 }
 
 } // namespace structures::memtable

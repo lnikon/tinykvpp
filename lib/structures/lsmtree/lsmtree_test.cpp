@@ -28,12 +28,14 @@ class RemoveArtefactsListener : public Catch::EventListenerBase
     /// cppcheck-suppress unusedFunction
     void testCaseStarting(Catch::TestCaseInfo const &testInfo) override
     {
+        (void)testInfo;
         prepare();
     }
 
     /// cppcheck-suppress unusedFunction
     void testCaseEnded(Catch::TestCaseStats const &testCaseStats) override
     {
+        (void)testCaseStats;
         prepare();
     }
 };
@@ -43,25 +45,25 @@ CATCH_REGISTER_LISTENER(RemoveArtefactsListener)
 namespace
 {
 template <typename TNumber>
-TNumber generateRandomNumber(const TNumber min = std::numeric_limits<TNumber>::min(),
-                             const TNumber max = std::numeric_limits<TNumber>::max()) noexcept
+auto generateRandomNumber(const TNumber min = std::numeric_limits<TNumber>::min(),
+                          const TNumber max = std::numeric_limits<TNumber>::max()) noexcept -> TNumber
 {
-    std::mt19937 rg{std::random_device{}()};
+    std::mt19937 rng{std::random_device{}()};
     if constexpr (std::is_same_v<int, TNumber>)
     {
-        return std::uniform_int_distribution<TNumber>(min, max)(rg);
+        return std::uniform_int_distribution<TNumber>(min, max)(rng);
     }
     else if (std::is_same_v<std::size_t, TNumber>)
     {
-        return std::uniform_int_distribution<TNumber>(min, max)(rg);
+        return std::uniform_int_distribution<TNumber>(min, max)(rng);
     }
     else if (std::is_same_v<double, TNumber>)
     {
-        return std::uniform_real_distribution<double>(min, max)(rg);
+        return std::uniform_real_distribution<double>(min, max)(rng);
     }
     else if (std::is_same_v<float, TNumber>)
     {
-        return std::uniform_real_distribution<float>(min, max)(rg);
+        return std::uniform_real_distribution<float>(min, max)(rng);
     }
     else
     {
@@ -70,14 +72,15 @@ TNumber generateRandomNumber(const TNumber min = std::numeric_limits<TNumber>::m
     }
 }
 
-std::string generateRandomString(std::size_t length) noexcept
+auto generateRandomString(std::size_t length) noexcept -> std::string
 {
-    static auto &alphabet = "0123456789"
-                            "abcdefghijklmnopqrstuvwxyz"
-                            "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    static const auto &alphabet = "0123456789"
+                                  "abcdefghijklmnopqrstuvwxyz"
+                                  "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
     std::string result;
     result.reserve(length);
-    while (length--)
+    while ((length--) != 0U)
     {
         result += alphabet[generateRandomNumber<std::size_t>(0, sizeof(alphabet) - 2)];
     }
@@ -85,7 +88,8 @@ std::string generateRandomString(std::size_t length) noexcept
     return result;
 }
 
-std::vector<std::pair<std::string, std::string>> generateRandomStringPairVector(const std::size_t length) noexcept
+auto generateRandomStringPairVector(const std::size_t length) noexcept
+    -> std::vector<std::pair<std::string, std::string>>
 {
     std::vector<std::pair<std::string, std::string>> result;
     result.reserve(length);
@@ -114,9 +118,9 @@ TEST_CASE("Flush regular segment", std::string(componentName))
         auto pConfig{config::make_shared()};
         pConfig->LSMTreeConfig.DiskFlushThresholdSize = 1; // 64mb = 64000000
 
-        auto manifest{db::manifest::make_shared(pConfig)};
-        auto wal{db::wal::make_shared("wal")};
-        auto lsmTree{structures::lsmtree::lsmtree_t{pConfig, manifest, wal}};
+        auto               manifest{db::manifest::make_shared(pConfig)};
+        auto               wal{db::wal::make_shared("wal")};
+        auto               lsmTree{structures::lsmtree::lsmtree_t{pConfig, manifest, wal}};
         lsmtree::lsmtree_t lsmt(pConfig, manifest, wal);
         for (const auto &kv : randomKeys)
         {

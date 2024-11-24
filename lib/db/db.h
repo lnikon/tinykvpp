@@ -45,6 +45,8 @@ class db_t
      */
     auto get(const structures::lsmtree::key_t &key) -> std::optional<structures::memtable::memtable_t::record_t>;
 
+    auto config() const noexcept -> config::shared_ptr_t ;
+
   private:
     auto prepare_directory_structure() -> bool;
 
@@ -53,5 +55,12 @@ class db_t
     wal::shared_ptr_t              m_wal;
     structures::lsmtree::lsmtree_t m_lsmTree;
 };
+
+using shared_ptr_t = std::shared_ptr<db_t>;
+
+template <typename... Args> auto make_shared(Args&&... args)
+{
+    return std::make_shared<db_t>(std::forward<Args>(args)...);
+}
 
 } // namespace db

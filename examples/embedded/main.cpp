@@ -8,19 +8,12 @@
 #include <spdlog/spdlog.h>
 
 #include <absl/debugging/stacktrace.h>
-#include <thread>
 
 using mem_key_t = structures::memtable::memtable_t::record_t::key_t;
 using mem_value_t = structures::memtable::memtable_t::record_t::value_t;
 
-int main(int argc, char *argv[])
+auto main() -> int
 {
-    // TODO(lnikon): This is temp arg handling. Refactor.
-    // if (argc != 2) {
-    //   spdlog::error("Usage: tkvp <path-to-db>");
-    //   return 1;
-    // }
-
     spdlog::set_level(spdlog::level::info);
 
     auto pConfig = config::make_shared();

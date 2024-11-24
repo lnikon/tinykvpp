@@ -72,6 +72,11 @@ auto db_t::get(const structures::lsmtree::key_t &key) -> std::optional<structure
     return m_lsmTree.get(key);
 }
 
+auto db_t::config() const noexcept  -> config::shared_ptr_t
+{
+    return m_config;
+}
+
 auto db_t::prepare_directory_structure() -> bool
 {
     // Create database directory
