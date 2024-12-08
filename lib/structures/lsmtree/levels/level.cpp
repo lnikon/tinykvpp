@@ -72,7 +72,8 @@ auto level_t::segment(memtable::memtable_t memtable, const std::string &name) ->
 {
     absl::WriterMutexLock lock{&m_mutex};
 
-    // Generate a path for the segment, including its name, then based on @type and @pMemtable create a segment
+    // Generate a path for the segment, including its name, then based on @type
+    // and @pMemtable create a segment
     auto pSegment{segments::factories::lsmtree_segment_factory(
         name, helpers::segment_path(m_pConfig->datadir_path(), name), std::move(memtable))};
     assert(pSegment);
@@ -120,8 +121,8 @@ auto level_t::compact() const noexcept -> segments::regular_segment::shared_ptr_
 
     for (const auto &segment : m_storage)
     {
-        // TODO(lnikon): reset memtable inside regular_segment_t at the of the flush() and recover it here
-        // e.g. segment->recover_memtable();
+        // TODO(lnikon): reset memtable inside regular_segment_t at the of the
+        // flush() and recover it here e.g. segment->recover_memtable();
         const auto &currentMemtable = segment->memtable().value();
         minHeap.emplace(currentMemtable.begin(), currentMemtable.end());
     }
@@ -134,7 +135,8 @@ auto level_t::compact() const noexcept -> segments::regular_segment::shared_ptr_
         minHeap.pop();
 
         // Add the smallest element to the merged sequence.
-        // If two elements have the same key, then choose the one with the greatest timestamp
+        // If two elements have the same key, then choose the one with the
+        // greatest timestamp
         if (mergedMemtable.empty() || lastKey != current.first->m_key)
         {
             mergedMemtable.emplace(*current.first);
@@ -150,7 +152,8 @@ auto level_t::compact() const noexcept -> segments::regular_segment::shared_ptr_
     }
 
     // Create a new segment from the compacted segment.
-    // The postfix "_compacted" signals that the segment is an intermediate result
+    // The postfix "_compacted" signals that the segment is an intermediate
+    // result
     auto name{fmt::format("{}_{}_compacted", helpers::segment_name(), index())};
     return segments::factories::lsmtree_segment_factory(
         name, helpers::segment_path(m_pConfig->datadir_path(), name), mergedMemtable);
@@ -160,7 +163,8 @@ void level_t::merge(const segments::regular_segment::shared_ptr_t &pSegment) noe
 {
     absl::WriterMutexLock nextLevelLock{&m_mutex};
 
-    // Get records of input memtable to merge them with overlapping records of the current level
+    // Get records of input memtable to merge them with overlapping records of
+    // the current level
     auto inMemtableRecords{pSegment->memtable().value().moved_records()};
 
     // Segments overlapping with input memtable
@@ -177,7 +181,8 @@ void level_t::merge(const segments::regular_segment::shared_ptr_t &pSegment) noe
         overlappingSegmentsRecordsCount += outStream->memtable().value().size();
     }
 
-    // Store records of memtables overlapping with @pSegment into @overlappingSegmentsRecords
+    // Store records of memtables overlapping with @pSegment into
+    // @overlappingSegmentsRecords
     std::vector<memtable_t::record_t> overlappingSegmentsRecords{};
     overlappingSegmentsRecords.reserve(overlappingSegmentsRecordsCount);
     for (auto &overlappingSegment : overlappingSegmentsView)
@@ -193,7 +198,8 @@ void level_t::merge(const segments::regular_segment::shared_ptr_t &pSegment) noe
     std::ranges::merge(
         inMemtableRecords, overlappingSegmentsRecords, std::back_inserter(mergedMemtable), std::less<>{});
 
-    // TODO(lnikon): Make this parameter configurable. Use measurement units(mb).
+    // TODO(lnikon): Make this parameter configurable. Use measurement
+    // units(mb).
     const std::size_t                    segmentSize{1024};
     memtable::memtable_t                 newMemtable;
     segments::storage::segment_storage_t newSegments;

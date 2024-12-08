@@ -11,4 +11,4 @@ namespace structures::memtable
 {
 };
 
-#endif  // ZKV_MEMTABLEREADERWRITER_H
+#endif // ZKV_MEMTABLEREADERWRITER_H

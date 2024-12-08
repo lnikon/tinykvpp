@@ -22,14 +22,13 @@ tinykvpp_service_impl_t::tinykvpp_service_impl_t(db::shared_ptr_t db)
 
 auto tinykvpp_service_impl_t::Put(grpc::ServerContext *pContext,
                                   const PutRequest    *pRequest,
-                                  PutResponse *pResponse) -> grpc::Status
+                                  PutResponse         *pResponse) -> grpc::Status
 {
     (void)pContext;
 
     try
     {
-        m_database->put(structures::lsmtree::key_t{pRequest->key()},
-                        structures::lsmtree::value_t{pRequest->value()});
+        m_database->put(structures::lsmtree::key_t{pRequest->key()}, structures::lsmtree::value_t{pRequest->value()});
         pResponse->set_status(std::string("OK"));
         return grpc::Status::OK;
     }
@@ -43,13 +42,12 @@ auto tinykvpp_service_impl_t::Put(grpc::ServerContext *pContext,
 
 auto tinykvpp_service_impl_t::Get(grpc::ServerContext *pContext,
                                   const GetRequest    *pRequest,
-                                  GetResponse *pResponse) -> grpc::Status
+                                  GetResponse         *pResponse) -> grpc::Status
 {
     (void)pContext;
     try
     {
-        const auto &record =
-            m_database->get(structures::lsmtree::key_t{pRequest->key()});
+        const auto &record = m_database->get(structures::lsmtree::key_t{pRequest->key()});
         if (record)
         {
             pResponse->set_value(record.value().m_value.m_value);
@@ -93,15 +91,12 @@ void grpc_communication_t::start(db::shared_ptr_t database) noexcept
     spdlog::info("Starting gRPC communication...");
 
     const auto serverAddress{
-        fmt::format("{}:{}",
-                    database->config()->ServerConfig.host,
-                    database->config()->ServerConfig.port)};
+        fmt::format("{}:{}", database->config()->ServerConfig.host, database->config()->ServerConfig.port)};
 
     try
     {
         grpc::ServerBuilder builder;
-        builder.AddListeningPort(serverAddress,
-                                 grpc::InsecureServerCredentials());
+        builder.AddListeningPort(serverAddress, grpc::InsecureServerCredentials());
 
         m_service = std::make_unique<tinykvpp_service_impl_t>(database);
         builder.RegisterService(m_service.get());
@@ -118,8 +113,7 @@ void grpc_communication_t::start(db::shared_ptr_t database) noexcept
     }
     catch (std::exception &e)
     {
-        spdlog::error("Excetion occured while creating gRPC server. {}",
-                      e.what());
+        spdlog::error("Excetion occured while creating gRPC server. {}", e.what());
         exit(EXIT_FAILURE);
     }
 }
@@ -133,8 +127,7 @@ void grpc_communication_t::shutdown() noexcept
     catch (std::exception &e)
     {
 
-        spdlog::error("Excetion occured while shutting down gRPC server. {}",
-                      e.what());
+        spdlog::error("Excetion occured while shutting down gRPC server. {}", e.what());
         exit(EXIT_FAILURE);
     }
 }

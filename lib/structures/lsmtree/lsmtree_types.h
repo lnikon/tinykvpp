@@ -23,6 +23,6 @@ enum class lsmtree_segment_type_t
     regular_k,
 };
 
-}  // namespace structures::lsmtree
+} // namespace structures::lsmtree
 
-#endif  // ZKV_LSMTREETYPES_H
+#endif // ZKV_LSMTREETYPES_H

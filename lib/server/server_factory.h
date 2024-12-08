@@ -13,8 +13,7 @@ using namespace tcp_communication;
 using namespace grpc_communication;
 
 template <communication_strategy_kind_k Type>
-    requires communication_strategy_t<tcp_communication_t> ||
-             communication_strategy_t<grpc_communication_t>
+    requires communication_strategy_t<tcp_communication_t> || communication_strategy_t<grpc_communication_t>
 struct CommunicationFactory;
 
 template <> struct CommunicationFactory<tcp_communication_t::kind>
@@ -27,8 +26,7 @@ template <> struct CommunicationFactory<grpc_communication_t::kind>
     using type = grpc_communication_t;
 };
 
-template <communication_strategy_kind_k kind>
-[[nodiscard]] auto factory() noexcept
+template <communication_strategy_kind_k kind> [[nodiscard]] auto factory() noexcept
 {
     try
     {
@@ -36,8 +34,7 @@ template <communication_strategy_kind_k kind>
     }
     catch (std::exception &e)
     {
-        spdlog::error("Exception happened during communication creation. {}",
-                      e.what());
+        spdlog::error("Exception happened during communication creation. {}", e.what());
         throw;
     }
 }

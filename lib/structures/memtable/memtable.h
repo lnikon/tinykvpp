@@ -106,7 +106,8 @@ class memtable_t
         }
     };
 
-    // using storage_t = typename sorted_vector::sorted_vector_t<record_t, record_comparator_by_key_t>;
+    // using storage_t = typename sorted_vector::sorted_vector_t<record_t,
+    // record_comparator_by_key_t>;
     using storage_t = typename skiplist::skiplist_t<record_t, record_comparator_by_key_t>;
     using size_type = typename storage_t::size_type;
     using index_type = typename storage_t::index_type;

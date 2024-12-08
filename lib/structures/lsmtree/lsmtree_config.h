@@ -15,8 +15,8 @@ namespace structures::lsmtree
 struct lsmtree_config_t
 {
     /**
-     * Determines the size (in Mb) of the in-memory memtable after which it should be flushed
-     * onto the disk.
+     * Determines the size (in Mb) of the in-memory memtable after which it
+     * should be flushed onto the disk.
      */
     uint64_t DiskFlushThresholdSize{8 * 1024 * 1024};
 

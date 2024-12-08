@@ -29,8 +29,7 @@ template <communication_strategy_t Strategy> class server_t
     Strategy m_impl;
 };
 
-template <communication_strategy_kind_k Type>
-auto main_server(db::shared_ptr_t &db)
+template <communication_strategy_kind_k Type> auto main_server(db::shared_ptr_t &db)
 {
     auto     communicationStrategy = factory<Type>();
     server_t server(std::move(communicationStrategy));

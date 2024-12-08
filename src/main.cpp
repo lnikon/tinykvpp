@@ -174,8 +174,7 @@ auto loadConfigJson(const std::string &configPath) -> json
     std::fstream configStream(configPath, std::fstream::in);
     if (!configStream.is_open())
     {
-        throw std::runtime_error(
-            fmt::format("Unable to open config file: %s", configPath));
+        throw std::runtime_error(fmt::format("Unable to open config file: %s", configPath));
     }
     return json::parse(configStream);
 }
@@ -188,8 +187,7 @@ void validateConfigJson(const json &configJson, json_validator &validator)
     }
     catch (const std::exception &e)
     {
-        throw std::runtime_error(
-            fmt::format("Config validation failed: {}", e.what()));
+        throw std::runtime_error(fmt::format("Config validation failed: {}", e.what()));
     }
 }
 
@@ -214,8 +212,7 @@ void configureLogging(const std::string &loggingLevel)
     }
     else
     {
-        throw std::runtime_error(
-            fmt::format("Unknown logging level: %s", loggingLevel));
+        throw std::runtime_error(fmt::format("Unknown logging level: %s", loggingLevel));
     }
 }
 
@@ -225,14 +222,12 @@ auto loadDatabaseConfig(const json &configJson) -> config::shared_ptr_t
 
     if (configJson["database"].contains("path"))
     {
-        dbConfig->DatabaseConfig.DatabasePath =
-            configJson["database"]["path"].get<std::string>();
+        dbConfig->DatabaseConfig.DatabasePath = configJson["database"]["path"].get<std::string>();
     }
 
     if (configJson["database"].contains("walFilename"))
     {
-        dbConfig->DatabaseConfig.WalFilename =
-            configJson["database"]["walFilename"].get<std::string>();
+        dbConfig->DatabaseConfig.WalFilename = configJson["database"]["walFilename"].get<std::string>();
     }
 
     if (configJson["database"].contains("manifestFilenamePrefix"))
@@ -244,20 +239,15 @@ auto loadDatabaseConfig(const json &configJson) -> config::shared_ptr_t
     return dbConfig;
 }
 
-void loadLSMTreeConfig(const json          &lsmtreeConfig,
-                       config::shared_ptr_t dbConfig,
-                       const std::string   &configPath)
+void loadLSMTreeConfig(const json &lsmtreeConfig, config::shared_ptr_t dbConfig, const std::string &configPath)
 {
     if (lsmtreeConfig.contains("memtableFlushThreshold"))
     {
-        dbConfig->LSMTreeConfig.DiskFlushThresholdSize =
-            lsmtreeConfig["memtableFlushThreshold"].get<uint64_t>();
+        dbConfig->LSMTreeConfig.DiskFlushThresholdSize = lsmtreeConfig["memtableFlushThreshold"].get<uint64_t>();
     }
     else
     {
-        throw std::runtime_error(
-            "\"memtableFlushThreshold\" is not specified in config: " +
-            configPath);
+        throw std::runtime_error("\"memtableFlushThreshold\" is not specified in config: " + configPath);
     }
 
     if (lsmtreeConfig.contains("levelZeroCompaction"))
@@ -270,10 +260,9 @@ void loadLSMTreeConfig(const json          &lsmtreeConfig,
         }
         else
         {
-            throw std::runtime_error(
-                "\"levelZeroCompaction.compactionStrategy\" is not specified "
-                "in config: " +
-                configPath);
+            throw std::runtime_error("\"levelZeroCompaction.compactionStrategy\" is not specified "
+                                     "in config: " +
+                                     configPath);
         }
 
         if (levelZeroCompaction.contains("compactionThreshold"))
@@ -283,23 +272,19 @@ void loadLSMTreeConfig(const json          &lsmtreeConfig,
         }
         else
         {
-            throw std::runtime_error(
-                "\"levelZeroCompaction.compactionThreshold\" is not specified "
-                "in config: " +
-                configPath);
+            throw std::runtime_error("\"levelZeroCompaction.compactionThreshold\" is not specified "
+                                     "in config: " +
+                                     configPath);
         }
     }
     else
     {
-        throw std::runtime_error(
-            "\"levelZeroCompaction\" is not specified in config: " +
-            configPath);
+        throw std::runtime_error("\"levelZeroCompaction\" is not specified in config: " + configPath);
     }
 
     if (lsmtreeConfig.contains("levelNonZeroCompaction"))
     {
-        const auto &levelNonZeroCompaction =
-            lsmtreeConfig["levelNonZeroCompaction"];
+        const auto &levelNonZeroCompaction = lsmtreeConfig["levelNonZeroCompaction"];
         if (levelNonZeroCompaction.contains("compactionStrategy"))
         {
             dbConfig->LSMTreeConfig.LevelNonZeroCompactionStrategy =
@@ -307,31 +292,26 @@ void loadLSMTreeConfig(const json          &lsmtreeConfig,
         }
         else
         {
-            throw std::runtime_error(
-                "\"levelNonZeroCompaction.compactionStrategy\" is not "
-                "specified in config: " +
-                configPath);
+            throw std::runtime_error("\"levelNonZeroCompaction.compactionStrategy\" is not "
+                                     "specified in config: " +
+                                     configPath);
         }
 
         if (levelNonZeroCompaction.contains("compactionThreshold"))
         {
             dbConfig->LSMTreeConfig.LevelNonZeroCompactionThreshold =
-                levelNonZeroCompaction["compactionThreshold"]
-                    .get<std::uint64_t>();
+                levelNonZeroCompaction["compactionThreshold"].get<std::uint64_t>();
         }
         else
         {
-            throw std::runtime_error(
-                "\"levelNonZeroCompaction.compactionThreshold\" is not "
-                "specified in config: " +
-                configPath);
+            throw std::runtime_error("\"levelNonZeroCompaction.compactionThreshold\" is not "
+                                     "specified in config: " +
+                                     configPath);
         }
     }
     else
     {
-        throw std::runtime_error(
-            "\"levelNonZeroCompaction\" is not specified in config: " +
-            configPath);
+        throw std::runtime_error("\"levelNonZeroCompaction\" is not specified in config: " + configPath);
     }
 }
 
@@ -357,19 +337,15 @@ auto loadServerConfig(const json &configJson, config::shared_ptr_t dbConfig)
 
     if (configJson.contains("transport"))
     {
-        dbConfig->ServerConfig.transport =
-            configJson["transport"].get<std::string>();
+        dbConfig->ServerConfig.transport = configJson["transport"].get<std::string>();
     }
     else
     {
-        throw std::runtime_error(
-            "\"transport\" is not specified in the config");
+        throw std::runtime_error("\"transport\" is not specified in the config");
     }
 }
 
-auto initializeDatabaseConfig(const json        &configJson,
-                              const std::string &configPath)
-    -> config::shared_ptr_t
+auto initializeDatabaseConfig(const json &configJson, const std::string &configPath) -> config::shared_ptr_t
 {
     auto dbConfig = loadDatabaseConfig(configJson);
 
@@ -379,8 +355,7 @@ auto initializeDatabaseConfig(const json        &configJson,
     }
     else
     {
-        throw std::runtime_error("\"lsmtree\" is not specified in config: " +
-                                 configPath);
+        throw std::runtime_error("\"lsmtree\" is not specified in config: " + configPath);
     }
 
     if (configJson.contains("server"))
@@ -389,8 +364,7 @@ auto initializeDatabaseConfig(const json        &configJson,
     }
     else
     {
-        throw std::runtime_error("\"server\" is not specified in config: " +
-                                 configPath);
+        throw std::runtime_error("\"server\" is not specified in config: " + configPath);
     }
 
     return dbConfig;
@@ -400,16 +374,12 @@ auto main(int argc, char *argv[]) -> int
 {
     try
     {
-        cxxopts::Options options("tinykvpp",
-                                 "A tiny database, powering big ideas");
-        options.add_options()("c,config",
-                              "Path to JSON configuration of database",
-                              cxxopts::value<std::string>())("help",
-                                                             "Print help");
+        cxxopts::Options options("tinykvpp", "A tiny database, powering big ideas");
+        options.add_options()("c,config", "Path to JSON configuration of database", cxxopts::value<std::string>())(
+            "help", "Print help");
 
         auto parsedOptions = options.parse(argc, argv);
-        if ((parsedOptions.count("help") != 0U) ||
-            (parsedOptions.count("config") == 0U))
+        if ((parsedOptions.count("help") != 0U) || (parsedOptions.count("config") == 0U))
         {
             spdlog::info("{}", options.help());
             return EXIT_SUCCESS;
@@ -422,8 +392,7 @@ auto main(int argc, char *argv[]) -> int
         validator.set_root_schema(database_config_schema);
         validateConfigJson(configJson, validator);
 
-        configureLogging(
-            configJson["logging"]["loggingLevel"].get<std::string>());
+        configureLogging(configJson["logging"]["loggingLevel"].get<std::string>());
 
         auto dbConfig = initializeDatabaseConfig(configJson, configPath);
         auto database = db::make_shared(dbConfig);
@@ -440,18 +409,14 @@ auto main(int argc, char *argv[]) -> int
             return EXIT_SUCCESS;
         }
 
-        std::variant<std::monostate,
-                     server::server_t<server::grpc_communication_t>>
-            server;
+        std::variant<std::monostate, server::server_t<server::grpc_communication_t>> server;
         if (kind == server::communication_strategy_kind_k::grpc_k)
         {
-            server = server::main_server<
-                server::communication_strategy_kind_k::grpc_k>(database);
+            server = server::main_server<server::communication_strategy_kind_k::grpc_k>(database);
         }
         else if (kind == server::communication_strategy_kind_k::tcp_k)
         {
-            spdlog::warn("{} server is not supported. Exiting",
-                         server::to_string(kind.value()).value());
+            spdlog::warn("{} server is not supported. Exiting", server::to_string(kind.value()).value());
             return EXIT_SUCCESS;
         }
 

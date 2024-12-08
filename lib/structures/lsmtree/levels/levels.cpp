@@ -76,7 +76,8 @@ auto levels_t::compact() -> segments::regular_segment::shared_ptr_t
         // Try to compact the @currentLevel
         compactedCurrentLevelSegment = currentLevel->compact();
 
-        // If 0th level is not ready for the compaction, then skip the other levels
+        // If 0th level is not ready for the compaction, then skip the other
+        // levels
         if (!compactedCurrentLevelSegment)
         {
             if (currentLevel->index() == 0)
@@ -108,13 +109,15 @@ auto levels_t::compact() -> segments::regular_segment::shared_ptr_t
             nextLevel->merge(compactedCurrentLevelSegment);
         }
 
-        // Purge the segment representing the compacted level and update the manifest
+        // Purge the segment representing the compacted level and update the
+        // manifest
         m_pManifest->add(db::manifest::manifest_t::segment_record_t{.op = segment_operation_k::remove_segment_k,
                                                                     .name = compactedCurrentLevelSegment->get_name(),
                                                                     .level = currentLevel->index()});
         compactedCurrentLevelSegment->remove_from_disk();
 
-        // After merging current level into the next level purge the current level and update the manifest
+        // After merging current level into the next level purge the current
+        // level and update the manifest
         m_pManifest->add(db::manifest::manifest_t::level_record_t{.op = level_operation_k::purge_level_k,
                                                                   .level = currentLevel->index()});
         currentLevel->purge();

@@ -74,7 +74,7 @@ class segment_storage_t : public std::enable_shared_from_this<segment_storage_t>
     void emplace(regular_segment::shared_ptr_t pSegment, segment_comp_t comp);
     void clear() noexcept;
     void remove(regular_segment::shared_ptr_t pSegment);
-    auto find(const std::string& name) const noexcept -> regular_segment::shared_ptr_t;
+    auto find(const std::string &name) const noexcept -> regular_segment::shared_ptr_t;
 
   private:
     // TODO(lnikon): Use thread annotations

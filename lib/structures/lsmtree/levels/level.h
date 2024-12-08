@@ -107,7 +107,8 @@ class level_t
      * updates the manifest to reflect the removal, purges the segment, and
      * removes it from storage.
      *
-     * @param pSegment A shared pointer to the segment to be purged. Must not be null.
+     * @param pSegment A shared pointer to the segment to be purged. Must not be
+     * null.
      */
     void purge(const segments::regular_segment::shared_ptr_t &pSegment) noexcept;
 

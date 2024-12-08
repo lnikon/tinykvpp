@@ -40,18 +40,22 @@ class levels_t
     [[nodiscard]] auto record(const key_t &key) const noexcept -> std::optional<record_t>;
 
     /**
-     * @brief Creates a new segment from the provided memtable and handles compaction across levels.
+     * @brief Creates a new segment from the provided memtable and handles
+     * compaction across levels.
      *
      * This function performs the following steps:
      * 1. Ensures that level zero exists, creating it if necessary.
      * 2. Creates a new segment for the provided memtable.
      * 3. Updates the manifest with the new segment.
-     * 4. Attempts to compact segments across all levels, starting from level zero.
-     * 5. If compaction is successful, updates the manifest and flushes the compacted segment to disk.
-     * 6. Merges the compacted segment into the next level, creating the next level if it does not exist.
+     * 4. Attempts to compact segments across all levels, starting from level
+     * zero.
+     * 5. If compaction is successful, updates the manifest and flushes the
+     * compacted segment to disk.
+     * 6. Merges the compacted segment into the next level, creating the next
+     * level if it does not exist.
      * 7. Purges the compacted segment and updates the manifest accordingly.
-     * 8. Returns the resulting segment from the compaction process, or the newly created segment if no compaction
-     * occurred.
+     * 8. Returns the resulting segment from the compaction process, or the
+     * newly created segment if no compaction occurred.
      *
      * @param memtable The memtable to be converted into a segment.
      * @return A shared pointer to the resulting segment.
@@ -61,9 +65,10 @@ class levels_t
     /**
      * @brief Creates and returns a shared pointer to a new level.
      *
-     * This function creates a new level using the current size of the levels container,
-     * the configuration pointer, and the manifest pointer. The new level is added to
-     * the levels container and a shared pointer to this new level is returned.
+     * This function creates a new level using the current size of the levels
+     * container, the configuration pointer, and the manifest pointer. The new
+     * level is added to the levels container and a shared pointer to this new
+     * level is returned.
      *
      * @return level::shared_ptr_t A shared pointer to the newly created level.
      */
@@ -73,11 +78,12 @@ class levels_t
      * @brief Retrieves a shared pointer to the level at the specified index.
      *
      * This function returns a shared pointer to the level object located at the
-     * given index within the levels container. The index must be within the bounds
-     * of the container.
+     * given index within the levels container. The index must be within the
+     * bounds of the container.
      *
      * @param idx The index of the level to retrieve.
-     * @return level::shared_ptr_t A shared pointer to the level at the specified index.
+     * @return level::shared_ptr_t A shared pointer to the level at the
+     * specified index.
      *
      * @note This function is marked as noexcept and [[maybe_unused]].
      * @throws Assertion failure if idx is out of bounds.

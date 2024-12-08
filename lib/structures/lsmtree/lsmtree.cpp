@@ -18,8 +18,7 @@ namespace structures::lsmtree
 {
 
 using level_operation_k = db::manifest::manifest_t::level_record_t::operation_k;
-using segment_operation_k =
-    db::manifest::manifest_t::segment_record_t::operation_k;
+using segment_operation_k = db::manifest::manifest_t::segment_record_t::operation_k;
 
 /**
  * ============================================================================
@@ -75,8 +74,7 @@ lsmtree_t::lsmtree_t(const config::shared_ptr_t &pConfig,
                       return;
                   }
 
-                  if (std::optional<memtable::memtable_t> memtable =
-                          m_flushing_queue.pop();
+                  if (std::optional<memtable::memtable_t> memtable = m_flushing_queue.pop();
                       memtable.has_value() && !memtable->empty())
                   {
                       spdlog::debug("Flushing memtable to level0. "
@@ -87,8 +85,7 @@ lsmtree_t::lsmtree_t(const config::shared_ptr_t &pConfig,
                       // TODO: Assert will crash the program, maybe we should
                       // return an error code?
                       absl::WriterMutexLock lock{&m_mutex};
-                      assert(m_levels.flush_to_level0(
-                          std::move(memtable.value())));
+                      assert(m_levels.flush_to_level0(std::move(memtable.value())));
                   }
               }
           })
@@ -101,8 +98,7 @@ lsmtree_t::~lsmtree_t() noexcept
     m_flushing_thread.join();
 }
 
-void lsmtree_t::put(const structures::lsmtree::key_t   &key,
-                    const structures::lsmtree::value_t &value) noexcept
+void lsmtree_t::put(const structures::lsmtree::key_t &key, const structures::lsmtree::value_t &value) noexcept
 {
     assert(m_pConfig);
 
@@ -174,8 +170,7 @@ auto lsmtree_t::recover() noexcept -> bool
     // Restore lsmtree structure from the manifest file
     if (!restore_from_manifest())
     {
-        spdlog::error("Unable to restore manifest at {}",
-                      m_pManifest->path().c_str());
+        spdlog::error("Unable to restore manifest at {}", m_pManifest->path().c_str());
         return false;
     }
 
@@ -210,76 +205,60 @@ auto lsmtree_t::restore_from_manifest() noexcept -> bool
             [this](auto record)
             {
                 using T = std::decay_t<decltype(record)>;
-                if constexpr (std::is_same_v<
-                                  T,
-                                  db::manifest::manifest_t::segment_record_t>)
+                if constexpr (std::is_same_v<T, db::manifest::manifest_t::segment_record_t>)
                 {
                     switch (record.op)
                     {
                     case segment_operation_k::add_segment_k:
                     {
                         m_levels.level(record.level)
-                            ->emplace(
-                                segments::factories::lsmtree_segment_factory(
-                                    record.name,
-                                    segments::helpers::segment_path(
-                                        m_pConfig->datadir_path(), record.name),
-                                    memtable_t{}));
-                        spdlog::debug(
-                            "Segment {} added into level {} during recovery",
-                            record.name,
-                            record.level);
+                            ->emplace(segments::factories::lsmtree_segment_factory(
+                                record.name,
+                                segments::helpers::segment_path(m_pConfig->datadir_path(), record.name),
+                                memtable_t{}));
+                        spdlog::debug("Segment {} added into level {} during recovery", record.name, record.level);
                         break;
                     }
                     case segment_operation_k::remove_segment_k:
                     {
                         m_levels.level(record.level)->purge(record.name);
-                        spdlog::debug(
-                            "Segment {} removed from level {} during recovery",
-                            record.name,
-                            record.level);
+                        spdlog::debug("Segment {} removed from level {} during recovery", record.name, record.level);
                         break;
                     }
                     default:
                     {
-                        spdlog::error("Unknown segment operation={}",
-                                      static_cast<std::int32_t>(record.op));
+                        spdlog::error("Unknown segment operation={}", static_cast<std::int32_t>(record.op));
                         break;
                     }
                     }
                 }
-                else if constexpr (
-                    std::is_same_v<T, db::manifest::manifest_t::level_record_t>)
+                else if constexpr (std::is_same_v<T, db::manifest::manifest_t::level_record_t>)
                 {
                     switch (record.op)
                     {
                     case level_operation_k::add_level_k:
                     {
                         m_levels.level();
-                        spdlog::debug("Level {} created during recovery",
-                                      record.level);
+                        spdlog::debug("Level {} created during recovery", record.level);
                         break;
                     }
                     case level_operation_k::compact_level_k:
                     {
                         spdlog::debug(
                             "Ignoring {} during recovery",
-                            db::manifest::manifest_t::level_record_t::ToString(
-                                level_operation_k::compact_level_k));
+                            db::manifest::manifest_t::level_record_t::ToString(level_operation_k::compact_level_k));
                         break;
                     }
                     case level_operation_k::purge_level_k:
                     {
                         spdlog::debug(
                             "Ignoring {} during recovery",
-                            db::manifest::manifest_t::level_record_t::ToString(
-                                level_operation_k::purge_level_k));
+                            db::manifest::manifest_t::level_record_t::ToString(level_operation_k::purge_level_k));
                         break;
                     }
                     default:
                     {
-                        spdlog::error("Unknown level operation={}",
-                                      static_cast<std::int32_t>(record.op));
+                        spdlog::error("Unknown level operation={}", static_cast<std::int32_t>(record.op));
                         break;
                     }
                     }
@@ -302,8 +281,7 @@ auto lsmtree_t::restore_from_manifest() noexcept -> bool
 
 auto lsmtree_t::restore_from_wal() noexcept -> bool
 {
-    auto stringify_record =
-        [](const memtable_t::record_t &record) -> std::string
+    auto stringify_record = [](const memtable_t::record_t &record) -> std::string
     {
         std::stringstream strStream;
         record.write(strStream);
@@ -318,21 +296,18 @@ auto lsmtree_t::restore_from_wal() noexcept -> bool
         case db::wal::wal_t::operation_k::add_k:
         {
             assert(m_table.has_value());
-            spdlog::debug("Recovering record {} from WAL",
-                          stringify_record(record.kv));
+            spdlog::debug("Recovering record {} from WAL", stringify_record(record.kv));
             m_table->emplace(record.kv);
             break;
         }
         case db::wal::wal_t::operation_k::delete_k:
         {
-            spdlog::debug(
-                "Recovery of delete records from WAS is not supported");
+            spdlog::debug("Recovery of delete records from WAS is not supported");
             break;
         }
         default:
         {
-            spdlog::error("Unkown WAL operation {}",
-                          static_cast<std::int32_t>(record.op));
+            spdlog::error("Unkown WAL operation {}", static_cast<std::int32_t>(record.op));
             break;
         }
         };

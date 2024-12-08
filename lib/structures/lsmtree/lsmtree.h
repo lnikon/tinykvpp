@@ -40,17 +40,19 @@ class lsmtree_t
     lsmtree_t() = delete;
 
     /**
-     * @brief Deleted copy constructor to prevent copying of lsmtree_t instances.
+     * @brief Deleted copy constructor to prevent copying of lsmtree_t
+     * instances.
      *
-     * The copy constructor for the lsmtree_t class is explicitly deleted to avoid
-     * unintended copying of instances. This ensures that each instance of lsmtree_t
-     * is unique and cannot be copied, which is important for maintaining the integrity
-     * and consistency of the data structure.
+     * The copy constructor for the lsmtree_t class is explicitly deleted to
+     * avoid unintended copying of instances. This ensures that each instance of
+     * lsmtree_t is unique and cannot be copied, which is important for
+     * maintaining the integrity and consistency of the data structure.
      */
     lsmtree_t(const lsmtree_t &) = delete;
 
     /**
-     * @brief Deleted copy assignment operator to prevent copying of lsmtree_t instances.
+     * @brief Deleted copy assignment operator to prevent copying of lsmtree_t
+     * instances.
      *
      * This operator is explicitly deleted to ensure that instances of lsmtree_t
      * cannot be copied. This is typically done to avoid unintended copying of
@@ -70,9 +72,10 @@ class lsmtree_t
     /**
      * @brief Destructor for the lsmtree_t class.
      *
-     * This destructor ensures that the flushing thread is properly joined before
-     * the object is destroyed. If the flushing thread is joinable, it will be
-     * joined. If it is not joinable, an error message will be logged using spdlog.
+     * This destructor ensures that the flushing thread is properly joined
+     * before the object is destroyed. If the flushing thread is joinable, it
+     * will be joined. If it is not joinable, an error message will be logged
+     * using spdlog.
      */
     ~lsmtree_t() noexcept;
 
@@ -91,9 +94,10 @@ class lsmtree_t
     /**
      * @brief Inserts a key-value pair into the LSM tree.
      *
-     * This function records the addition of a new key into the Write-Ahead Log (WAL)
-     * and adds the record into the memtable. If the size of the memtable exceeds the
-     * configured threshold after the addition, the memtable is flushed to disk.
+     * This function records the addition of a new key into the Write-Ahead Log
+     * (WAL) and adds the record into the memtable. If the size of the memtable
+     * exceeds the configured threshold after the addition, the memtable is
+     * flushed to disk.
      *
      * @param key The key to be inserted.
      * @param value The value associated with the key.
@@ -103,12 +107,13 @@ class lsmtree_t
     /**
      * @brief Retrieves the record associated with the given key.
      *
-     * This function attempts to find the record associated with the specified key.
-     * It first checks the in-memory table for the record. If the record is not found
-     * in the in-memory table, it then searches the on-disk segments.
+     * This function attempts to find the record associated with the specified
+     * key. It first checks the in-memory table for the record. If the record is
+     * not found in the in-memory table, it then searches the on-disk segments.
      *
      * @param key The key for which the record is to be retrieved.
-     * @return std::optional<record_t> The record associated with the key, or std::nullopt if the record is not found.
+     * @return std::optional<record_t> The record associated with the key, or
+     * std::nullopt if the record is not found.
      */
     [[nodiscard]] auto get(const key_t &key) noexcept -> std::optional<record_t>;
 
@@ -116,8 +121,9 @@ class lsmtree_t
      * @brief Recovers the LSM tree from persistent storage.
      *
      * This function performs the recovery process for the LSM tree by restoring
-     * its state from the manifest file and the Write-Ahead Log (WAL). During the
-     * recovery phase, updates to the manifest are disabled to ensure consistency.
+     * its state from the manifest file and the Write-Ahead Log (WAL). During
+     * the recovery phase, updates to the manifest are disabled to ensure
+     * consistency.
      *
      * @return true if the recovery process is successful, false otherwise.
      *
@@ -130,10 +136,11 @@ class lsmtree_t
     /**
      * @brief Restores the manifest from the persistent storage.
      *
-     * This function iterates over the records in the manifest and applies the necessary operations
-     * to restore the state of the LSM tree. It handles both segment and level records, performing
-     * operations such as adding or removing segments and creating levels. After applying all
-     * modifications, it restores the in-memory indices for all levels.
+     * This function iterates over the records in the manifest and applies the
+     * necessary operations to restore the state of the LSM tree. It handles
+     * both segment and level records, performing operations such as adding or
+     * removing segments and creating levels. After applying all modifications,
+     * it restores the in-memory indices for all levels.
      *
      * @return true if the manifest is successfully restored, false otherwise.
      */
@@ -142,9 +149,9 @@ class lsmtree_t
     /**
      * @brief Restores the Write-Ahead Log (WAL) for the LSM tree.
      *
-     * This function iterates through the records in the WAL and applies the operations
-     * to the in-memory table (memtable). It supports adding records to the memtable
-     * but does not support recovery of delete operations.
+     * This function iterates through the records in the WAL and applies the
+     * operations to the in-memory table (memtable). It supports adding records
+     * to the memtable but does not support recovery of delete operations.
      *
      * @return true if the WAL was successfully restored.
      */
@@ -160,7 +167,8 @@ class lsmtree_t
     db::wal::shared_ptr_t               m_pWal;
     levels::levels_t                    m_levels;
 
-    // Communication channels. Thread-safe queues for inter-thread communication.
+    // Communication channels. Thread-safe queues for inter-thread
+    // communication.
     std::atomic_bool                                       m_recovered;
     std::jthread                                           m_flushing_thread;
     concurrency::thread_safe_queue_t<memtable::memtable_t> m_flushing_queue;

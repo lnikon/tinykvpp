@@ -14,5 +14,4 @@ class random_access_file_t
 
 } // namespace fs::random_access_file
 
-
 #endif // ZKV_RANDOM_ACCESS_FILE_H

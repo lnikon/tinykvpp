@@ -36,12 +36,14 @@ template <typename TItem> class thread_safe_queue_t
     {
         /*absl::WriterMutexLock lock(&m_mutex);*/
         // if (!m_mutex.AwaitWithTimeout(
-        //         absl::Condition(+[](queue_t *queue) { return !queue->empty(); }, &m_queue), absl::Seconds(1)))
+        //         absl::Condition(+[](queue_t *queue) { return !queue->empty();
+        //         }, &m_queue), absl::Seconds(1)))
         //{
         //     return std::nullopt;
         // }
 
-        /*spdlog::debug("Popping item from the queue. size={}", m_queue.size());*/
+        /*spdlog::debug("Popping item from the queue. size={}",
+         * m_queue.size());*/
 
         std::unique_lock<std::mutex> lk(smut);
         cv.wait_for(lk, std::chrono::seconds(1), [this] { return !m_queue.empty(); });
