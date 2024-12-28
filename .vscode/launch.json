@@ -5,6 +5,33 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "rr - RaftMain",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/RaftMain",
+            "miDebuggerServerAddress": "localhost:50505",
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": true,
+            "linux": {
+                "MIMode": "gdb",
+                "setupCommands": [
+                    {
+                        "description": "Setup to resolve symbols",
+                        "text": "set sysroot /",
+                        "ignoreFailures": false
+                    }
+                ]
+            },
+            "osx": {
+                "MIMode": "gdb"
+            },
+            "windows": {
+                "MIMode": "gdb"
+            }
+        },
+        {
             "name": "Debug - LSMTreeTest",
             "type": "cppdbg",
             "request": "launch",
@@ -84,7 +111,7 @@
             "args": [
                 "-c",
                 "./assets/tkvpp_config.json"
-            ], // Arguments to pass to the program
+            ],
             "stopAtEntry": false, // Set to true to stop at the program's entry point
             "cwd": "${workspaceFolder}", // Current working directory
             "environment": [],

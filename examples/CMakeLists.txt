@@ -3,3 +3,4 @@ project(zkv)
 
 add_subdirectory(absl)
 add_subdirectory(embedded)
+add_subdirectory(raft)

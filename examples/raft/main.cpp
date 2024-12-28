@@ -1,9 +1,15 @@
+#include <absl/synchronization/mutex.h>
+#include <absl/time/time.h>
+#include <cxxopts.hpp>
 #include <grpc/grpc.h>
 #include <grpcpp/channel.h>
 #include <grpcpp/client_context.h>
 #include <grpcpp/create_channel.h>
 #include <grpcpp/security/credentials.h>
 
+#include <grpcpp/security/server_credentials.h>
+#include <grpcpp/server_builder.h>
+#include <grpcpp/support/status.h>
 #include <iterator>
 #include <cstdlib>
 #include <chrono>
@@ -17,6 +23,8 @@
 #include <random>
 
 #include <spdlog/spdlog.h>
+
+#include "thread_safety.h"
 
 #include "Raft.grpc.pb.h"
 #include "Raft.pb.h"
@@ -73,11 +81,13 @@ class NodeClient
     auto requestVote(const RequestVoteRequest &request, RequestVoteResponse *response) -> bool
     {
         grpc::ClientContext context;
-
+        context.set_deadline(std::chrono::system_clock::now() + std::chrono::seconds(generateRandomTimeout()));
         grpc::Status status = m_stub->RequestVote(&context, request, response);
         if (!status.ok())
         {
-            spdlog::error("RequestVote RPC call failed");
+            spdlog::error("RequestVote RPC call failed. Error code={} and message={}",
+                          static_cast<int>(status.error_code()),
+                          status.error_message());
             return false;
         }
 
@@ -98,23 +108,97 @@ class NodeClient
     /*grpc::CompletionQueue                   m_cq;*/
 };
 
-class ConsensusModule : public RaftService::Service
+class ConsensusModule : public RaftService::Service, std::enable_shared_from_this<ConsensusModule>
 {
   public:
     // @id is the ID of the current node. Order of RaftServices in @replicas is important!
     ConsensusModule(const ID id, std::vector<IP> replicas)
-        : m_id{id}
+        : m_id{id},
+          m_currentTerm{0}
     {
         assert(m_id > 0);
-        assert(m_replicas.size() > 0);
+        assert(replicas.size() > 0);
+        assert(m_id <= replicas.size());
+
+        m_ip = replicas[m_id - 1];
+
+        grpc::ServerBuilder builder;
+        builder.AddListeningPort(m_ip, grpc::InsecureServerCredentials());
+        builder.RegisterService(this);
+
+        m_server = builder.BuildAndStart();
 
         for (auto [id, ip] : std::ranges::views::enumerate(replicas))
         {
-            m_replicas.emplace(id, NodeClient(id, ip));
+            if (id + 1 == m_id)
+            {
+                continue;
+            }
+
+            m_replicas.emplace(id + 1, NodeClient(id + 1, ip));
         }
 
         m_nextIndex.resize(m_replicas.size());
         m_matchIndex.resize(m_replicas.size());
+    }
+
+    auto AppendEntries(grpc::ServerContext        *pContext,
+                       const AppendEntriesRequest *pRequest,
+                       AppendEntriesResponse      *pResponse) -> grpc::Status override
+    {
+        (void)pContext;
+        (void)pRequest;
+        (void)pResponse;
+
+        spdlog::info(
+            "Recevied AppendEntries RPC from leader={} during term={}", pRequest->senderid(), pRequest->term());
+
+        absl::MutexLock locker(&m_electionMutex);
+        pResponse->set_term(m_currentTerm);
+        pResponse->set_success(true);
+        pResponse->set_responderid(m_id);
+
+        m_leaderHeartbeatReceived.store(true);
+
+        return grpc::Status::OK;
+    }
+
+    auto RequestVote(grpc::ServerContext *pContext, const RequestVoteRequest *pRequest, RequestVoteResponse *pResponse)
+        -> grpc::Status override
+    {
+        (void)pContext;
+
+        spdlog::info(
+            "Received RequestVote RPC from candidate={} during term={}", pRequest->candidateid(), pRequest->term());
+
+        absl::WriterMutexLock locker(&m_electionMutex);
+        if (pRequest->term() > m_currentTerm)
+        {
+            becomeFollower(pRequest->term());
+        }
+
+        if (pRequest->term() < m_currentTerm)
+        {
+            pResponse->set_term(m_currentTerm);
+            pResponse->set_votegranted(0);
+            pResponse->set_responderid(m_id);
+
+            return grpc::Status::OK;
+        }
+
+        if (m_votedFor == 0 || m_votedFor == pRequest->candidateid())
+        {
+            m_votedFor = pRequest->candidateid();
+            m_currentTerm = pRequest->term();
+
+            pResponse->set_term(m_currentTerm);
+            pResponse->set_votegranted(1);
+            pResponse->set_responderid(m_id);
+
+            return grpc::Status::OK;
+        }
+
+        return grpc::Status::OK;
     }
 
     auto init() -> bool
@@ -136,7 +220,57 @@ class ConsensusModule : public RaftService::Service
 
     void start()
     {
-        m_electionTimerThread = std::jthread(&ConsensusModule::electionTimeoutTask, this);
+        m_electionTimerThread = std::jthread(
+            [this](std::stop_token token)
+            {
+                while (!m_stopElectionTimer)
+                {
+                    if (token.stop_requested())
+                    {
+                        spdlog::info("Stopping election timer thread");
+                        return;
+                    }
+
+                    if (m_state == NodeState::LEADER)
+                    {
+                        spdlog::info("Skipping the election loop as the node is the leader");
+                        return;
+                    }
+
+                    absl::WriterMutexLock locker(&m_timerMutex);
+                    if (m_timerMutex.AwaitWithTimeout(absl::Condition(
+                                                          +[](std::atomic<bool> *leaderHeartbeatReceived)
+                                                          { return leaderHeartbeatReceived->load(); },
+                                                          &m_leaderHeartbeatReceived),
+                                                      absl::Milliseconds(m_electionTimeout.load())))
+                    {
+                        {
+                            absl::MutexLock locker(&m_electionMutex);
+                            spdlog::info("node={} received heartbeat during term={}", m_id, m_currentTerm);
+                        }
+
+                        m_leaderHeartbeatReceived.store(false);
+                    }
+                    else
+                    {
+                        startElection();
+                    }
+                }
+            });
+
+        /*m_serverThread = std::jthread(*/
+        /*[this](std::stop_token token)*/
+        {
+            assert(m_server);
+            spdlog::info("Listening for RPC requests on ");
+            m_server->Wait();
+        }
+        /*);*/
+    }
+
+    void startServer()
+    {
+        m_server->Wait();
     }
 
     void stop()
@@ -145,6 +279,9 @@ class ConsensusModule : public RaftService::Service
         m_timerCV.notify_all();
         m_electionTimerThread.request_stop();
         m_electionTimerThread.join();
+
+        m_serverThread.request_stop();
+        m_serverThread.join();
     }
 
   private:
@@ -180,76 +317,84 @@ class ConsensusModule : public RaftService::Service
     // Called every time 'AppendEntries' received.
     void resetElectionTimer()
     {
-        std::lock_guard lock(m_timerMutex);
-        m_electionTimeout = generateRandomTimeout();
+        /*m_timerMutex.AssertHeld();*/
+        m_electionTimeout.store(generateRandomTimeout());
         m_timerCV.notify_all();
     }
 
     // The logic behind election
     void startElection()
     {
-        std::lock_guard locker(m_electionMutex);
-        auto            previousTerm = m_currentTerm++;
-        auto            previousState = m_state;
-        m_state = NodeState::CANDIDATE;
-
-        // Node in a canditate state should vote for itself.
-        m_voteCount++;
-        m_votedFor = m_id;
-
-        m_electionInProgress = true;
-
         RequestVoteRequest request;
-        request.set_term(m_currentTerm);
-        request.set_candidateid(m_id);
-        request.set_lastlogterm(getLastLogTerm());
-        request.set_lastlogindex(getLastLogIndex());
+        {
+            absl::WriterMutexLock locker(&m_electionMutex);
+            m_currentTerm++;
+            m_state = NodeState::CANDIDATE;
+
+            spdlog::info("Node={} starts election. New term={}", m_id, m_currentTerm);
+
+            // Node in a canditate state should vote for itself.
+            m_voteCount++;
+            m_votedFor = m_id;
+
+            m_electionInProgress = true;
+
+            request.set_term(m_currentTerm);
+            request.set_candidateid(m_id);
+            request.set_lastlogterm(getLastLogTerm());
+            request.set_lastlogindex(getLastLogIndex());
+        }
 
         std::vector<std::jthread> requesterThreads;
         for (auto &[id, client] : m_replicas)
         {
+            /*requesterThreads.emplace_back(*/
+            /*[request, this](NodeClient &client)*/
+            {
+                RequestVoteResponse response;
+                if (!client.requestVote(request, &response))
+                {
+                    spdlog::error("RequestVote RPC failed in requester thread");
+                    return;
+                }
 
-            requesterThreads
-                .emplace_back(
-                    [request, this](NodeClient &client)
+                auto responseTerm = response.term();
+                auto voteGranted = response.votegranted();
+
+                spdlog::info(
+                    "Received RequestVoteResponse in requester thread peerTerm={} voteGranted={} responseTerm={}",
+                    responseTerm,
+                    voteGranted,
+                    response.responderid());
+
+                absl::MutexLock locker(&m_electionMutex);
+                if (responseTerm > m_currentTerm)
+                {
+                    becomeFollower(responseTerm);
+                    return;
+                }
+
+                if ((voteGranted != 0) && responseTerm == m_currentTerm)
+                {
+                    m_voteCount++;
+                    if (hasMajority(m_voteCount.load()))
                     {
-                        RequestVoteResponse response;
-                        if (!client.requestVote(request, &response))
-                        {
-                            spdlog::error("RequestVote RPC failed in requester thread");
-                        }
+                        becomeLeader();
+                    }
+                }
+            }
+            /*, std::ref(client));*/
+        }
 
-                        auto responseTerm = response.term();
-                        auto voteGranted = response.votegranted();
-
-                        spdlog::info("Received RequestVoteResponse in requester thread peerTerm={} voteGranted={}",
-                                     responseTerm,
-                                     voteGranted);
-
-                        std::lock_guard locker(m_electionMutex);
-                        if (responseTerm > m_currentTerm)
-                        {
-                            becomeFollower(responseTerm);
-                            return;
-                        }
-
-                        if (voteGranted && responseTerm == m_currentTerm)
-                        {
-                            m_voteCount++;
-                            if (hasMajority(m_voteCount.load()))
-                            {
-                                becomeLeader();
-                            }
-                        }
-                    },
-                    std::ref(client))
-                .detach();
+        for (auto &thread : requesterThreads)
+        {
+            thread.join();
         }
     }
 
     void becomeFollower(const uint32_t newTerm)
     {
-        std::lock_guard locker(m_electionMutex);
+        m_electionMutex.AssertHeld();
 
         m_currentTerm = newTerm;
         m_state = NodeState::FOLLOWER;
@@ -263,38 +408,42 @@ class ConsensusModule : public RaftService::Service
     }
 
     // A task to monitor the election timeout and start a new election if needed.
-    void electionTimeoutTask(std::stop_token token)
-    {
-        while (!m_stopElectionTimer)
-        {
-            if (token.stop_requested())
-            {
-                return;
-            }
-
-            std::unique_lock lock(m_timerMutex);
-            if (m_timerCV.wait_for(lock,
-                                   std::chrono::milliseconds(m_electionTimeout),
-                                   [this]() { return m_leaderHeartbeatReceived.load(); }))
-            {
-                m_leaderHeartbeatReceived.store(false);
-            }
-            else
-            {
-                startElection();
-            }
-        }
-    }
-
+    /*void electionTimeoutTask(std::stop_token token)*/
+    /*{*/
+    /*    while (!m_stopElectionTimer)*/
+    /*    {*/
+    /*        if (token.stop_requested())*/
+    /*        {*/
+    /*            return;*/
+    /*        }*/
+    /**/
+    /*        std::unique_lock lock(m_timerMutex);*/
+    /*        if (m_timerCV.wait_for(lock,*/
+    /*                               std::chrono::milliseconds(m_electionTimeout),*/
+    /*                               [this]() { return m_leaderHeartbeatReceived.load(); }))*/
+    /*        {*/
+    /*            m_leaderHeartbeatReceived.store(false);*/
+    /*        }*/
+    /*        else*/
+    /*        {*/
+    /*            startElection();*/
+    /*        }*/
+    /*    }*/
+    /*}*/
+    /**/
     auto hasMajority(const uint32_t votes) const -> bool
     {
-        return votes > m_replicas.size() / 2;
+        return votes > static_cast<double>(m_replicas.size()) / 2.0;
     }
 
     void becomeLeader()
     {
+        m_electionMutex.AssertHeld();
+
         m_state = NodeState::LEADER;
         m_electionInProgress = false;
+
+        spdlog::info("Node={} become a leader at term={}", m_id, m_currentTerm);
 
         for (auto &[id, client] : m_replicas)
         {
@@ -312,12 +461,13 @@ class ConsensusModule : public RaftService::Service
                 {
                     AppendEntriesRequest request;
                     {
-                        std::lock_guard locker(m_electionMutex);
+                        absl::ReaderMutexLock locker(&m_electionMutex);
 
                         request.set_term(m_currentTerm);
                         request.set_prevlogterm(getLastLogTerm());
                         request.set_prevlogindex(getLastLogIndex());
                         request.set_leadercommit(m_commitIndex);
+                        request.set_senderid(m_id);
                     }
 
                     {
@@ -331,12 +481,14 @@ class ConsensusModule : public RaftService::Service
                         auto responseTerm = response.term();
                         auto success = response.success();
 
-                        spdlog::info("Received RequestVoteResponse in requester thread peerTerm={} success={}",
-                                     responseTerm,
-                                     success);
+                        spdlog::info(
+                            "Received AppendEntriesResponse in requester thread peerTerm={} success={} responderId={}",
+                            responseTerm,
+                            success,
+                            response.responderid());
 
                         {
-                            std::lock_guard locker(m_electionMutex);
+                            absl::WriterMutexLock locker(&m_electionMutex);
 
                             if (responseTerm > m_currentTerm)
                             {
@@ -359,6 +511,7 @@ class ConsensusModule : public RaftService::Service
 
     void decrementNextIndex(ID id)
     {
+        (void)id;
     }
 
     [[nodiscard]] auto getLastLogIndex() const -> uint32_t
@@ -371,24 +524,28 @@ class ConsensusModule : public RaftService::Service
         return m_log.empty() ? 0 : m_log.back().term();
     }
 
-    void revertToFollower(uint32_t newTerm)
-    {
-    }
-
     void appendEntriesRPC()
     {
     }
 
     // Id of the current node. Received from outside.
-    uint32_t m_id{invalidId};
+    ID m_id{invalidId};
+
+    // IP of the current node. Received from outside.
+    IP m_ip;
+
+    // gRPC server for the current node
+    std::unique_ptr<grpc::Server> m_server;
 
     // Each server starts as a follower.
     NodeState m_state{NodeState::FOLLOWER};
 
+    absl::Mutex m_electionMutex;
+
     // Persistent state on all servers
-    uint32_t              m_currentTerm{0};
-    uint32_t              m_votedFor{0};
-    std::vector<LogEntry> m_log{};
+    uint32_t m_currentTerm ABSL_GUARDED_BY(m_electionMutex);
+    uint32_t               m_votedFor{0};
+    std::vector<LogEntry>  m_log;
 
     // Volatile state on all servers. Reseted on each server start.
     uint32_t m_commitIndex{0};
@@ -401,19 +558,53 @@ class ConsensusModule : public RaftService::Service
 
     // Election and election timer related fields.
     std::atomic<bool>       m_leaderHeartbeatReceived{false};
-    std::mutex              m_timerMutex;
+    absl::Mutex             m_timerMutex;
     std::condition_variable m_timerCV;
     std::atomic<bool>       m_stopElectionTimer{false};
-    int                     m_electionTimeout{0};
+    std::atomic<int>        m_electionTimeout{0};
     std::jthread            m_electionTimerThread;
-    std::mutex              m_electionMutex;
     std::atomic<uint32_t>   m_voteCount{0};
     std::atomic<bool>       m_electionInProgress{false};
+
+    std::jthread m_serverThread;
 };
 
-int main()
+int main(int argc, char *argv[])
 {
-    ConsensusModule cm;
+    cxxopts::Options options("raft");
+    options.add_options()("id", "id of the node", cxxopts::value<ID>())(
+        "nodes", "ip addresses of replicas in a correct order", cxxopts::value<std::vector<IP>>());
+
+    auto parsedOptions = options.parse(argc, argv);
+    if ((parsedOptions.count("help") != 0U) || (parsedOptions.count("id") == 0U) ||
+        (parsedOptions.count("nodes") == 0U))
+    {
+        spdlog::info("{}", options.help());
+        return EXIT_SUCCESS;
+    }
+
+    auto nodeId = parsedOptions["id"].as<ID>();
+    auto nodeIps = parsedOptions["nodes"].as<std::vector<IP>>();
+    for (auto ip : nodeIps)
+    {
+        spdlog::info(ip);
+    }
+
+    spdlog::info("nodeIps.size()={}", nodeIps.size());
+
+    if (nodeId == 0)
+    {
+        spdlog::error("ID of the node should be positve integer");
+        return EXIT_FAILURE;
+    }
+
+    if (nodeIps.empty())
+    {
+        spdlog::error("List of node IPs can't be empty");
+        return EXIT_FAILURE;
+    }
+
+    ConsensusModule cm(nodeId, nodeIps);
     if (!cm.init())
     {
         spdlog::error("Failed to initialize the state machine");

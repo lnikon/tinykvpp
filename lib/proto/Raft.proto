@@ -29,11 +29,13 @@ message AppendEntriesRequest {
     uint32 prevLogTerm = 4;
     repeated LogEntry entries = 5;
     uint32 leaderCommit = 6;
+    uint32 senderId = 7;
 }
 
 message AppendEntriesResponse {
     uint32 term = 1;
     bool success = 2;
+    uint32 responderId = 3;
 }
 
 message RequestVoteRequest {
@@ -41,9 +43,11 @@ message RequestVoteRequest {
     uint32 candidateId = 2;
     uint32 lastLogIndex = 3;
     uint32 lastLogterm = 4;
+    uint32 senderId = 7;
 }
 
 message RequestVoteResponse {
     uint32 term = 1;
     uint32 voteGranted = 2;
+    uint32 responderId = 3;
 }

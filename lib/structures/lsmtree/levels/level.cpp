@@ -169,7 +169,8 @@ void level_t::merge(const segments::regular_segment::shared_ptr_t &pSegment) noe
 
     // Segments overlapping with input memtable
     auto overlappingSegmentsView = m_storage | std::views::filter(
-                                                   [](auto pSegment) {
+                                                   [](auto pSegment)
+                                                   {
                                                        return pSegment->min().value() > pSegment->min().value() ||
                                                               pSegment->max().value() < pSegment->max().value();
                                                    });
