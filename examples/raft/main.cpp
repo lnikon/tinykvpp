@@ -321,14 +321,6 @@ class ConsensusModule : public RaftService::Service, std::enable_shared_from_thi
         return true;
     }
 
-    // Request handling
-    void handleAppendEntriesRPC()
-    {
-        // TODO(vbejanyan): Staff to do
-
-        // TODO(vbejanyan): Work continues
-    }
-
     // Timer handling
     // Called every time 'AppendEntries' received.
     void resetElectionTimer()
@@ -362,44 +354,39 @@ class ConsensusModule : public RaftService::Service, std::enable_shared_from_thi
         }
 
         std::vector<std::jthread> requesterThreads;
+        // TODO(lnikon): Is it possible to broadcast unary RPC or consider async?
         for (auto &[id, client] : m_replicas)
         {
-            /*requesterThreads.emplace_back(*/
-            /*[request, this](NodeClient &client)*/
+            RequestVoteResponse response;
+            if (!client.requestVote(request, &response))
             {
-                RequestVoteResponse response;
-                if (!client.requestVote(request, &response))
+                spdlog::error("RequestVote RPC failed in requester thread");
+                return;
+            }
+
+            auto responseTerm = response.term();
+            auto voteGranted = response.votegranted();
+
+            spdlog::info("Received RequestVoteResponse in requester thread peerTerm={} voteGranted={} responseTerm={}",
+                         responseTerm,
+                         voteGranted,
+                         response.responderid());
+
+            absl::MutexLock locker(&m_electionMutex);
+            if (responseTerm > m_currentTerm)
+            {
+                becomeFollower(responseTerm);
+                return;
+            }
+
+            if ((voteGranted != 0) && responseTerm == m_currentTerm)
+            {
+                m_voteCount++;
+                if (hasMajority(m_voteCount.load()))
                 {
-                    spdlog::error("RequestVote RPC failed in requester thread");
-                    return;
-                }
-
-                auto responseTerm = response.term();
-                auto voteGranted = response.votegranted();
-
-                spdlog::info(
-                    "Received RequestVoteResponse in requester thread peerTerm={} voteGranted={} responseTerm={}",
-                    responseTerm,
-                    voteGranted,
-                    response.responderid());
-
-                absl::MutexLock locker(&m_electionMutex);
-                if (responseTerm > m_currentTerm)
-                {
-                    becomeFollower(responseTerm);
-                    return;
-                }
-
-                if ((voteGranted != 0) && responseTerm == m_currentTerm)
-                {
-                    m_voteCount++;
-                    if (hasMajority(m_voteCount.load()))
-                    {
-                        becomeLeader();
-                    }
+                    becomeLeader();
                 }
             }
-            /*, std::ref(client));*/
         }
 
         for (auto &thread : requesterThreads)
