@@ -168,12 +168,13 @@ void level_t::merge(const segments::regular_segment::shared_ptr_t &pSegment) noe
     auto inMemtableRecords{pSegment->memtable().value().moved_records()};
 
     // Segments overlapping with input memtable
-    auto overlappingSegmentsView = m_storage | std::views::filter(
-                                                   [](auto pSegment)
-                                                   {
-                                                       return pSegment->min().value() > pSegment->min().value() ||
-                                                              pSegment->max().value() < pSegment->max().value();
-                                                   });
+    auto overlappingSegmentsView =
+        m_storage | std::views::filter(
+                        [pSegment](const auto &currentSegment)
+                        {
+                            return !(currentSegment->max().value() < pSegment->min().value() ||
+                                     currentSegment->min().value() > pSegment->max().value());
+                        });
 
     // Calculate total number of records in memtables overlapping with @pSegment
     std::size_t overlappingSegmentsRecordsCount{0};

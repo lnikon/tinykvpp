@@ -156,6 +156,13 @@ auto ConsensusModule::RequestVote(grpc::ServerContext      *pContext,
         return grpc::Status::OK;
     }
 
+    if (pRequest->lastlogterm() < getLastLogTerm() ||
+        (pRequest->lastlogterm() == getLastLogTerm() && pRequest->lastlogindex() < getLastLogIndex()))
+    {
+        pResponse->set_votegranted(0);
+        return grpc::Status::OK;
+    }
+
     return grpc::Status::OK;
 }
 
