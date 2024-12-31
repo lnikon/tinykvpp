@@ -105,8 +105,21 @@ auto ConsensusModule::AppendEntries(grpc::ServerContext        *pContext,
 
     spdlog::info("Recevied AppendEntries RPC from leader={} during term={}", pRequest->senderid(), pRequest->term());
 
-    absl::MutexLock timerLocker(&m_timerMutex);
     absl::MutexLock locker(&m_stateMutex);
+    absl::MutexLock timerLocker(&m_timerMutex);
+
+    if (pRequest->term() < m_currentTerm)
+    {
+        pResponse->set_term(m_currentTerm);
+        pResponse->set_success(false);
+        pResponse->set_responderid(m_id);
+        return grpc::Status::OK;
+    }
+
+    if (pRequest->term() > m_currentTerm)
+    {
+        becomeFollower(pRequest->term());
+    }
 
     pResponse->set_term(m_currentTerm);
     pResponse->set_success(true);
@@ -156,13 +169,13 @@ auto ConsensusModule::RequestVote(grpc::ServerContext      *pContext,
         return grpc::Status::OK;
     }
 
-    if (pRequest->lastlogterm() < getLastLogTerm() ||
-        (pRequest->lastlogterm() == getLastLogTerm() && pRequest->lastlogindex() < getLastLogIndex()))
-    {
-        pResponse->set_votegranted(0);
-        return grpc::Status::OK;
-    }
-
+    /*if (pRequest->lastlogterm() < getLastLogTerm() ||*/
+    /*    (pRequest->lastlogterm() == getLastLogTerm() && pRequest->lastlogindex() < getLastLogIndex()))*/
+    /*{*/
+    /*    pResponse->set_votegranted(0);*/
+    /*    return grpc::Status::OK;*/
+    /*}*/
+    /**/
     return grpc::Status::OK;
 }
 
@@ -269,6 +282,7 @@ void ConsensusModule::stop()
     for (auto &heartbeatThread : m_heartbeatThreads)
     {
         heartbeatThread.request_stop();
+        heartbeatThread.join();
     }
     m_heartbeatThreads.clear();
 
@@ -377,6 +391,7 @@ void ConsensusModule::becomeFollower(const uint32_t newTerm)
         heartbeatThread.request_stop();
         heartbeatThread.join();
     }
+    m_heartbeatThreads.clear();
 
     resetElectionTimer();
 
@@ -391,12 +406,20 @@ auto ConsensusModule::hasMajority(const uint32_t votes) const -> bool
 
 void ConsensusModule::becomeLeader()
 {
+    assert((m_state != NodeState::LEADER && m_heartbeatThreads.empty()) ||
+           (m_state == NodeState::LEADER && !m_heartbeatThreads.empty()));
+
+    if (m_state == NodeState::LEADER)
+    {
+        spdlog::warn("Node={} is already a leader", m_id);
+        return;
+    }
+
     m_state = NodeState::LEADER;
     m_electionInProgress = false;
 
     spdlog::info("Node={} become a leader at term={}", m_id, m_currentTerm);
 
-    assert(m_heartbeatThreads.empty());
     for (auto &[id, client] : m_replicas)
     {
         sendHeartbeat(client);
@@ -410,6 +433,7 @@ void ConsensusModule::sendHeartbeat(NodeClient &client)
     m_heartbeatThreads.emplace_back(
         [this, &client, heartbeatInterval](std::stop_token token)
         {
+            spdlog::info("Node={} is starting a heartbeat thread for client={}", m_id, client.getId());
             while (!token.stop_requested())
             {
                 AppendEntriesRequest request;
@@ -428,7 +452,7 @@ void ConsensusModule::sendHeartbeat(NodeClient &client)
                     if (!client.appendEntries(request, &response))
                     {
                         spdlog::error("AppendEntriesRequest failed during heartbeat");
-                        return;
+                        continue;
                     }
 
                     auto responseTerm = response.term();
@@ -446,7 +470,7 @@ void ConsensusModule::sendHeartbeat(NodeClient &client)
                         if (responseTerm > m_currentTerm)
                         {
                             becomeFollower(responseTerm);
-                            return;
+                            break;
                         }
 
                         if (!success)
