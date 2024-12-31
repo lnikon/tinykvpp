@@ -3,6 +3,8 @@
 #include <cstdlib>
 #include <memory>
 #include <ranges>
+#include <stdexcept>
+#include <utility>
 #include <vector>
 
 #include <grpc/grpc.h>
@@ -17,15 +19,27 @@
 #include <absl/synchronization/mutex.h>
 #include <absl/time/time.h>
 
+#include <fmt/format.h>
 #include <spdlog/spdlog.h>
 
-NodeClient::NodeClient(const ID id, const IP ip)
-    : m_id{id},
-      m_ip{ip},
+NodeClient::NodeClient(ID nodeId, IP nodeIp)
+    : m_id{nodeId},
+      m_ip{std::move(nodeIp)},
       m_channel(grpc::CreateChannel(m_ip, grpc::InsecureChannelCredentials())),
       m_stub(RaftService::NewStub(m_channel))
 {
     assert(m_id > 0);
+    assert(!m_ip.empty());
+
+    if (!m_channel)
+    {
+        throw std::runtime_error(fmt::format("Failed to establish a gRPC channel for node={} ip={}", m_id, m_id));
+    }
+
+    if (!m_stub)
+    {
+        throw std::runtime_error(fmt::format("Failed to create a stub for node={} ip={}", m_id, m_id));
+    }
 }
 
 auto NodeClient::appendEntries(const AppendEntriesRequest &request, AppendEntriesResponse *response) -> bool
@@ -63,8 +77,8 @@ auto NodeClient::getId() const -> ID
     return m_id;
 }
 
-ConsensusModule::ConsensusModule(const ID id, std::vector<IP> replicas)
-    : m_id{id},
+ConsensusModule::ConsensusModule(ID nodeId, std::vector<IP> replicas)
+    : m_id{nodeId},
       m_currentTerm{0},
       m_votedFor{0},
       m_state{NodeState::FOLLOWER}
@@ -80,6 +94,10 @@ ConsensusModule::ConsensusModule(const ID id, std::vector<IP> replicas)
     builder.RegisterService(this);
 
     m_server = builder.BuildAndStart();
+    if (!m_server)
+    {
+        throw std::runtime_error(fmt::format("Failed to create a gRPC server for node={} ip={}", m_id, m_ip));
+    }
 
     for (auto [id, ip] : std::ranges::views::enumerate(replicas))
     {
@@ -143,39 +161,37 @@ auto ConsensusModule::RequestVote(grpc::ServerContext      *pContext,
         "Received RequestVote RPC from candidate={} during term={}", pRequest->candidateid(), pRequest->term());
 
     absl::WriterMutexLock locker(&m_stateMutex);
+
+    pResponse->set_term(m_currentTerm);
+    pResponse->set_votegranted(0);
+    pResponse->set_responderid(m_id);
+
+    // Become follower if candidates has higher term
     if (pRequest->term() > m_currentTerm)
     {
         becomeFollower(pRequest->term());
     }
 
+    // Don't grant vote to the candidate if the nodes term is higher
     if (pRequest->term() < m_currentTerm)
     {
-        pResponse->set_term(m_currentTerm);
-        pResponse->set_votegranted(0);
-        pResponse->set_responderid(m_id);
-
         return grpc::Status::OK;
     }
 
+    // Grant vote to the candidate if the node hasn't voted yet and
+    // candidates log is at least as up-to-date as receiver's log
     if (m_votedFor == 0 || m_votedFor == pRequest->candidateid())
     {
-        m_votedFor = pRequest->candidateid();
-        m_currentTerm = pRequest->term();
+        if (pRequest->lastlogterm() > getLastLogTerm() ||
+            (pRequest->lastlogterm() == getLastLogTerm() && pRequest->lastlogindex() >= getLastLogIndex()))
+        {
 
-        pResponse->set_term(m_currentTerm);
-        pResponse->set_votegranted(1);
-        pResponse->set_responderid(m_id);
-
-        return grpc::Status::OK;
+            m_votedFor = pRequest->candidateid();
+            pResponse->set_votegranted(1);
+            resetElectionTimer();
+        }
     }
 
-    /*if (pRequest->lastlogterm() < getLastLogTerm() ||*/
-    /*    (pRequest->lastlogterm() == getLastLogTerm() && pRequest->lastlogindex() < getLastLogIndex()))*/
-    /*{*/
-    /*    pResponse->set_votegranted(0);*/
-    /*    return grpc::Status::OK;*/
-    /*}*/
-    /**/
     return grpc::Status::OK;
 }
 
@@ -273,7 +289,7 @@ void ConsensusModule::stop()
 {
     absl::WriterMutexLock locker{&m_stateMutex};
 
-    m_stopElectionTimer = false;
+    m_stopElectionTimer = true;
     m_timerCV.SignalAll();
 
     m_electionTimerThread.request_stop();
@@ -285,6 +301,11 @@ void ConsensusModule::stop()
         heartbeatThread.join();
     }
     m_heartbeatThreads.clear();
+
+    if (m_server)
+    {
+        m_server->Shutdown();
+    }
 
     m_serverThread.request_stop();
     m_serverThread.join();
@@ -428,17 +449,25 @@ void ConsensusModule::becomeLeader()
 
 void ConsensusModule::sendHeartbeat(NodeClient &client)
 {
-    constexpr const auto heartbeatInterval{std::chrono::milliseconds(100)};
+    constexpr const auto heartbeatInterval{std::chrono::milliseconds(10)};
+    constexpr const int  maxRetries{3};
 
     m_heartbeatThreads.emplace_back(
-        [this, &client, heartbeatInterval](std::stop_token token)
+        [this, maxRetries, &client, heartbeatInterval](std::stop_token token)
         {
             spdlog::info("Node={} is starting a heartbeat thread for client={}", m_id, client.getId());
+
+            int consecutiveFailures = 0;
             while (!token.stop_requested())
             {
                 AppendEntriesRequest request;
                 {
                     absl::ReaderMutexLock locker(&m_stateMutex);
+                    if (m_state != NodeState::LEADER)
+                    {
+                        spdlog::info("Node={} is no longer a leader. Stopping the heartbeat thread");
+                        break;
+                    }
 
                     request.set_term(m_currentTerm);
                     request.set_prevlogterm(getLastLogTerm());
@@ -451,9 +480,21 @@ void ConsensusModule::sendHeartbeat(NodeClient &client)
                     AppendEntriesResponse response;
                     if (!client.appendEntries(request, &response))
                     {
-                        spdlog::error("AppendEntriesRequest failed during heartbeat");
+                        consecutiveFailures++;
+
+                        consecutiveFailures = 0;
+                        spdlog::error("AppendEntriesRequest failed during heartbeat. Attempt {}/{}",
+                                      consecutiveFailures,
+                                      maxRetries);
+                        if (consecutiveFailures >= maxRetries)
+                        {
+                            return;
+                        }
+
                         continue;
                     }
+
+                    consecutiveFailures = 0;
 
                     auto responseTerm = response.term();
                     auto success = response.success();

@@ -22,7 +22,7 @@ auto generateRandomTimeout() -> int;
 class NodeClient
 {
   public:
-    NodeClient(const ID id, const IP ip);
+    NodeClient(ID nodeId, IP nodeIp);
 
     auto appendEntries(const AppendEntriesRequest &request, AppendEntriesResponse *response) -> bool;
     auto requestVote(const RequestVoteRequest &request, RequestVoteResponse *response) -> bool;
@@ -41,7 +41,7 @@ class ConsensusModule : public RaftService::Service, std::enable_shared_from_thi
 {
   public:
     // @id is the ID of the current node. Order of RaftServices in @replicas is important!
-    ConsensusModule(const ID id, std::vector<IP> replicas);
+    ConsensusModule(ID nodeId, std::vector<IP> replicas);
 
     auto AppendEntries(grpc::ServerContext        *pContext,
                        const AppendEntriesRequest *pRequest,
