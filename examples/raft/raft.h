@@ -3,6 +3,9 @@
 #include "Raft.grpc.pb.h"
 #include "Raft.pb.h"
 
+#include "TinyKVPP.pb.h"
+#include "TinyKVPP.grpc.pb.h"
+
 #include <absl/base/thread_annotations.h>
 #include <chrono>  // for 'std::chrono::high_resolution_clock'
 #include <cstdint> // for 'uint32_t'
@@ -37,7 +40,9 @@ class NodeClient
     std::unique_ptr<RaftService::Stub>      m_stub{nullptr};
 };
 
-class ConsensusModule : public RaftService::Service, std::enable_shared_from_this<ConsensusModule>
+class ConsensusModule : public RaftService::Service,
+                        public TinyKVPPService::Service,
+                        std::enable_shared_from_this<ConsensusModule>
 {
   public:
     // @id is the ID of the current node. Order of RaftServices in @replicas is important!
@@ -48,6 +53,12 @@ class ConsensusModule : public RaftService::Service, std::enable_shared_from_thi
                        AppendEntriesResponse      *pResponse) -> grpc::Status override;
 
     auto RequestVote(grpc::ServerContext *pContext, const RequestVoteRequest *pRequest, RequestVoteResponse *pResponse)
+        -> grpc::Status override;
+
+    auto Put(grpc::ServerContext *pContext, const PutRequest *pRequest, PutResponse *pResponse)
+        -> grpc::Status override;
+
+    auto Get(grpc::ServerContext *pContext, const GetRequest *pRequest, GetResponse *pResponse)
         -> grpc::Status override;
 
     auto init() -> bool;
@@ -63,22 +74,21 @@ class ConsensusModule : public RaftService::Service, std::enable_shared_from_thi
     auto initializePersistentState() -> bool;
     auto initializeVolatileState() -> bool;
 
-    // Timer handling
-    // Called every time 'AppendEntries' received.
-    void resetElectionTimer();
-
     // The logic behind election
     void startElection();
-    void becomeFollower(const uint32_t newTerm) ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_stateMutex);
-    auto hasMajority(const uint32_t votes) const -> bool;
+    void becomeFollower(uint32_t newTerm) ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_stateMutex);
+    auto hasMajority(uint32_t votes) const -> bool;
     void becomeLeader() ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_stateMutex);
     void sendHeartbeat(NodeClient &client) ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_stateMutex);
-    void decrementNextIndex(ID id);
+    void sendAppendEntriesRPC(NodeClient &client, std::vector<LogEntry> logEntries);
 
     // NOLINTBEGIN(modernize-use-trailing-return-type)
     [[nodiscard]] uint32_t  getLastLogIndex() const ABSL_SHARED_LOCKS_REQUIRED(m_stateMutex);
     [[nodiscard]] uint32_t  getLastLogTerm() const ABSL_SHARED_LOCKS_REQUIRED(m_stateMutex);
     [[nodiscard]] NodeState getState() ABSL_SHARED_LOCKS_REQUIRED(m_stateMutex);
+    uint32_t                getLogTerm(uint32_t index) const ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_stateMutex);
+    uint32_t                findMajorityIndexMatch() ABSL_SHARED_LOCKS_REQUIRED(m_stateMutex);
+    bool                    waitForMajorityReplication(uint32_t logIndex); // ABSL_SHARED_LOCKS_REQUIRED(m_stateMutex);
     // NOLINTEND(modernize-use-trailing-return-type)
 
     // Id of the current node. Received from outside.
@@ -87,39 +97,41 @@ class ConsensusModule : public RaftService::Service, std::enable_shared_from_thi
     // IP of the current node. Received from outside.
     IP m_ip;
 
-    // gRPC server for the current node
-    std::unique_ptr<grpc::Server> m_server;
+    // gRPC server to receive Raft RPCs
+    std::unique_ptr<grpc::Server> m_raftServer{nullptr};
+
+    // gRPC server to receive KV RPCs
+    std::unique_ptr<grpc::Server> m_kvServer{nullptr};
 
     // Persistent state on all servers
-    absl::Mutex m_stateMutex    ABSL_ACQUIRED_AFTER(m_timerMutex);
+    absl::Mutex                 m_stateMutex;
     uint32_t m_currentTerm      ABSL_GUARDED_BY(m_stateMutex);
     uint32_t m_votedFor         ABSL_GUARDED_BY(m_stateMutex);
     NodeState m_state           ABSL_GUARDED_BY(m_stateMutex);
     std::vector<LogEntry> m_log ABSL_GUARDED_BY(m_stateMutex);
 
-    // Leader specific members
+    // Volatile state on all servers. Reseted on each server start.
+    uint32_t m_commitIndex ABSL_GUARDED_BY(m_stateMutex);
+    uint32_t m_lastApplied ABSL_GUARDED_BY(m_stateMutex);
+
+    // Log replication related fields
+    std::unordered_map<ID, NodeClient>            m_replicas;
+    std::unordered_map<ID, uint32_t> m_matchIndex ABSL_GUARDED_BY(m_stateMutex);
+    std::unordered_map<ID, uint32_t> m_nextIndex  ABSL_GUARDED_BY(m_stateMutex);
+
+    // Election related fields
+    absl::Mutex           m_timerMutex;
+    std::atomic<bool>     m_leaderHeartbeatReceived{false};
+    std::atomic<bool>     m_stopElection{false};
+    std::jthread          m_electionThread;
+    std::atomic<uint32_t> m_voteCount{0};
+
+    // Stores clusterSize - 1 thread to send heartbeat to replicas
     std::vector<std::jthread> m_heartbeatThreads ABSL_GUARDED_BY(m_stateMutex);
 
-    // Volatile state on all servers. Reseted on each server start.
-    uint32_t m_commitIndex{0};
-    uint32_t m_lastApplied{0};
-
-    // Volatile state on leaders
-    std::unordered_map<ID, NodeClient> m_replicas;
-    std::vector<uint32_t>              m_nextIndex;
-    std::vector<uint32_t>              m_matchIndex;
-
-    // Election and election timer related fields.
-    absl::Mutex m_timerMutex ABSL_ACQUIRED_BEFORE(m_stateMutex);
-    std::atomic<bool>        m_leaderHeartbeatReceived{false};
-    absl::CondVar            m_timerCV;
-    std::atomic<bool>        m_stopElectionTimer{false};
-    std::atomic<int>         m_electionTimeout{generateRandomTimeout()};
-    TimePoint                m_electionTimeoutResetTime{Clock::now()};
-    std::jthread             m_electionTimerThread;
-    std::atomic<uint32_t>    m_voteCount{0};
-    std::atomic<bool>        m_electionInProgress{false};
-
-    // TODO[lnikon]: Use this to serve RPC's in a different thread
+    // Serves incoming RPC's
     std::jthread m_serverThread;
+
+    // Temporary in-memory hashtable to store KVs
+    std::unordered_map<std::string, std::string> m_kv;
 };

@@ -20,6 +20,8 @@ message LogEntry {
     uint32 term = 1;
     uint32 index = 2;
     string command = 3;
+    string key = 4;
+    string value = 5;
 }
 
 message AppendEntriesRequest {
@@ -35,7 +37,8 @@ message AppendEntriesRequest {
 message AppendEntriesResponse {
     uint32 term = 1;
     bool success = 2;
-    uint32 responderId = 3;
+    uint32 match_index = 3;
+    uint32 responderId = 4;
 }
 
 message RequestVoteRequest {

@@ -22,6 +22,8 @@ auto generateRandomTimeout() -> int
 
 int main(int argc, char *argv[])
 {
+    setenv("ASAN_OPTIONS", "allocator_may_return_null=1", 1);
+
     cxxopts::Options options("raft");
     options.add_options()("id", "id of the node", cxxopts::value<ID>())(
         "nodes", "ip addresses of replicas in a correct order", cxxopts::value<std::vector<IP>>());

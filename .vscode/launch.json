@@ -32,6 +32,37 @@
             }
         },
         {
+            "name": "Debug - RaftMain",
+            "type": "cppdbg",
+            "request": "attach",
+            "program": "${workspaceFolder}/build/RaftMain", // Path to the compiled executable
+            "processId": "${command:pickProcess}",
+            "MIMode": "gdb", // Use "lldb" if you're using clang on macOS
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ],
+            "preLaunchTask": "build", // Ensure your program is built before launching
+            "miDebuggerPath": "/usr/bin/gdb", // Path to the gdb or lldb debugger
+            "logging": {
+                "trace": true, // Enable trace for debugging the launch.json config
+                "traceResponse": true,
+                "engineLogging": false
+            },
+            "targetArchitecture": "x86_64",
+            "pipeTransport": {
+                "pipeCwd": "",
+                "pipeProgram": "/bin/bash",
+                "pipeArgs": [
+                    "-c"
+                ],
+                "debuggerPath": "/usr/bin/gdb"
+            },
+        },
+        {
             "name": "Debug - LSMTreeTest",
             "type": "cppdbg",
             "request": "launch",
