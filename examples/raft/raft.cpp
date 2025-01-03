@@ -1,7 +1,5 @@
 #include "raft.h"
 
-#include "db.h"
-
 #include <cstdint>
 #include <cstdlib>
 #include <memory>
@@ -25,13 +23,14 @@
 #include <fmt/format.h>
 #include <spdlog/spdlog.h>
 
-static int gFirstElection = 0;
+static bool gFirstElection = true;
 
 NodeClient::NodeClient(ID nodeId, IP nodeIp)
     : m_id{nodeId},
       m_ip{std::move(nodeIp)},
       m_channel(grpc::CreateChannel(m_ip, grpc::InsecureChannelCredentials())),
-      m_stub(RaftService::NewStub(m_channel))
+      m_stub(RaftService::NewStub(m_channel)),
+      m_kvStub(TinyKVPPService::NewStub(m_channel))
 {
     assert(m_id > 0);
     assert(!m_ip.empty());
@@ -44,6 +43,11 @@ NodeClient::NodeClient(ID nodeId, IP nodeIp)
     if (!m_stub)
     {
         throw std::runtime_error(fmt::format("Failed to create a stub for node={} ip={}", m_id, m_id));
+    }
+
+    if (!m_kvStub)
+    {
+        throw std::runtime_error(fmt::format("Failed to create a KV stub for node={} ip={}", m_id, m_id));
     }
 }
 
@@ -69,6 +73,22 @@ auto NodeClient::requestVote(const RequestVoteRequest &request, RequestVoteRespo
     if (!status.ok())
     {
         spdlog::error("RequestVote RPC call failed. Error code={} and message={}",
+                      static_cast<int>(status.error_code()),
+                      status.error_message());
+        return false;
+    }
+
+    return true;
+}
+
+auto NodeClient::put(const PutRequest &request, PutResponse *pResponse) -> bool
+{
+    grpc::ClientContext context;
+    context.set_deadline(std::chrono::system_clock::now() + std::chrono::seconds(generateRandomTimeout()));
+    grpc::Status status = m_kvStub->Put(&context, request, pResponse);
+    if (!status.ok())
+    {
+        spdlog::error("Put RPC call failed. Error code={} and message={}",
                       static_cast<int>(status.error_code()),
                       status.error_message());
         return false;
@@ -126,10 +146,9 @@ auto ConsensusModule::AppendEntries(grpc::ServerContext        *pContext,
     (void)pRequest;
     (void)pResponse;
 
-    spdlog::info("Recevied AppendEntries RPC from leader={} during term={}", pRequest->senderid(), pRequest->term());
+    spdlog::debug("Recevied AppendEntries RPC from leader={} during term={}", pRequest->senderid(), pRequest->term());
 
     absl::MutexLock locker(&m_stateMutex);
-    /*absl::MutexLock timerLocker(&m_timerMutex);*/
 
     // 1. Term check
     if (pRequest->term() < m_currentTerm)
@@ -172,9 +191,23 @@ auto ConsensusModule::AppendEntries(grpc::ServerContext        *pContext,
 
     m_log.insert(m_log.end(), pRequest->entries().begin(), pRequest->entries().end());
 
+    /*const auto &entries = pRequest->entries();*/
+    /*for (const auto &entry : entries)*/
+    /*{*/
+    /*    m_wal.add(db::wal::wal_t::record_t{.op = db::wal::wal_t::operation_k::add_k,*/
+    /*                                       .kv = {structures::memtable::memtable_t::record_t::key_t{entry.key()},*/
+    /*                                              structures::memtable::memtable_t::record_t::value_t{entry.value()}}});*/
+    /*}*/
+
     if (pRequest->leadercommit() > m_commitIndex)
     {
         m_commitIndex = std::min(pRequest->leadercommit(), (uint32_t)m_log.size());
+
+        while (m_lastApplied < m_commitIndex)
+        {
+            ++m_lastApplied;
+            m_kv[m_log[m_lastApplied - 1].key()] = m_log[m_lastApplied - 1].value();
+        }
     }
 
     pResponse->set_term(m_currentTerm);
@@ -182,9 +215,10 @@ auto ConsensusModule::AppendEntries(grpc::ServerContext        *pContext,
     pResponse->set_responderid(m_id);
     pResponse->set_match_index(m_log.size());
 
+    m_votedFor = pRequest->senderid();
     m_leaderHeartbeatReceived.store(true);
 
-    spdlog::info("Node={} is resetting election timeout at term={}", m_id, m_currentTerm);
+    spdlog::debug("Node={} is resetting election timeout at term={}", m_id, m_currentTerm);
 
     return grpc::Status::OK;
 }
@@ -197,10 +231,10 @@ auto ConsensusModule::RequestVote(grpc::ServerContext      *pContext,
 
     absl::WriterMutexLock locker(&m_stateMutex);
 
-    spdlog::info("Received RequestVote RPC from candidate={} during term={} peerTerm={}",
-                 pRequest->candidateid(),
-                 m_currentTerm,
-                 pRequest->term());
+    spdlog::debug("Received RequestVote RPC from candidate={} during term={} peerTerm={}",
+                  pRequest->candidateid(),
+                  m_currentTerm,
+                  pRequest->term());
 
     pResponse->set_term(m_currentTerm);
     pResponse->set_votegranted(0);
@@ -245,17 +279,40 @@ auto ConsensusModule::Put(grpc::ServerContext *pContext, const PutRequest *pRequ
 
     uint32_t currentTerm = 0;
     uint32_t lastLogIndex = 0;
+    uint32_t votedFor = 0;
     {
         absl::MutexLock locker{&m_stateMutex};
         if (m_state != NodeState::LEADER)
         {
-            spdlog::error("Non-leader node={} received a put request", m_id);
-            pResponse->set_status("");
-            return grpc::Status::OK;
+            if (m_votedFor != invalidId)
+            {
+                votedFor = m_votedFor;
+            }
+            else
+            {
+                spdlog::error("Non-leader node={} received a put request. Leader at current term is unkown.", m_id);
+                pResponse->set_status("");
+                return grpc::Status::OK;
+            }
         }
 
         currentTerm = m_currentTerm;
         lastLogIndex = getLastLogIndex() + 1;
+    }
+
+    if (votedFor != invalidId)
+    {
+        spdlog::error("Non-leader node={} received a put request. Forwarding to leader={} during currentTerm={}",
+                      m_id,
+                      votedFor,
+                      currentTerm);
+
+        if (!m_replicas[votedFor]->put(*pRequest, pResponse))
+        {
+            spdlog::error("Non-leader node={} was unable to forward put RPC to leader={}", m_id, votedFor);
+        }
+
+        return grpc::Status::OK;
     }
 
     LogEntry logEntry;
@@ -272,7 +329,7 @@ auto ConsensusModule::Put(grpc::ServerContext *pContext, const PutRequest *pRequ
 
     for (auto &[id, client] : m_replicas)
     {
-        sendAppendEntriesRPC(client, {logEntry});
+        sendAppendEntriesRPC(client.value(), {logEntry});
     }
 
     absl::MutexLock locker{&m_stateMutex};
@@ -280,13 +337,6 @@ auto ConsensusModule::Put(grpc::ServerContext *pContext, const PutRequest *pRequ
     if (success)
     {
         spdlog::info("Node={} majority agreed on logEntry={}", m_id, logEntry.index());
-
-        // Apply successfull replication to the state machine e.g. in-memory hash-table
-        while (m_lastApplied < m_commitIndex)
-        {
-            ++m_lastApplied;
-            m_kv[m_log[m_lastApplied - 1].key()] = m_log[m_lastApplied - 1].value();
-        }
     }
     else
     {
@@ -354,16 +404,16 @@ void ConsensusModule::start()
                     absl::MutexLock locker(&m_timerMutex); // Lock the mutex using Abseil's MutexLock
 
                     // Determine the timeout duration
-                    int64_t timeToWaitMs = gFirstElection == 0 ? generateRandomTimeout() : 1'000'000'000;
+                    int64_t timeToWaitMs = gFirstElection ? generateRandomTimeout() : 1'000'000'000;
                     int64_t timeToWaitDeadlineMs = currentTimeMs() + timeToWaitMs;
 
                     // Define the condition to wait for leader's heartbeat
                     auto heartbeatReceivedCondition = [this, &timeToWaitDeadlineMs, currentTimeMs]()
                     { return m_leaderHeartbeatReceived.load() || currentTimeMs() >= timeToWaitDeadlineMs; };
 
-                    spdlog::info("Timer thread at node={} will block for {}ms for the leader to send a heartbeat",
-                                 m_id,
-                                 timeToWaitMs);
+                    spdlog::debug("Timer thread at node={} will block for {}ms for the leader to send a heartbeat",
+                                  m_id,
+                                  timeToWaitMs);
 
                     // Wait for the condition to be met or timeout
                     bool heartbeatReceived = m_timerMutex.AwaitWithTimeout(absl::Condition(&heartbeatReceivedCondition),
@@ -373,8 +423,8 @@ void ConsensusModule::start()
                     // Otherwise, heartbeat timed out and node needs to start the new leader election
                     if (heartbeatReceived && m_leaderHeartbeatReceived.load())
                     {
-                        gFirstElection = 1;
-                        spdlog::info("Node={} received heartbeat", m_id);
+                        gFirstElection = false;
+                        spdlog::debug("Node={} received heartbeat", m_id);
                         m_leaderHeartbeatReceived.store(false);
                     }
                     else
@@ -387,7 +437,7 @@ void ConsensusModule::start()
 
     {
         assert(m_raftServer);
-        spdlog::info("Listening for RPC requests on ");
+        spdlog::debug("Listening for RPC requests on ");
         m_raftServer->Wait();
     }
 }
@@ -436,7 +486,7 @@ void ConsensusModule::startElection()
         m_currentTerm++;
         m_state = NodeState::CANDIDATE;
 
-        spdlog::info("Node={} starts election. New term={}", m_id, m_currentTerm);
+        spdlog::debug("Node={} starts election. New term={}", m_id, m_currentTerm);
 
         // Node in a canditate state should vote for itself.
         m_voteCount++;
@@ -453,7 +503,7 @@ void ConsensusModule::startElection()
     for (auto &[id, client] : m_replicas)
     {
         RequestVoteResponse response;
-        if (!client.requestVote(request, &response))
+        if (!client->requestVote(request, &response))
         {
             spdlog::error("RequestVote RPC failed in requester thread");
             return;
@@ -462,10 +512,10 @@ void ConsensusModule::startElection()
         auto responseTerm = response.term();
         auto voteGranted = response.votegranted();
 
-        spdlog::info("Received RequestVoteResponse in requester thread peerTerm={} voteGranted={} responseTerm={}",
-                     responseTerm,
-                     voteGranted,
-                     response.responderid());
+        spdlog::debug("Received RequestVoteResponse in requester thread peerTerm={} voteGranted={} responseTerm={}",
+                      responseTerm,
+                      voteGranted,
+                      response.responderid());
 
         absl::MutexLock locker(&m_stateMutex);
         if (responseTerm > m_currentTerm)
@@ -503,7 +553,7 @@ void ConsensusModule::becomeFollower(uint32_t newTerm)
     }
     m_heartbeatThreads.clear();
 
-    spdlog::info("Server reverted to FOLLOWER state in term={}", m_currentTerm);
+    spdlog::debug("Server reverted to FOLLOWER state in term={}", m_currentTerm);
 }
 
 auto ConsensusModule::hasMajority(uint32_t votes) const -> bool
@@ -525,11 +575,11 @@ void ConsensusModule::becomeLeader()
 
     m_state = NodeState::LEADER;
 
-    spdlog::info("Node={} become a leader at term={}", m_id, m_currentTerm);
+    spdlog::debug("Node={} become a leader at term={}", m_id, m_currentTerm);
 
     for (auto &[id, client] : m_replicas)
     {
-        sendHeartbeat(client);
+        sendHeartbeat(client.value());
     }
 }
 
@@ -541,7 +591,7 @@ void ConsensusModule::sendHeartbeat(NodeClient &client)
     m_heartbeatThreads.emplace_back(
         [this, maxRetries, &client, heartbeatInterval](std::stop_token token)
         {
-            spdlog::info("Node={} is starting a heartbeat thread for client={}", m_id, client.getId());
+            spdlog::debug("Node={} is starting a heartbeat thread for client={}", m_id, client.getId());
 
             int consecutiveFailures = 0;
             while (!token.stop_requested())
@@ -551,7 +601,7 @@ void ConsensusModule::sendHeartbeat(NodeClient &client)
                     absl::ReaderMutexLock locker(&m_stateMutex);
                     if (m_state != NodeState::LEADER)
                     {
-                        spdlog::info("Node={} is no longer a leader. Stopping the heartbeat thread");
+                        spdlog::debug("Node={} is no longer a leader. Stopping the heartbeat thread");
                         break;
                     }
 
@@ -585,7 +635,7 @@ void ConsensusModule::sendHeartbeat(NodeClient &client)
                     auto responseTerm = response.term();
                     auto success = response.success();
 
-                    spdlog::info(
+                    spdlog::debug(
                         "Received AppendEntriesResponse in requester thread peerTerm={} success={} responderId={}",
                         responseTerm,
                         success,
@@ -599,18 +649,13 @@ void ConsensusModule::sendHeartbeat(NodeClient &client)
                             becomeFollower(responseTerm);
                             break;
                         }
-
-                        if (!success)
-                        {
-                            /*decrementNextIndex(client.getId());*/
-                        }
                     }
                 }
 
                 std::this_thread::sleep_for(heartbeatInterval);
             }
 
-            spdlog::info("Stopping heartbeat thread for on the node={} for the client={}", m_id, client.getId());
+            spdlog::debug("Stopping heartbeat thread for on the node={} for the client={}", m_id, client.getId());
         });
 }
 
@@ -631,16 +676,7 @@ void ConsensusModule::sendAppendEntriesRPC(NodeClient &client, std::vector<LogEn
 
                 for (auto logEntry : logEntries)
                 {
-                    spdlog::info("VAGAG: logEntry.command={} logEntry.command.size={}",
-                                 logEntry.command(),
-                                 logEntry.command().size());
                     request.add_entries()->CopyFrom(logEntry);
-                    /*auto *entry = request.add_entries();*/
-                    /*entry->set_term(logEntry.term());*/
-                    /*entry->set_index(logEntry.index());*/
-                    /*entry->set_command(logEntry.command());*/
-                    /*entry->set_key(logEntry.key());*/
-                    /*entry->set_value(logEntry.value());*/
                 }
             }
 
@@ -677,11 +713,11 @@ void ConsensusModule::sendAppendEntriesRPC(NodeClient &client, std::vector<LogEn
                     m_commitIndex = majorityIndex;
 
                     // Apply successfull replication to the state machine e.g. in-memory hash-table
-                    /*while (m_lastApplied < m_commitIndex)*/
-                    /*{*/
-                    /*    ++m_lastApplied;*/
-                    /*    m_kv[m_log[m_lastApplied - 1].key()] = m_log[m_lastApplied - 1].value();*/
-                    /*}*/
+                    while (m_lastApplied < m_commitIndex)
+                    {
+                        ++m_lastApplied;
+                        m_kv[m_log[m_lastApplied - 1].key()] = m_log[m_lastApplied - 1].value();
+                    }
 
                     return;
                 }

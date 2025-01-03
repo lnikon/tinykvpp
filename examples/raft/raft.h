@@ -1,5 +1,7 @@
 #pragma once
 
+#include <wal/wal.h>
+
 #include "Raft.grpc.pb.h"
 #include "Raft.pb.h"
 
@@ -30,6 +32,8 @@ class NodeClient
     auto appendEntries(const AppendEntriesRequest &request, AppendEntriesResponse *response) -> bool;
     auto requestVote(const RequestVoteRequest &request, RequestVoteResponse *response) -> bool;
 
+    auto put(const PutRequest &request, PutResponse *pResponse) -> bool;
+
     [[nodiscard]] auto getId() const -> ID;
 
   private:
@@ -38,6 +42,7 @@ class NodeClient
 
     std::shared_ptr<grpc::ChannelInterface> m_channel{nullptr};
     std::unique_ptr<RaftService::Stub>      m_stub{nullptr};
+    std::unique_ptr<TinyKVPPService::Stub>  m_kvStub{nullptr};
 };
 
 class ConsensusModule : public RaftService::Service,
@@ -72,7 +77,6 @@ class ConsensusModule : public RaftService::Service,
   private:
     // State initialization
     auto initializePersistentState() -> bool;
-    auto initializeVolatileState() -> bool;
 
     // The logic behind election
     void startElection();
@@ -109,15 +113,16 @@ class ConsensusModule : public RaftService::Service,
     uint32_t m_votedFor         ABSL_GUARDED_BY(m_stateMutex);
     NodeState m_state           ABSL_GUARDED_BY(m_stateMutex);
     std::vector<LogEntry> m_log ABSL_GUARDED_BY(m_stateMutex);
+    /*db::wal::wal_t m_wal        ABSL_GUARDED_BY(m_stateMutex);*/
 
     // Volatile state on all servers. Reseted on each server start.
     uint32_t m_commitIndex ABSL_GUARDED_BY(m_stateMutex);
     uint32_t m_lastApplied ABSL_GUARDED_BY(m_stateMutex);
 
     // Log replication related fields
-    std::unordered_map<ID, NodeClient>            m_replicas;
-    std::unordered_map<ID, uint32_t> m_matchIndex ABSL_GUARDED_BY(m_stateMutex);
-    std::unordered_map<ID, uint32_t> m_nextIndex  ABSL_GUARDED_BY(m_stateMutex);
+    std::unordered_map<ID, std::optional<NodeClient>> m_replicas;
+    std::unordered_map<ID, uint32_t> m_matchIndex     ABSL_GUARDED_BY(m_stateMutex);
+    std::unordered_map<ID, uint32_t> m_nextIndex      ABSL_GUARDED_BY(m_stateMutex);
 
     // Election related fields
     absl::Mutex           m_timerMutex;
