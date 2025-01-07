@@ -76,7 +76,7 @@ class ConsensusModule : public RaftService::Service,
 
   private:
     // State initialization
-    auto initializePersistentState() -> bool;
+    bool initializePersistentState() ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_stateMutex);
 
     // The logic behind election
     void startElection();
@@ -93,6 +93,11 @@ class ConsensusModule : public RaftService::Service,
     uint32_t                getLogTerm(uint32_t index) const ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_stateMutex);
     uint32_t                findMajorityIndexMatch() ABSL_SHARED_LOCKS_REQUIRED(m_stateMutex);
     bool                    waitForMajorityReplication(uint32_t logIndex); // ABSL_SHARED_LOCKS_REQUIRED(m_stateMutex);
+
+    bool updatePersistentState(std::optional<std::uint32_t> commitIndex, std::optional<std::uint32_t> votedFor)
+        ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_stateMutex);
+    [[nodiscard]] bool flushPersistentState() ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_stateMutex);
+    [[nodiscard]] bool restorePersistentState() ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_stateMutex);
     // NOLINTEND(modernize-use-trailing-return-type)
 
     // Id of the current node. Received from outside.

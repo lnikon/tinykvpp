@@ -2,9 +2,12 @@
 
 #include <cstdint>
 #include <cstdlib>
+#include <filesystem>
 #include <memory>
+#include <optional>
 #include <ranges>
 #include <stdexcept>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -24,6 +27,19 @@
 #include <spdlog/spdlog.h>
 
 static bool gFirstElection = true;
+
+namespace
+{
+
+const std::string_view gRaftFilename = "RAFT_PERSISTENCE";
+const std::string_view gLogFilename = "RAFT_LOG";
+
+auto constructFilename(std::string_view filename, std::uint32_t id) -> std::string
+{
+    return fmt::format("{}_NODE_{}", filename, id);
+}
+
+} // namespace
 
 NodeClient::NodeClient(ID nodeId, IP nodeIp)
     : m_id{nodeId},
@@ -201,7 +217,7 @@ auto ConsensusModule::AppendEntries(grpc::ServerContext        *pContext,
 
     if (pRequest->leadercommit() > m_commitIndex)
     {
-        m_commitIndex = std::min(pRequest->leadercommit(), (uint32_t)m_log.size());
+        updatePersistentState(std::min(pRequest->leadercommit(), (uint32_t)m_log.size()), std::nullopt);
 
         while (m_lastApplied < m_commitIndex)
         {
@@ -215,7 +231,8 @@ auto ConsensusModule::AppendEntries(grpc::ServerContext        *pContext,
     pResponse->set_responderid(m_id);
     pResponse->set_match_index(m_log.size());
 
-    m_votedFor = pRequest->senderid();
+    updatePersistentState(std::nullopt, pRequest->senderid());
+
     m_leaderHeartbeatReceived.store(true);
 
     spdlog::debug("Node={} is resetting election timeout at term={}", m_id, m_currentTerm);
@@ -260,7 +277,7 @@ auto ConsensusModule::RequestVote(grpc::ServerContext      *pContext,
             (pRequest->lastlogterm() == getLastLogTerm() && pRequest->lastlogindex() >= getLastLogIndex()))
         {
 
-            m_votedFor = pRequest->candidateid();
+            updatePersistentState(std::nullopt, pRequest->candidateid());
             pResponse->set_term(m_currentTerm);
             pResponse->set_votegranted(1);
             m_leaderHeartbeatReceived.store(true);
@@ -302,10 +319,10 @@ auto ConsensusModule::Put(grpc::ServerContext *pContext, const PutRequest *pRequ
 
     if (votedFor != invalidId)
     {
-        spdlog::error("Non-leader node={} received a put request. Forwarding to leader={} during currentTerm={}",
-                      m_id,
-                      votedFor,
-                      currentTerm);
+        spdlog::info("Non-leader node={} received a put request. Forwarding to leader={} during currentTerm={}",
+                     m_id,
+                     votedFor,
+                     currentTerm);
 
         if (!m_replicas[votedFor]->put(*pRequest, pResponse))
         {
@@ -361,6 +378,7 @@ auto ConsensusModule::Get(grpc::ServerContext *pContext, const GetRequest *pRequ
 
 auto ConsensusModule::init() -> bool
 {
+    absl::MutexLock locker{&m_stateMutex};
     if (!initializePersistentState())
     {
         spdlog::warn("Unable to initialize persistent state!");
@@ -474,7 +492,17 @@ void ConsensusModule::stop()
 
 auto ConsensusModule::initializePersistentState() -> bool
 {
-    // TODO: Init m_currentTerm, m_votedFor, m_log from disk. Setting dummy values for now.
+    if (!restorePersistentState())
+    {
+        spdlog::error("Unable to restore persistent state");
+        return false;
+    }
+
+    for (const auto &logEntry : m_log)
+    {
+        m_kv[logEntry.key()] = logEntry.value();
+    }
+
     return true;
 }
 
@@ -490,7 +518,7 @@ void ConsensusModule::startElection()
 
         // Node in a canditate state should vote for itself.
         m_voteCount++;
-        m_votedFor = m_id;
+        updatePersistentState(std::nullopt, m_id);
 
         request.set_term(m_currentTerm);
         request.set_candidateid(m_id);
@@ -544,7 +572,7 @@ void ConsensusModule::becomeFollower(uint32_t newTerm)
 {
     m_currentTerm = newTerm;
     m_state = NodeState::FOLLOWER;
-    m_votedFor = 0;
+    updatePersistentState(std::nullopt, 0);
 
     for (auto &heartbeatThread : m_heartbeatThreads)
     {
@@ -710,7 +738,7 @@ void ConsensusModule::sendAppendEntriesRPC(NodeClient &client, std::vector<LogEn
                 uint32_t majorityIndex = findMajorityIndexMatch();
                 if (majorityIndex > m_commitIndex && m_log[majorityIndex - 1].term() == m_currentTerm)
                 {
-                    m_commitIndex = majorityIndex;
+                    updatePersistentState(majorityIndex, std::nullopt);
 
                     // Apply successfull replication to the state machine e.g. in-memory hash-table
                     while (m_lastApplied < m_commitIndex)
@@ -793,4 +821,107 @@ auto ConsensusModule::getLastLogTerm() const -> uint32_t
 auto ConsensusModule::getState() -> NodeState
 {
     return m_state;
+}
+
+auto ConsensusModule::updatePersistentState(std::optional<std::uint32_t> commitIndex,
+                                            std::optional<std::uint32_t> votedFor) -> bool
+{
+    m_commitIndex = commitIndex.has_value() ? commitIndex.value() : m_commitIndex;
+    m_votedFor = votedFor.has_value() ? votedFor.value() : m_votedFor;
+    return flushPersistentState();
+}
+
+auto ConsensusModule::flushPersistentState() -> bool
+{
+    // Flush commitIndex and votedFor
+    {
+        auto          path = std::filesystem::path(constructFilename(gRaftFilename, m_id));
+        std::ofstream fsa(path, std::fstream::out | std::fstream::trunc);
+        if (!fsa.is_open())
+        {
+            spdlog::error("Node={} is unable to open {} to flush commitIndex={} and votedFor={}",
+                          m_id,
+                          path.c_str(),
+                          m_commitIndex,
+                          m_votedFor);
+            return false;
+        }
+        fsa << m_commitIndex << " " << m_votedFor << "\n";
+        fsa.flush();
+        // TODO(lnikon): ::fsync(fsa->handle());
+    }
+
+    // Flush the log
+    {
+        auto          path = std::filesystem::path(constructFilename(gLogFilename, m_id));
+        std::ofstream fsa(path, std::fstream::out | std::fstream::trunc);
+        if (!fsa.is_open())
+        {
+            spdlog::error("Node={} is unable to open {} to flush the log", m_id, path.c_str());
+            return false;
+        }
+
+        for (const auto &entry : m_log)
+        {
+            fsa << entry.key() << " " << entry.value() << " " << entry.term() << "\n";
+        }
+        fsa.flush();
+        // TODO(lnikon): ::fsync(fsa->handle());
+    }
+
+    return true;
+}
+
+auto ConsensusModule::restorePersistentState() -> bool
+{
+    {
+        auto path = std::filesystem::path(constructFilename(gRaftFilename, m_id));
+        if (!std::filesystem::exists(path))
+        {
+            spdlog::info("Node={} is running the first time", m_id);
+            return true;
+        }
+
+        std::ifstream ifs(path, std::ifstream::in);
+        if (!ifs.is_open())
+        {
+            spdlog::error("Node={} is unable to open {} to restore commitIndex and votedFor", m_id, path.c_str());
+            return false;
+        }
+
+        ifs >> m_commitIndex >> m_votedFor;
+        spdlog::info("Node={} restored commitIndex={} and votedFor={}", m_id, m_commitIndex, m_votedFor);
+    }
+
+    {
+        auto          path = std::filesystem::path(constructFilename(gLogFilename, m_id));
+        std::ifstream ifs(path, std::ifstream::in);
+        if (!ifs.is_open())
+        {
+            spdlog::error("Node={} is unable to open {} to restore log", m_id, path.c_str());
+            return false;
+        }
+
+        std::string logLine;
+        while (std::getline(ifs, logLine))
+        {
+            std::stringstream sst(logLine);
+
+            std::string   key;
+            std::string   value;
+            std::uint32_t term = 0;
+
+            sst >> key >> value >> term;
+
+            LogEntry logEntry;
+            logEntry.set_key(key);
+            logEntry.set_value(value);
+            logEntry.set_term(term);
+            m_log.emplace_back(logEntry);
+
+            spdlog::info("Node={} restored logEntry=[key={}, value={}, term={}]", m_id, key, value, term);
+        }
+    }
+
+    return true;
 }
