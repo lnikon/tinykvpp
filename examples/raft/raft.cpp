@@ -128,7 +128,8 @@ ConsensusModule::ConsensusModule(ID nodeId, std::vector<IP> replicas)
       m_votedFor{0},
       m_state{NodeState::FOLLOWER},
       m_commitIndex{0},
-      m_lastApplied{0}
+      m_lastApplied{0},
+      m_voteCount{0}
 {
     assert(m_id > 0);
     assert(replicas.size() > 0);
@@ -382,7 +383,14 @@ auto ConsensusModule::Get(grpc::ServerContext *pContext, const GetRequest *pRequ
     spdlog::info("Node={} recevied get request for key={}", m_id, pRequest->key());
 
     absl::MutexLock locker{&m_stateMutex};
-    pResponse->set_value(m_kv[pRequest->key()]);
+    if (auto it = m_kv.find(pRequest->key()); it != m_kv.end())
+    {
+        pResponse->set_value(it->second);
+    }
+    else
+    {
+        pResponse->set_value(std::string());
+    }
 
     return grpc::Status::OK;
 }
@@ -497,8 +505,11 @@ void ConsensusModule::stop()
         m_raftServer->Shutdown();
     }
 
-    m_serverThread.request_stop();
-    m_serverThread.join();
+    /*if (m_serverThread.joinable())*/
+    {
+        m_serverThread.request_stop();
+        m_serverThread.join();
+    }
 }
 
 auto ConsensusModule::initializePersistentState() -> bool

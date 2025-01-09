@@ -64,7 +64,7 @@ auto main(int argc, char *argv[]) -> int
 
     cm.start();
 
-    cm.stop();
+    /*cm.stop();*/
 
     return EXIT_SUCCESS;
 }
