@@ -53,24 +53,26 @@ NodeClient::NodeClient(ID nodeId, IP nodeIp)
 
     if (!m_channel)
     {
-        throw std::runtime_error(fmt::format("Failed to establish a gRPC channel for node={} ip={}", m_id, m_id));
+        throw std::runtime_error(fmt::format("Failed to establish a gRPC channel for node={} ip={}", m_id, m_ip));
     }
 
     if (!m_stub)
     {
-        throw std::runtime_error(fmt::format("Failed to create a stub for node={} ip={}", m_id, m_id));
+        throw std::runtime_error(fmt::format("Failed to create a stub for node={} ip={}", m_id, m_ip));
     }
 
     if (!m_kvStub)
     {
-        throw std::runtime_error(fmt::format("Failed to create a KV stub for node={} ip={}", m_id, m_id));
+        throw std::runtime_error(fmt::format("Failed to create a KV stub for node={} ip={}", m_id, m_ip));
     }
 }
 
 auto NodeClient::appendEntries(const AppendEntriesRequest &request, AppendEntriesResponse *response) -> bool
 {
-    grpc::ClientContext context;
+    const auto RPC_TIMEOUT = std::chrono::seconds(generateRandomTimeout());
 
+    grpc::ClientContext context;
+    context.set_deadline(std::chrono::system_clock::now() + RPC_TIMEOUT);
     grpc::Status status = m_stub->AppendEntries(&context, request, response);
     if (!status.ok())
     {
@@ -83,8 +85,10 @@ auto NodeClient::appendEntries(const AppendEntriesRequest &request, AppendEntrie
 
 auto NodeClient::requestVote(const RequestVoteRequest &request, RequestVoteResponse *response) -> bool
 {
+    const auto RPC_TIMEOUT = std::chrono::seconds(generateRandomTimeout());
+
     grpc::ClientContext context;
-    context.set_deadline(std::chrono::system_clock::now() + std::chrono::seconds(generateRandomTimeout()));
+    context.set_deadline(std::chrono::system_clock::now() + RPC_TIMEOUT);
     grpc::Status status = m_stub->RequestVote(&context, request, response);
     if (!status.ok())
     {
@@ -134,8 +138,20 @@ ConsensusModule::ConsensusModule(ID nodeId, std::vector<IP> replicas)
 
     grpc::ServerBuilder builder;
     builder.AddListeningPort(m_ip, grpc::InsecureServerCredentials());
-    builder.RegisterService(dynamic_cast<RaftService::Service *>(this));
-    builder.RegisterService(dynamic_cast<TinyKVPPService::Service *>(this));
+
+    auto *raftService = dynamic_cast<RaftService::Service *>(this);
+    if (raftService == nullptr)
+    {
+        throw std::runtime_error(fmt::format("Failed to dynamic_cast ConsensusModule to RaftService"));
+    }
+    builder.RegisterService(raftService);
+
+    auto *tkvppService = dynamic_cast<TinyKVPPService::Service *>(this);
+    if (tkvppService == nullptr)
+    {
+        throw std::runtime_error(fmt::format("Failed to dynamic_cast ConsensusModule to TinyKVPPService"));
+    }
+    builder.RegisterService(tkvppService);
 
     m_raftServer = builder.BuildAndStart();
     if (!m_raftServer)
@@ -143,14 +159,17 @@ ConsensusModule::ConsensusModule(ID nodeId, std::vector<IP> replicas)
         throw std::runtime_error(fmt::format("Failed to create a gRPC server for node={} ip={}", m_id, m_ip));
     }
 
-    for (auto [id, ip] : std::ranges::views::enumerate(replicas))
+    std::size_t id{1};
+    for (const auto &ip : replicas)
     {
-        if (id + 1 == m_id)
+        if (id != m_id)
         {
-            continue;
+            m_replicas[id] = NodeClient(id, ip);
+            m_matchIndex[id] = 0;
+            m_nextIndex[id] = 1;
         }
 
-        m_replicas.emplace(id + 1, NodeClient(id + 1, ip));
+        ++id;
     }
 }
 
@@ -206,14 +225,6 @@ auto ConsensusModule::AppendEntries(grpc::ServerContext        *pContext,
     }
 
     m_log.insert(m_log.end(), pRequest->entries().begin(), pRequest->entries().end());
-
-    /*const auto &entries = pRequest->entries();*/
-    /*for (const auto &entry : entries)*/
-    /*{*/
-    /*    m_wal.add(db::wal::wal_t::record_t{.op = db::wal::wal_t::operation_k::add_k,*/
-    /*                                       .kv = {structures::memtable::memtable_t::record_t::key_t{entry.key()},*/
-    /*                                              structures::memtable::memtable_t::record_t::value_t{entry.value()}}});*/
-    /*}*/
 
     if (pRequest->leadercommit() > m_commitIndex)
     {
@@ -527,43 +538,50 @@ void ConsensusModule::startElection()
     }
 
     std::vector<std::jthread> requesterThreads;
-    // TODO(lnikon): Is it possible to broadcast unary RPC or consider async?
+    requesterThreads.reserve(m_replicas.size());
     for (auto &[id, client] : m_replicas)
     {
-        RequestVoteResponse response;
-        if (!client->requestVote(request, &response))
-        {
-            spdlog::error("RequestVote RPC failed in requester thread");
-            return;
-        }
-
-        auto responseTerm = response.term();
-        auto voteGranted = response.votegranted();
-
-        spdlog::debug("Received RequestVoteResponse in requester thread peerTerm={} voteGranted={} responseTerm={}",
-                      responseTerm,
-                      voteGranted,
-                      response.responderid());
-
-        absl::MutexLock locker(&m_stateMutex);
-        if (responseTerm > m_currentTerm)
-        {
-            becomeFollower(responseTerm);
-            return;
-        }
-
-        if (voteGranted != 0 && responseTerm == m_currentTerm)
-        {
-            m_voteCount++;
-            if (hasMajority(m_voteCount.load()))
+        spdlog::debug("Node={} is creating RequestVoteRPC thread for the peer={}", m_id, id);
+        requesterThreads.emplace_back(
+            [&client, request, this]()
             {
-                becomeLeader();
-            }
-        }
+                RequestVoteResponse response;
+                if (!client->requestVote(request, &response))
+                {
+                    spdlog::error("RequestVote RPC failed in requester thread");
+                    return;
+                }
+
+                auto responseTerm = response.term();
+                auto voteGranted = response.votegranted();
+
+                spdlog::debug(
+                    "Received RequestVoteResponse in requester thread peerTerm={} voteGranted={} responseTerm={}",
+                    responseTerm,
+                    voteGranted,
+                    response.responderid());
+
+                absl::MutexLock locker(&m_stateMutex);
+                if (responseTerm > m_currentTerm)
+                {
+                    becomeFollower(responseTerm);
+                    return;
+                }
+
+                if (voteGranted != 0 && responseTerm == m_currentTerm)
+                {
+                    m_voteCount++;
+                    if (hasMajority(m_voteCount.load()))
+                    {
+                        becomeLeader();
+                    }
+                }
+            });
     }
 
     for (auto &thread : requesterThreads)
     {
+        spdlog::debug("Node={} is joining RequestVoteRPC thread", m_id);
         thread.join();
     }
 }
@@ -581,7 +599,7 @@ void ConsensusModule::becomeFollower(uint32_t newTerm)
     }
     m_heartbeatThreads.clear();
 
-    spdlog::debug("Server reverted to FOLLOWER state in term={}", m_currentTerm);
+    spdlog::debug("Server reverted to follower state in term={}", m_currentTerm);
 }
 
 auto ConsensusModule::hasMajority(uint32_t votes) const -> bool
@@ -603,10 +621,11 @@ void ConsensusModule::becomeLeader()
 
     m_state = NodeState::LEADER;
 
-    spdlog::debug("Node={} become a leader at term={}", m_id, m_currentTerm);
+    spdlog::info("Node={} become a leader at term={}", m_id, m_currentTerm);
 
     for (auto &[id, client] : m_replicas)
     {
+        spdlog::debug("Node={} is creating a heartbeat thread for the peer={}", m_id, id);
         sendHeartbeat(client.value());
     }
 }
@@ -646,7 +665,6 @@ void ConsensusModule::sendHeartbeat(NodeClient &client)
                     {
                         consecutiveFailures++;
 
-                        consecutiveFailures = 0;
                         spdlog::error("AppendEntriesRequest failed during heartbeat. Attempt {}/{}",
                                       consecutiveFailures,
                                       maxRetries);
@@ -654,6 +672,7 @@ void ConsensusModule::sendHeartbeat(NodeClient &client)
                         {
                             return;
                         }
+                        consecutiveFailures = 0;
 
                         continue;
                     }

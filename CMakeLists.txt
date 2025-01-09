@@ -7,8 +7,19 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED On)
 set(CMAKE_CXX_EXTENSIONS Off)
 
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -Wthread-safety -pedantic-errors")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wthread-safety -pedantic-errors")
+set(TINYKVPP_COMMON_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -pedantic-errors")
+set(TINYKVPP_COMMON_CXX_FLAGS
+    "${CMAKE_CXX_FLAGS} -Wall -Wextra -pedantic-errors")
+
+message("Using compiler: ${CMAKE_CXX_COMPILER_ID}")
+
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  set(CMAKE_C_FLAGS "${TINYKVPP_COMMON_C_FLAGS} -Wthread-safety")
+  set(CMAKE_CXX_FLAGS "${TINYKVPP_COMMON_CXX_FLAGS} -Wthread-safety")
+else()
+  set(CMAKE_C_FLAGS "${TINYKVPP_COMMON_C_FLAGS}")
+  set(CMAKE_CXX_FLAGS "${TINYKVPP_COMMON_CXX_FLAGS}")
+endif()
 
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}")
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}")
@@ -36,12 +47,12 @@ add_subdirectory(bench)
 add_subdirectory(examples)
 
 # Custom targets to build docker images and run tests
-add_custom_target(GCCReleaseDockerImage
-    COMMAND sh scripts/build_gcc_release_docker_image.sh
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-)
+add_custom_target(
+  GCCReleaseDockerImage
+  COMMAND sh scripts/build_gcc_release_docker_image.sh
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 
-add_custom_target(ClangReleaseDockerImage
-    COMMAND sh scripts/build_clang_release_docker_image.sh
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-)
+add_custom_target(
+  ClangReleaseDockerImage
+  COMMAND sh scripts/build_clang_release_docker_image.sh
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})

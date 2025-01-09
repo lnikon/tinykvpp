@@ -24,10 +24,27 @@ constexpr const ID invalidId = 0;
 
 auto generateRandomTimeout() -> int;
 
+/**
+ * Client for communicating with other nodes in the Raft cluster.
+ * Handles RPC operations for consensus and key-value operations.
+ */
 class NodeClient
 {
   public:
+    /**
+     * Constructs a client for communicating with a specific node.
+     * @param nodeId Unique identifier for the target node
+     * @param nodeIp IP address of the target node
+     * @throws std::runtime_error if connection cannot be established
+     */
     NodeClient(ID nodeId, IP nodeIp);
+    virtual ~NodeClient() noexcept = default;
+
+    NodeClient(const NodeClient &) = delete;
+    auto operator=(const NodeClient &) -> NodeClient & = delete;
+
+    NodeClient(NodeClient &&) = default;
+    auto operator=(NodeClient &&) -> NodeClient & = default;
 
     auto appendEntries(const AppendEntriesRequest &request, AppendEntriesResponse *response) -> bool;
     auto requestVote(const RequestVoteRequest &request, RequestVoteResponse *response) -> bool;
