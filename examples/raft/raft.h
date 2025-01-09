@@ -64,7 +64,7 @@ class NodeClient
 
 class ConsensusModule : public RaftService::Service,
                         public TinyKVPPService::Service,
-                        std::enable_shared_from_this<ConsensusModule>
+                        public std::enable_shared_from_this<ConsensusModule>
 {
   public:
     // @id is the ID of the current node. Order of RaftServices in @replicas is important!

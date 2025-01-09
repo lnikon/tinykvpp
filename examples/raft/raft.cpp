@@ -620,6 +620,7 @@ void ConsensusModule::becomeLeader()
     }
 
     m_state = NodeState::LEADER;
+    m_voteCount = 0;
 
     spdlog::info("Node={} become a leader at term={}", m_id, m_currentTerm);
 
