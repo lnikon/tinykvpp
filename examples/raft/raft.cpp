@@ -1,5 +1,6 @@
 #include "raft.h"
 
+#include <algorithm>
 #include <cstdint>
 #include <cstdlib>
 #include <filesystem>
@@ -733,7 +734,7 @@ void ConsensusModule::sendAppendEntriesRPC(NodeClient &client, std::vector<LogEn
                 request.set_leadercommit(m_commitIndex);
                 request.set_senderid(m_id);
 
-                for (auto logEntry : logEntries)
+                for (const auto& logEntry : logEntries)
                 {
                     request.add_entries()->CopyFrom(logEntry);
                 }
@@ -816,7 +817,7 @@ auto ConsensusModule::findMajorityIndexMatch() -> uint32_t
     }
     matchIndexes.emplace_back(m_log.back().index());
 
-    std::sort(std::begin(matchIndexes), std::end(matchIndexes));
+    std::ranges::sort(matchIndexes);
 
     return matchIndexes[matchIndexes.size() / 2];
 }
