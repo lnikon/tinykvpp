@@ -64,6 +64,13 @@ auto db_t::open() -> bool
 // TODO(lnikon): Indicate on insertion failure
 void db_t::put(const structures::lsmtree::key_t &key, const structures::lsmtree::value_t &value)
 {
+    // ConsensusModule m_cm;
+    // if (!m_cm.replicate(key, value))
+    // {
+    //     spdlog::error("ConensusModule is unable to replicate");
+    //     return;
+    // }
+
     m_lsmTree.put(key, value);
 }
 
