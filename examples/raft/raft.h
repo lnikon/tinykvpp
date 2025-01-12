@@ -1,6 +1,13 @@
 #pragma once
 
-#include <wal/wal.h>
+#include <grpc/grpc.h>
+#include <grpcpp/channel.h>
+#include <grpcpp/client_context.h>
+#include <grpcpp/create_channel.h>
+#include <grpcpp/security/credentials.h>
+#include <grpcpp/security/server_credentials.h>
+#include <grpcpp/server_builder.h>
+#include <grpcpp/support/status.h>
 
 #include "Raft.grpc.pb.h"
 #include "Raft.pb.h"
@@ -10,10 +17,14 @@
 
 #include <absl/base/thread_annotations.h>
 
-#include <chrono>  // for 'std::chrono::high_resolution_clock'
-#include <cstdint> // for 'uint32_t'
-#include <string>  // for 'std::string'
-#include <thread>  // for 'std::jthread'
+#include <chrono>        // for 'std::chrono::high_resolution_clock'
+#include <cstdint>       // for 'uint32_t'
+#include <string>        // for 'std::string'
+#include <thread>        // for 'std::jthread'
+#include <memory>        // for 'std::shared_ptr', 'std::unique_ptr'
+#include <optional>      // for 'std::optional'
+#include <unordered_map> // for 'std::unordered_map'
+#include <vector>        // for 'std::vector'
 
 namespace raft
 {
@@ -25,6 +36,12 @@ using timepoint_t = std::chrono::high_resolution_clock::time_point;
 
 // Valid IDs start from 1
 constexpr const id_t gInvalidId = 0;
+
+struct node_config_t
+{
+    id_t m_id{gInvalidId};
+    ip_t m_ip;
+};
 
 /**
  * Client for communicating with other nodes in the Raft cluster.
@@ -39,7 +56,7 @@ class node_client_t
      * @param nodeIp IP address of the target node
      * @throws std::runtime_error if connection cannot be established
      */
-    node_client_t(id_t nodeId, ip_t nodeIp);
+    node_client_t(node_config_t config, std::unique_ptr<RaftService::StubInterface> pRaftStub);
     virtual ~node_client_t() noexcept = default;
 
     node_client_t(const node_client_t &) = delete;
@@ -54,14 +71,14 @@ class node_client_t
     auto put(const PutRequest &request, PutResponse *pResponse) -> bool;
 
     [[nodiscard]] auto id() const -> id_t;
+    [[nodiscard]] auto ip() const -> ip_t;
 
   private:
-    id_t m_id{gInvalidId};
-    ip_t m_ip;
+    node_config_t m_config{};
 
-    std::shared_ptr<grpc::ChannelInterface> m_channel{nullptr};
-    std::unique_ptr<RaftService::Stub>      m_stub{nullptr};
-    std::unique_ptr<TinyKVPPService::Stub>  m_kvStub{nullptr};
+    std::shared_ptr<grpc::ChannelInterface>     m_channel{nullptr};
+    std::unique_ptr<RaftService::StubInterface> m_stub{nullptr};
+    std::unique_ptr<TinyKVPPService::Stub>      m_kvStub{nullptr};
 };
 
 class consensus_module_t : public RaftService::Service,
@@ -70,7 +87,8 @@ class consensus_module_t : public RaftService::Service,
 {
   public:
     // @id is the ID of the current node. Order of RaftServices in @replicas is important!
-    consensus_module_t(id_t nodeId, std::vector<ip_t> replicas);
+    /*consensus_module_t(id_t nodeId, std::vector<ip_t> replicas);*/
+    consensus_module_t(node_config_t nodeConfig, std::vector<node_client_t> replicas);
 
     auto AppendEntries(grpc::ServerContext        *pContext,
                        const AppendEntriesRequest *pRequest,
@@ -90,6 +108,10 @@ class consensus_module_t : public RaftService::Service,
     void start();
 
     void stop();
+
+    [[nodiscard]] auto currentTerm() const -> uint32_t;
+    [[nodiscard]] auto votedFor() const -> uint32_t;
+    [[nodiscard]] auto log() const -> std::vector<LogEntry>;
 
   private:
     // Logic behind Leader election and log replication
@@ -121,11 +143,8 @@ class consensus_module_t : public RaftService::Service,
     // Map from client ID to a gRPC client.
     std::unordered_map<id_t, std::optional<node_client_t>> m_replicas;
 
-    // Id of the current node. Received from outside.
-    id_t m_id{gInvalidId};
-
-    // IP of the current node. Received from outside.
-    ip_t m_ip;
+    // Stores ID and IP of the current node. Received from outside.
+    node_config_t m_config;
 
     // gRPC server to receive Raft RPCs
     std::unique_ptr<grpc::Server> m_raftServer{nullptr};
@@ -134,7 +153,7 @@ class consensus_module_t : public RaftService::Service,
     std::unique_ptr<grpc::Server> m_kvServer{nullptr};
 
     // Persistent state on all servers
-    absl::Mutex                 m_stateMutex;
+    mutable absl::Mutex         m_stateMutex;
     uint32_t m_currentTerm      ABSL_GUARDED_BY(m_stateMutex);
     uint32_t m_votedFor         ABSL_GUARDED_BY(m_stateMutex);
     std::vector<LogEntry> m_log ABSL_GUARDED_BY(m_stateMutex);

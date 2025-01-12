@@ -1,4 +1,5 @@
-#include <random>
+#include <grpcpp/create_channel.h>
+#include <grpcpp/security/credentials.h>
 
 #include "raft.h"
 
@@ -36,7 +37,22 @@ auto main(int argc, char *argv[]) -> int
         return EXIT_FAILURE;
     }
 
-    raft::consensus_module_t consensusModule(nodeId, nodeIps);
+    raft::id_t                       replicaId{1};
+    std::vector<raft::node_client_t> replicas;
+    for (const auto &replicaIp : nodeIps)
+    {
+        if (replicaId != nodeId)
+        {
+            std::unique_ptr<RaftService::Stub> stub{
+                RaftService::NewStub(grpc::CreateChannel(replicaIp, grpc::InsecureChannelCredentials()))};
+
+            replicas.emplace_back(raft::node_config_t{.m_id = replicaId, .m_ip = replicaIp}, std::move(stub));
+        }
+
+        ++replicaId;
+    }
+
+    raft::consensus_module_t consensusModule({.m_id = nodeId, .m_ip = nodeIps[0]}, std::move(replicas));
     if (!consensusModule.init())
     {
         spdlog::error("Failed to initialize the state machine");

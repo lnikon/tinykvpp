@@ -38,6 +38,7 @@ find_package(absl CONFIG REQUIRED)
 find_package(Celero CONFIG REQUIRED)
 find_package(protobuf CONFIG REQUIRED)
 find_package(gRPC CONFIG REQUIRED)
+find_package(GTest CONFIG REQUIRED)
 
 include_directories(lib)
 
