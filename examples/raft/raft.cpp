@@ -1,12 +1,14 @@
 #include "raft.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <random>
 #include <ranges>
 #include <stdexcept>
+#include <thread>
 #include <utility>
 
 #include <absl/synchronization/mutex.h>
@@ -47,7 +49,7 @@ namespace raft
 /*    : m_id{nodeId},*/
 /*      m_ip{std::move(nodeIp)},*/
 /*      m_channel(grpc::CreateChannel(m_ip, grpc::InsecureChannelCredentials())),*/
-      /*m_stub(RaftService::NewStub(m_channel)),*/
+/*m_stub(RaftService::NewStub(m_channel)),*/
 /*      m_kvStub(TinyKVPPService::NewStub(m_channel))*/
 /*{*/
 /*    assert(m_id > 0);*/
@@ -155,8 +157,8 @@ consensus_module_t::consensus_module_t(node_config_t nodeConfig, std::vector<nod
       m_voteCount{0}
 {
     assert(m_config.m_id > 0);
-    assert(replicas.size() > 0);
-    assert(m_config.m_id <= replicas.size());
+    // assert(replicas.size() > 0);
+    assert(m_config.m_id <= replicas.size() + 1);
 
     grpc::ServerBuilder builder;
     builder.AddListeningPort(m_config.m_ip, grpc::InsecureServerCredentials());
@@ -444,18 +446,13 @@ void consensus_module_t::start()
     m_electionThread = std::jthread(
         [this](std::stop_token token)
         {
-            while (!m_stopElection)
+            while (!token.stop_requested())
             {
-                if (token.stop_requested())
-                {
-                    spdlog::info("Stopping election timer thread");
-                    return;
-                }
-
                 {
                     absl::MutexLock locker(&m_stateMutex);
                     if (getState() == NodeState::LEADER)
                     {
+                        std::this_thread::sleep_for(std::chrono::milliseconds(generate_random_timeout()));
                         continue;
                     }
                 }
@@ -476,8 +473,11 @@ void consensus_module_t::start()
                     int64_t timeToWaitDeadlineMs = currentTimeMs() + timeToWaitMs;
 
                     // Define the condition to wait for leader's heartbeat
-                    auto heartbeatReceivedCondition = [this, &timeToWaitDeadlineMs, currentTimeMs]()
-                    { return m_leaderHeartbeatReceived.load() || currentTimeMs() >= timeToWaitDeadlineMs; };
+                    auto heartbeatReceivedCondition = [this, &timeToWaitDeadlineMs, &token, currentTimeMs]()
+                    {
+                        return token.stop_requested() || m_leaderHeartbeatReceived.load() ||
+                               currentTimeMs() >= timeToWaitDeadlineMs;
+                    };
 
                     spdlog::debug("Timer thread at node={} will block for {}ms for the leader to send a heartbeat",
                                   m_config.m_id,
@@ -486,6 +486,12 @@ void consensus_module_t::start()
                     // Wait for the condition to be met or timeout
                     bool heartbeatReceived = m_timerMutex.AwaitWithTimeout(absl::Condition(&heartbeatReceivedCondition),
                                                                            absl::Milliseconds(timeToWaitMs));
+
+                    if (token.stop_requested())
+                    {
+                        spdlog::info("Node={} election thread terminating due to stop request.", m_config.m_id);
+                        break;
+                    }
 
                     // If timer CV gets signaled, then node has received the heartbeat from the leader.
                     // Otherwise, heartbeat timed out and node needs to start the new leader election
@@ -500,40 +506,58 @@ void consensus_module_t::start()
                     }
                 }
             }
+
+            spdlog::info("Election thread received stop_request");
         });
 
-    {
-        assert(m_raftServer);
-        spdlog::debug("Listening for RPC requests on ");
-        m_raftServer->Wait();
-    }
+    m_serverThread = std::jthread(
+        [this]()
+        {
+            assert(m_raftServer);
+            spdlog::debug("Listening for RPC requests on {}", m_config.m_ip);
+            m_raftServer->Wait();
+        });
 }
 
 void consensus_module_t::stop()
 {
+    spdlog::info("Shutting down consensus module");
+
     absl::WriterMutexLock locker{&m_stateMutex};
 
-    m_stopElection = true;
+    if (m_electionThread.joinable())
+    {
+        spdlog::info("Joining election thread");
 
-    m_electionThread.request_stop();
-    m_electionThread.join();
+        m_electionThread.request_stop();
+        spdlog::info("Election thread stop requested");
+
+        m_electionThread.join();
+        spdlog::info("Election thread joined");
+    }
 
     for (auto &heartbeatThread : m_heartbeatThreads)
     {
+        spdlog::info("Joining heartbeat thread");
         heartbeatThread.request_stop();
         heartbeatThread.join();
+        spdlog::info("Heartbeat thread joined");
     }
     m_heartbeatThreads.clear();
 
     if (m_raftServer)
     {
+        spdlog::info("Shutting down Raft gRPC server");
         m_raftServer->Shutdown();
+        spdlog::info("Raft gRPC server shutdown");
     }
 
-    /*if (m_serverThread.joinable())*/
+    if (m_serverThread.joinable())
     {
+        spdlog::info("Joining server thread");
         m_serverThread.request_stop();
         m_serverThread.join();
+        spdlog::info("Server thread joined");
     }
 }
 

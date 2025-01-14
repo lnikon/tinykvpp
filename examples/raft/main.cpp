@@ -1,3 +1,5 @@
+#include <chrono>
+#include <csignal>
 #include <grpcpp/create_channel.h>
 #include <grpcpp/security/credentials.h>
 
@@ -8,9 +10,23 @@
 #include <cxxopts.hpp>
 
 #include <spdlog/spdlog.h>
+#include <thread>
+
+std::atomic_flag gGracefullyStop = ATOMIC_FLAG_INIT;
+
+static void signalHandler(int sig)
+{
+    if (sig == SIGTERM || sig == SIGINT)
+    {
+        gGracefullyStop.test_and_set(std::memory_order_release);
+    }
+}
 
 auto main(int argc, char *argv[]) -> int
 {
+    std::signal(SIGTERM, signalHandler);
+    std::signal(SIGINT, signalHandler);
+
     cxxopts::Options options("raft");
     options.add_options()("id", "id of the node", cxxopts::value<id_t>())(
         "nodes", "ip addresses of replicas in a correct order", cxxopts::value<std::vector<raft::ip_t>>());
@@ -37,9 +53,8 @@ auto main(int argc, char *argv[]) -> int
         return EXIT_FAILURE;
     }
 
-    raft::id_t                       replicaId{1};
     std::vector<raft::node_client_t> replicas;
-    for (const auto &replicaIp : nodeIps)
+    for (raft::id_t replicaId{1}; const auto &replicaIp : nodeIps)
     {
         if (replicaId != nodeId)
         {
@@ -52,16 +67,23 @@ auto main(int argc, char *argv[]) -> int
         ++replicaId;
     }
 
-    raft::consensus_module_t consensusModule({.m_id = nodeId, .m_ip = nodeIps[0]}, std::move(replicas));
+    raft::consensus_module_t consensusModule({.m_id = nodeId, .m_ip = nodeIps[nodeId - 1]}, std::move(replicas));
     if (!consensusModule.init())
     {
         spdlog::error("Failed to initialize the state machine");
         return EXIT_FAILURE;
     }
 
+    spdlog::set_level(spdlog::level::debug);
     consensusModule.start();
 
-    /*cm.stop();*/
+    while (!gGracefullyStop.test(std::memory_order_acquire))
+    {
+        std::this_thread::yield();
+    }
+
+    consensusModule.stop();
+    spdlog::info("Consensus module stopped gracefully!");
 
     return EXIT_SUCCESS;
 }

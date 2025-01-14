@@ -76,7 +76,6 @@ class node_client_t
   private:
     node_config_t m_config{};
 
-    std::shared_ptr<grpc::ChannelInterface>     m_channel{nullptr};
     std::unique_ptr<RaftService::StubInterface> m_stub{nullptr};
     std::unique_ptr<TinyKVPPService::Stub>      m_kvStub{nullptr};
 };
@@ -109,9 +108,10 @@ class consensus_module_t : public RaftService::Service,
 
     void stop();
 
-    [[nodiscard]] auto currentTerm() const -> uint32_t;
-    [[nodiscard]] auto votedFor() const -> uint32_t;
-    [[nodiscard]] auto log() const -> std::vector<LogEntry>;
+    [[nodiscard]] auto      currentTerm() const -> uint32_t;
+    [[nodiscard]] auto      votedFor() const -> uint32_t;
+    [[nodiscard]] auto      log() const -> std::vector<LogEntry>;
+    [[nodiscard]] NodeState getState() ABSL_SHARED_LOCKS_REQUIRED(m_stateMutex);
 
   private:
     // Logic behind Leader election and log replication
@@ -124,13 +124,12 @@ class consensus_module_t : public RaftService::Service,
 
     // Utility methods
     // NOLINTBEGIN(modernize-use-trailing-return-type)
-    [[nodiscard]] bool      initializePersistentState() ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_stateMutex);
-    [[nodiscard]] uint32_t  getLastLogIndex() const ABSL_SHARED_LOCKS_REQUIRED(m_stateMutex);
-    [[nodiscard]] uint32_t  getLastLogTerm() const ABSL_SHARED_LOCKS_REQUIRED(m_stateMutex);
-    [[nodiscard]] auto      hasMajority(uint32_t votes) const -> bool;
-    [[nodiscard]] NodeState getState() ABSL_SHARED_LOCKS_REQUIRED(m_stateMutex);
-    [[nodiscard]] uint32_t  getLogTerm(uint32_t index) const ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_stateMutex);
-    [[nodiscard]] uint32_t  findMajorityIndexMatch() ABSL_SHARED_LOCKS_REQUIRED(m_stateMutex);
+    [[nodiscard]] bool     initializePersistentState() ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_stateMutex);
+    [[nodiscard]] uint32_t getLastLogIndex() const ABSL_SHARED_LOCKS_REQUIRED(m_stateMutex);
+    [[nodiscard]] uint32_t getLastLogTerm() const ABSL_SHARED_LOCKS_REQUIRED(m_stateMutex);
+    [[nodiscard]] auto     hasMajority(uint32_t votes) const -> bool;
+    [[nodiscard]] uint32_t getLogTerm(uint32_t index) const ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_stateMutex);
+    [[nodiscard]] uint32_t findMajorityIndexMatch() ABSL_SHARED_LOCKS_REQUIRED(m_stateMutex);
 
     [[nodiscard]] bool updatePersistentState(std::optional<std::uint32_t> commitIndex,
                                              std::optional<std::uint32_t> votedFor)
@@ -170,7 +169,6 @@ class consensus_module_t : public RaftService::Service,
     // Election related fields
     absl::Mutex           m_timerMutex;
     std::atomic<bool>     m_leaderHeartbeatReceived{false};
-    std::atomic<bool>     m_stopElection{false};
     std::jthread          m_electionThread;
     std::atomic<uint32_t> m_voteCount{0};
 
