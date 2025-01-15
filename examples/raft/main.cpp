@@ -1,4 +1,3 @@
-#include <chrono>
 #include <csignal>
 #include <grpcpp/create_channel.h>
 #include <grpcpp/security/credentials.h>
@@ -10,7 +9,6 @@
 #include <cxxopts.hpp>
 
 #include <spdlog/spdlog.h>
-#include <thread>
 
 std::condition_variable gCv;
 
