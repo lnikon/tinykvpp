@@ -12,13 +12,13 @@
 #include <spdlog/spdlog.h>
 #include <thread>
 
-std::atomic_flag gGracefullyStop = ATOMIC_FLAG_INIT;
+std::condition_variable gCv;
 
 static void signalHandler(int sig)
 {
     if (sig == SIGTERM || sig == SIGINT)
     {
-        gGracefullyStop.test_and_set(std::memory_order_release);
+        gCv.notify_all();
     }
 }
 
@@ -77,13 +77,11 @@ auto main(int argc, char *argv[]) -> int
     spdlog::set_level(spdlog::level::debug);
     consensusModule.start();
 
-    while (!gGracefullyStop.test(std::memory_order_acquire))
-    {
-        std::this_thread::yield();
-    }
+    std::mutex                   mtx;
+    std::unique_lock<std::mutex> lock(mtx);
+    gCv.wait(lock);
 
     consensusModule.stop();
-    spdlog::info("Consensus module stopped gracefully!");
 
     return EXIT_SUCCESS;
 }

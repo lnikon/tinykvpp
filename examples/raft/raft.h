@@ -89,9 +89,9 @@ class consensus_module_t : public RaftService::Service,
     /*consensus_module_t(id_t nodeId, std::vector<ip_t> replicas);*/
     consensus_module_t(node_config_t nodeConfig, std::vector<node_client_t> replicas);
 
-    auto AppendEntries(grpc::ServerContext        *pContext,
-                       const AppendEntriesRequest *pRequest,
-                       AppendEntriesResponse      *pResponse) -> grpc::Status override;
+    grpc::Status AppendEntries(grpc::ServerContext        *pContext,
+                               const AppendEntriesRequest *pRequest,
+                               AppendEntriesResponse      *pResponse) override ABSL_LOCKS_EXCLUDED(m_stateMutex);
 
     auto RequestVote(grpc::ServerContext *pContext, const RequestVoteRequest *pRequest, RequestVoteResponse *pResponse)
         -> grpc::Status override;

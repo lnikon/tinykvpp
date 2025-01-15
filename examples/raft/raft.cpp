@@ -200,13 +200,18 @@ auto consensus_module_t::AppendEntries(grpc::ServerContext        *pContext,
     (void)pRequest;
     (void)pResponse;
 
-    spdlog::debug("Recevied AppendEntries RPC from leader={} during term={}", pRequest->senderid(), pRequest->term());
+    spdlog::debug("Node={} recevied AppendEntries RPC from leader={} during term={}",
+                  m_config.m_id,
+                  pRequest->senderid(),
+                  pRequest->term());
 
-    absl::MutexLock locker(&m_stateMutex);
+    absl::WriterMutexLock locker(&m_stateMutex);
 
     // 1. Term check
     if (pRequest->term() < m_currentTerm)
     {
+        spdlog::debug(
+            "Node={} receviedTerm={} is smaller than currentTerm={}", m_config.m_id, pRequest->term(), m_currentTerm);
         pResponse->set_term(m_currentTerm);
         pResponse->set_success(false);
         pResponse->set_responderid(m_config.m_id);
@@ -215,6 +220,10 @@ auto consensus_module_t::AppendEntries(grpc::ServerContext        *pContext,
 
     if (pRequest->term() > m_currentTerm)
     {
+        spdlog::debug("Node={} receviedTerm={} is higher than currentTerm={}. Reverting to follower",
+                      m_config.m_id,
+                      pRequest->term(),
+                      m_currentTerm);
         becomeFollower(pRequest->term());
     }
 
@@ -290,7 +299,8 @@ auto consensus_module_t::RequestVote(grpc::ServerContext      *pContext,
 
     absl::WriterMutexLock locker(&m_stateMutex);
 
-    spdlog::debug("Received RequestVote RPC from candidate={} during term={} peerTerm={}",
+    spdlog::debug("Node={} received RequestVote RPC from candidate={} during term={} peerTerm={}",
+                  m_config.m_id,
                   pRequest->candidateid(),
                   m_currentTerm,
                   pRequest->term());
@@ -395,8 +405,8 @@ auto consensus_module_t::Put(grpc::ServerContext *pContext, const PutRequest *pR
         sendAppendEntriesRPC(client.value(), {logEntry});
     }
 
-    absl::MutexLock locker{&m_stateMutex};
-    bool            success = waitForMajorityReplication(logEntry.index());
+    absl::WriterMutexLock locker{&m_stateMutex};
+    bool                  success = waitForMajorityReplication(logEntry.index());
     if (success)
     {
         spdlog::info("Node={} majority agreed on logEntry={}", m_config.m_id, logEntry.index());
@@ -416,7 +426,7 @@ auto consensus_module_t::Get(grpc::ServerContext *pContext, const GetRequest *pR
 
     spdlog::info("Node={} recevied get request for key={}", m_config.m_id, pRequest->key());
 
-    absl::MutexLock locker{&m_stateMutex};
+    absl::ReaderMutexLock locker{&m_stateMutex};
     if (auto itKv = m_kv.find(pRequest->key()); itKv != m_kv.end())
     {
         pResponse->set_value(itKv->second);
@@ -431,7 +441,7 @@ auto consensus_module_t::Get(grpc::ServerContext *pContext, const GetRequest *pR
 
 auto consensus_module_t::init() -> bool
 {
-    absl::MutexLock locker{&m_stateMutex};
+    absl::WriterMutexLock locker{&m_stateMutex};
     if (!initializePersistentState())
     {
         spdlog::warn("Unable to initialize persistent state!");
@@ -452,7 +462,7 @@ void consensus_module_t::start()
                     absl::MutexLock locker(&m_stateMutex);
                     if (getState() == NodeState::LEADER)
                     {
-                        std::this_thread::sleep_for(std::chrono::milliseconds(generate_random_timeout()));
+                        /*std::this_thread::sleep_for(std::chrono::milliseconds(generate_random_timeout()));*/
                         continue;
                     }
                 }
@@ -514,7 +524,7 @@ void consensus_module_t::start()
         [this]()
         {
             assert(m_raftServer);
-            spdlog::debug("Listening for RPC requests on {}", m_config.m_ip);
+            spdlog::debug("Node={} listening for RPC requests on {}", m_config.m_id, m_config.m_ip);
             m_raftServer->Wait();
         });
 }
@@ -527,38 +537,37 @@ void consensus_module_t::stop()
 
     if (m_electionThread.joinable())
     {
-        spdlog::info("Joining election thread");
-
+        spdlog::info("Joining election thread...");
         m_electionThread.request_stop();
-        spdlog::info("Election thread stop requested");
-
         m_electionThread.join();
-        spdlog::info("Election thread joined");
+        spdlog::info("Election thread joined!");
     }
 
     for (auto &heartbeatThread : m_heartbeatThreads)
     {
-        spdlog::info("Joining heartbeat thread");
+        spdlog::info("Joining heartbeat thread...");
         heartbeatThread.request_stop();
         heartbeatThread.join();
-        spdlog::info("Heartbeat thread joined");
+        spdlog::info("Heartbeat thread joined!");
     }
     m_heartbeatThreads.clear();
 
     if (m_raftServer)
     {
-        spdlog::info("Shutting down Raft gRPC server");
+        spdlog::info("Shutting down Raft gRPC server...");
         m_raftServer->Shutdown();
-        spdlog::info("Raft gRPC server shutdown");
+        spdlog::info("Raft gRPC server shutdown!");
     }
 
     if (m_serverThread.joinable())
     {
-        spdlog::info("Joining server thread");
+        spdlog::info("Joining server thread...");
         m_serverThread.request_stop();
         m_serverThread.join();
-        spdlog::info("Server thread joined");
+        spdlog::info("Server thread joined!");
     }
+
+    spdlog::info("Consensus module stopped gracefully!");
 }
 
 auto consensus_module_t::currentTerm() const -> uint32_t
@@ -636,11 +645,10 @@ void consensus_module_t::startElection()
                 auto responseTerm = response.term();
                 auto voteGranted = response.votegranted();
 
-                spdlog::debug(
-                    "Received RequestVoteResponse in requester thread peerTerm={} voteGranted={} responseTerm={}",
-                    responseTerm,
-                    voteGranted,
-                    response.responderid());
+                spdlog::debug("Received RequestVoteResponse in requester thread peerTerm={} voteGranted={} peer={}",
+                              responseTerm,
+                              voteGranted,
+                              response.responderid());
 
                 absl::MutexLock locker(&m_stateMutex);
                 if (responseTerm > m_currentTerm)
@@ -767,11 +775,12 @@ void consensus_module_t::sendHeartbeat(node_client_t &client)
                     auto responseTerm = response.term();
                     auto success = response.success();
 
-                    spdlog::debug(
-                        "Received AppendEntriesResponse in requester thread peerTerm={} success={} responderId={}",
-                        responseTerm,
-                        success,
-                        response.responderid());
+                    spdlog::debug("Node={} received AppendEntriesResponse in requester thread peerTerm={} success={} "
+                                  "responderId={}",
+                                  m_config.m_id,
+                                  responseTerm,
+                                  success,
+                                  response.responderid());
 
                     {
                         absl::WriterMutexLock locker(&m_stateMutex);
@@ -936,6 +945,7 @@ auto consensus_module_t::updatePersistentState(std::optional<std::uint32_t> comm
 {
     m_commitIndex = commitIndex.has_value() ? commitIndex.value() : m_commitIndex;
     m_votedFor = votedFor.has_value() ? votedFor.value() : m_votedFor;
+    /*return true;*/
     return flushPersistentState();
 }
 

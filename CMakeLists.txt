@@ -13,6 +13,9 @@ set(TINYKVPP_COMMON_CXX_FLAGS
 
 message("Using compiler: ${CMAKE_CXX_COMPILER_ID}")
 
+# CFLAGS="-fsanitize=thread -g -O1" CXXFLAGS="-fsanitize=thread -g -O1"
+# LDFLAGS="-fsanitize=thread"
+
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   set(CMAKE_C_FLAGS "${TINYKVPP_COMMON_C_FLAGS} -Wthread-safety")
   set(CMAKE_CXX_FLAGS "${TINYKVPP_COMMON_CXX_FLAGS} -Wthread-safety")
