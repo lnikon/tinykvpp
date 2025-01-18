@@ -45,32 +45,6 @@ auto generate_random_timeout() -> int
 namespace raft
 {
 
-/*node_client_t::node_client_t(id_t nodeId, ip_t nodeIp)*/
-/*    : m_id{nodeId},*/
-/*      m_ip{std::move(nodeIp)},*/
-/*      m_channel(grpc::CreateChannel(m_ip, grpc::InsecureChannelCredentials())),*/
-/*m_stub(RaftService::NewStub(m_channel)),*/
-/*      m_kvStub(TinyKVPPService::NewStub(m_channel))*/
-/*{*/
-/*    assert(m_id > 0);*/
-/*    assert(!m_ip.empty());*/
-/**/
-/*    if (!m_channel)*/
-/*    {*/
-/*        throw std::runtime_error(fmt::format("Failed to establish a gRPC channel for node={} ip={}", m_id, m_ip));*/
-/*    }*/
-/**/
-/*    if (!m_stub)*/
-/*    {*/
-/*        throw std::runtime_error(fmt::format("Failed to create a stub for node={} ip={}", m_id, m_ip));*/
-/*    }*/
-/**/
-/*    if (!m_kvStub)*/
-/*    {*/
-/*        throw std::runtime_error(fmt::format("Failed to create a KV stub for node={} ip={}", m_id, m_ip));*/
-/*    }*/
-/*}*/
-
 node_client_t::node_client_t(node_config_t config, std::unique_ptr<RaftService::StubInterface> pRaftStub)
     : m_config{std::move(config)},
       m_stub{std::move(pRaftStub)}
@@ -318,6 +292,7 @@ auto consensus_module_t::RequestVote(grpc::ServerContext      *pContext,
     // Don't grant vote to the candidate if the nodes term is higher
     if (pRequest->term() < m_currentTerm)
     {
+        spdlog::debug("receivedTerm={} is lower than currentTerm={}", pRequest->term(), m_currentTerm);
         return grpc::Status::OK;
     }
 
@@ -325,6 +300,7 @@ auto consensus_module_t::RequestVote(grpc::ServerContext      *pContext,
     // candidates log is at least as up-to-date as receiver's log
     if (m_votedFor == 0 || m_votedFor == pRequest->candidateid())
     {
+        spdlog::debug("votedFor={} candidateid={}", m_votedFor, pRequest->candidateid());
         if (pRequest->lastlogterm() > getLastLogTerm() ||
             (pRequest->lastlogterm() == getLastLogTerm() && pRequest->lastlogindex() >= getLastLogIndex()))
         {
@@ -332,6 +308,8 @@ auto consensus_module_t::RequestVote(grpc::ServerContext      *pContext,
             {
                 spdlog::error("Node={} is unable to persist votedFor", m_config.m_id, m_votedFor);
             }
+
+            spdlog::debug("Node={} votedFor={}", m_config.m_id, pRequest->candidateid());
 
             m_leaderHeartbeatReceived.store(true);
             pResponse->set_term(m_currentTerm);
@@ -453,16 +431,21 @@ auto consensus_module_t::init() -> bool
 
 void consensus_module_t::start()
 {
+    absl::WriterMutexLock locker{&m_stateMutex};
     m_electionThread = std::jthread(
         [this](std::stop_token token)
         {
             while (!token.stop_requested())
             {
+                if (m_shutdown)
                 {
-                    absl::MutexLock locker(&m_stateMutex);
+                    break;
+                }
+
+                {
+                    absl::ReaderMutexLock locker{&m_stateMutex};
                     if (getState() == NodeState::LEADER)
                     {
-                        /*std::this_thread::sleep_for(std::chrono::milliseconds(generate_random_timeout()));*/
                         continue;
                     }
                 }
@@ -482,7 +465,10 @@ void consensus_module_t::start()
                     int64_t timeToWaitMs = generate_random_timeout();
                     int64_t timeToWaitDeadlineMs = currentTimeMs() + timeToWaitMs;
 
-                    // Define the condition to wait for leader's heartbeat
+                    // Wake up when
+                    // 1) Thread should be stopped
+                    // 2) Leader sent a heartbeat
+                    // 3) Wait for the heartbeat was too long
                     auto heartbeatReceivedCondition = [this, &timeToWaitDeadlineMs, &token, currentTimeMs]()
                     {
                         return token.stop_requested() || m_leaderHeartbeatReceived.load() ||
@@ -531,9 +517,12 @@ void consensus_module_t::start()
 
 void consensus_module_t::stop()
 {
+    spdlog::info("before lock shutting down consensus module");
+    absl::ReaderMutexLock locker{&m_stateMutex};
+
     spdlog::info("Shutting down consensus module");
 
-    absl::WriterMutexLock locker{&m_stateMutex};
+    m_shutdown = true;
 
     if (m_electionThread.joinable())
     {
@@ -650,7 +639,9 @@ void consensus_module_t::startElection()
                               voteGranted,
                               response.responderid());
 
-                absl::MutexLock locker(&m_stateMutex);
+                spdlog::debug("Req lock before");
+                absl::WriterMutexLock locker(&m_stateMutex);
+                spdlog::debug("Req lock after");
                 if (responseTerm > m_currentTerm)
                 {
                     becomeFollower(responseTerm);
@@ -679,19 +670,22 @@ void consensus_module_t::becomeFollower(uint32_t newTerm)
 {
     m_currentTerm = newTerm;
     m_state = NodeState::FOLLOWER;
+    spdlog::debug("Node={} reverted to follower state in term={}", m_config.m_id, m_currentTerm);
+
     if (!updatePersistentState(std::nullopt, 0))
     {
         spdlog::error("Node={} is unable to persist votedFor={}", m_config.m_id, m_votedFor);
     }
 
+    spdlog::debug("Follower node={} is joining heartbeat threads");
+    m_shutdownHeartbeatThreads = true;
     for (auto &heartbeatThread : m_heartbeatThreads)
     {
         heartbeatThread.request_stop();
         heartbeatThread.join();
     }
     m_heartbeatThreads.clear();
-
-    spdlog::debug("Server reverted to follower state in term={}", m_currentTerm);
+    spdlog::debug("Follower node={} is joining heartbeat threads finished");
 }
 
 auto consensus_module_t::hasMajority(uint32_t votes) const -> bool
@@ -736,9 +730,14 @@ void consensus_module_t::sendHeartbeat(node_client_t &client)
             int consecutiveFailures = 0;
             while (!token.stop_requested())
             {
+                if (m_shutdown || m_shutdownHeartbeatThreads)
+                {
+                    break;
+                }
+
                 AppendEntriesRequest request;
                 {
-                    absl::ReaderMutexLock locker(&m_stateMutex);
+                    absl::ReaderMutexLock locker{&m_stateMutex};
                     if (m_state != NodeState::LEADER)
                     {
                         spdlog::debug("Node={} is no longer a leader. Stopping the heartbeat thread");
@@ -763,11 +762,10 @@ void consensus_module_t::sendHeartbeat(node_client_t &client)
                                       maxRetries);
                         if (consecutiveFailures >= maxRetries)
                         {
+                            spdlog::error(
+                                "Stopping heartbeat thread due to too much failed AppendEntries RPC attempts");
                             return;
                         }
-                        consecutiveFailures = 0;
-
-                        continue;
                     }
 
                     consecutiveFailures = 0;
@@ -783,8 +781,12 @@ void consensus_module_t::sendHeartbeat(node_client_t &client)
                                   response.responderid());
 
                     {
-                        absl::WriterMutexLock locker(&m_stateMutex);
+                        if (token.stop_requested())
+                        {
+                            return;
+                        }
 
+                        absl::WriterMutexLock locker(&m_stateMutex);
                         if (responseTerm > m_currentTerm)
                         {
                             becomeFollower(responseTerm);
@@ -795,8 +797,6 @@ void consensus_module_t::sendHeartbeat(node_client_t &client)
 
                 std::this_thread::sleep_for(heartbeatInterval);
             }
-
-            spdlog::debug("Stopping heartbeat thread for on the node={} for the client={}", m_config.m_id, client.id());
         });
 }
 
@@ -1034,6 +1034,7 @@ auto consensus_module_t::restorePersistentState() -> bool
         }
 
         ifs >> m_commitIndex >> m_votedFor;
+        m_votedFor = 0;
         spdlog::info("Node={} restored commitIndex={} and votedFor={}", m_config.m_id, m_commitIndex, m_votedFor);
     }
 

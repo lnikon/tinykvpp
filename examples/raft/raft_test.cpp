@@ -70,7 +70,6 @@ TEST_CASE("ConsensusModule Initialization", "[ConsensusModule]")
         .WillRepeatedly(testing::DoAll(testing::SetArgPointee<2>(response), testing::Return(grpc::Status::OK)));
 
     AppendEntriesResponse aeResponse;
-    aeResponse.set_responderid(1);
     aeResponse.set_responderid(2);
     aeResponse.set_success(true);
     EXPECT_CALL(*mockStub2, AppendEntries)
@@ -88,6 +87,9 @@ TEST_CASE("ConsensusModule Initialization", "[ConsensusModule]")
 
     raft::consensus_module_t consensusModule{nodeConfig1, std::move(replicas)};
     consensusModule.start();
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+    consensusModule.stop();
 }
 
 TEST_CASE("ConsensusModule Leader Election", "[ConsensusModule]")

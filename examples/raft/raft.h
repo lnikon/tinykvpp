@@ -37,6 +37,25 @@ using timepoint_t = std::chrono::high_resolution_clock::time_point;
 // Valid IDs start from 1
 constexpr const id_t gInvalidId = 0;
 
+struct tkvpp_absl_try_unlock
+{
+    tkvpp_absl_try_unlock(absl::Mutex *mu)
+        : m_mu{mu}
+    {
+    }
+
+    ~tkvpp_absl_try_unlock()
+    {
+        if (m_mu)
+        {
+            m_mu->Unlock();
+        }
+    }
+
+  private:
+    absl::Mutex *m_mu{nullptr};
+};
+
 struct node_config_t
 {
     id_t m_id{gInvalidId};
@@ -157,6 +176,8 @@ class consensus_module_t : public RaftService::Service,
     uint32_t m_votedFor         ABSL_GUARDED_BY(m_stateMutex);
     std::vector<LogEntry> m_log ABSL_GUARDED_BY(m_stateMutex);
 
+    absl::CondVar m_electionCV;
+
     // Volatile state on all servers.
     uint32_t m_commitIndex ABSL_GUARDED_BY(m_stateMutex);
     uint32_t m_lastApplied ABSL_GUARDED_BY(m_stateMutex);
@@ -167,16 +188,19 @@ class consensus_module_t : public RaftService::Service,
     std::unordered_map<id_t, uint32_t> m_nextIndex  ABSL_GUARDED_BY(m_stateMutex);
 
     // Election related fields
-    absl::Mutex           m_timerMutex;
-    std::atomic<bool>     m_leaderHeartbeatReceived{false};
-    std::jthread          m_electionThread;
-    std::atomic<uint32_t> m_voteCount{0};
+    absl::Mutex                   m_timerMutex;
+    std::atomic<bool>             m_leaderHeartbeatReceived{false};
+    std::jthread m_electionThread ABSL_GUARDED_BY(m_stateMutex);
+    std::atomic<uint32_t>         m_voteCount{0};
 
     // Stores clusterSize - 1 thread to send heartbeat to replicas
     std::vector<std::jthread> m_heartbeatThreads ABSL_GUARDED_BY(m_stateMutex);
 
     // Serves incoming RPC's
-    std::jthread m_serverThread;
+    std::jthread m_serverThread ABSL_GUARDED_BY(m_stateMutex);
+
+    bool m_shutdown{false};
+    bool m_shutdownHeartbeatThreads{false};
 
     // Temporary in-memory hashtable to store KVs
     std::unordered_map<std::string, std::string> m_kv;
