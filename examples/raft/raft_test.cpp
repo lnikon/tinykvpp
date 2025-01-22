@@ -1,5 +1,6 @@
-#include "gmock/gmock.h"
-#include <catch2/catch_test_macros.hpp>
+#include <algorithm>
+#include <gmock/gmock.h>
+#include <gtest/gtest.h>
 
 #include <chrono>
 #include <grpc/grpc.h>
@@ -11,18 +12,22 @@
 #include <grpcpp/server_builder.h>
 #include <grpcpp/support/status.h>
 
-#include <gtest/gtest.h>
 #include <memory>
+#include <ranges>
+
 #include <spdlog/spdlog.h>
 #include <thread>
 #include <utility>
 
 #include "raft.h"
 #include "Raft_mock.grpc.pb.h"
+#include "TinyKVPP_mock.grpc.pb.h"
+
+using namespace std::chrono_literals;
 
 // AppendEntries RPC returns OK - NodeClient::appendEntries returns true
 // AppendEntries RPC returns CANCELLED - NodeClient::appendEntries returns false
-TEST_CASE("NodeClient AppendEntries", "[NodeClient]")
+TEST(NodeClient, AppendEntries)
 {
     raft::node_config_t nodeConfig{.m_id = 1, .m_ip = "0.0.0.0:9090"};
 
@@ -41,57 +46,93 @@ TEST_CASE("NodeClient AppendEntries", "[NodeClient]")
     EXPECT_EQ(nodeClient.appendEntries(request, &response), false);
 }
 
-TEST_CASE("ConsensusModule Initialization", "[ConsensusModule]")
+class ConsensusModuleTest : public testing::Test
 {
-    spdlog::set_level(spdlog::level::debug);
+  protected:
+    ConsensusModuleTest()
+    {
+        m_configs[1] = raft::node_config_t{.m_id = 1, .m_ip = "0.0.0.0:9090"};
+        m_configs[2] = raft::node_config_t{.m_id = 2, .m_ip = "0.0.0.0:9091"};
+        m_configs[3] = raft::node_config_t{.m_id = 3, .m_ip = "0.0.0.0:9092"};
+    }
 
-    // Leader node
-    raft::node_config_t nodeConfig1{.m_id = 1, .m_ip = "0.0.0.0:9090"};
+    void SetUp() override
+    {
+        for (id_t id{2}; id <= clusterSize; id++)
+        {
+            m_raftStubs[id] = new MockRaftServiceStub;
 
-    // Follower #1
-    raft::node_config_t nodeConfig2{.m_id = 2, .m_ip = "0.0.0.0:9091"};
-    auto                mockStub2 = std::make_unique<MockRaftServiceStub>();
+            m_raftClients.emplace(
+                id,
+                raft::raft_node_grpc_client_t(m_configs[id], std::unique_ptr<MockRaftServiceStub>(m_raftStubs[id])));
 
-    // Follower #2
-    raft::node_config_t nodeConfig3{.m_id = 3, .m_ip = "0.0.0.0:9092"};
-    auto                mockStub3 = std::make_unique<MockRaftServiceStub>();
+            m_tkvClients.emplace(
+                id, raft::tkvpp_node_grpc_client_t(m_configs[id], std::make_unique<MockTinyKVPPServiceStub>()));
+        }
+    }
 
-    RequestVoteResponse response;
-    response.set_votegranted(1);
-    response.set_responderid(2);
-    response.set_term(1);
-    EXPECT_CALL(*mockStub2, RequestVote)
-        .Times(testing::AtLeast(1))
-        .WillRepeatedly(testing::DoAll(testing::SetArgPointee<2>(response), testing::Return(grpc::Status::OK)));
+    void TearDown() override
+    {
+        m_raftStubs.clear();
+        m_raftClients.clear();
+        m_tkvClients.clear();
+    }
 
-    response.set_responderid(3);
-    EXPECT_CALL(*mockStub3, RequestVote)
-        .Times(testing::AtLeast(1))
-        .WillRepeatedly(testing::DoAll(testing::SetArgPointee<2>(response), testing::Return(grpc::Status::OK)));
+    const std::uint32_t clusterSize{3};
 
-    AppendEntriesResponse aeResponse;
-    aeResponse.set_responderid(2);
-    aeResponse.set_success(true);
-    EXPECT_CALL(*mockStub2, AppendEntries)
-        .Times(testing::AtLeast(1))
-        .WillRepeatedly(testing::DoAll(testing::SetArgPointee<2>(aeResponse), testing::Return(grpc::Status::OK)));
+    std::unordered_map<id_t, raft::node_config_t> m_configs;
 
-    aeResponse.set_responderid(3);
-    EXPECT_CALL(*mockStub3, AppendEntries)
-        .Times(testing::AtLeast(1))
-        .WillRepeatedly(testing::DoAll(testing::SetArgPointee<2>(aeResponse), testing::Return(grpc::Status::OK)));
+    std::unordered_map<id_t, MockRaftServiceStub *>         m_raftStubs;
+    std::unordered_map<id_t, raft::raft_node_grpc_client_t> m_raftClients;
 
-    std::vector<raft::raft_node_grpc_client_t> replicas;
-    replicas.emplace_back(nodeConfig2, std::move(mockStub2));
-    replicas.emplace_back(nodeConfig3, std::move(mockStub3));
+    std::unordered_map<id_t, std::unique_ptr<MockTinyKVPPServiceStub>> m_tkvStubs;
+    std::unordered_map<id_t, raft::tkvpp_node_grpc_client_t>           m_tkvClients;
 
-    raft::consensus_module_t consensusModule{nodeConfig1, std::move(replicas)};
+    auto raftClients()
+    {
+        return m_raftClients | std::views::transform([](auto &&pair) { return std::move(pair.second); }) |
+               std::ranges::to<std::vector<raft::raft_node_grpc_client_t>>();
+    }
+
+    auto tkvClients()
+    {
+        return m_tkvClients | std::views::transform([](auto &&pair) { return std::move(pair.second); }) |
+               std::ranges::to<std::vector<raft::tkvpp_node_grpc_client_t>>();
+    }
+};
+
+TEST_F(ConsensusModuleTest, Initialization)
+{
+    std::vector<RequestVoteResponse>   rvResponses;
+    std::vector<AppendEntriesResponse> aeResponses;
+    for (id_t id{2}; id <= clusterSize; id++)
+    {
+        RequestVoteResponse &response = rvResponses.emplace_back();
+        response.set_votegranted(1);
+        response.set_responderid(id);
+        response.set_term(1);
+        EXPECT_CALL(*m_raftStubs[id], RequestVote)
+            .Times(testing::Exactly(1))
+            .WillRepeatedly(testing::DoAll(testing::SetArgPointee<2>(response), testing::Return(grpc::Status::OK)));
+
+        AppendEntriesResponse &aeResponse = aeResponses.emplace_back();
+        aeResponse.set_responderid(id);
+        aeResponse.set_success(true);
+        EXPECT_CALL(*m_raftStubs[id], AppendEntries)
+            .Times(testing::AtLeast(1))
+            .WillRepeatedly(testing::DoAll(testing::SetArgPointee<2>(aeResponse), testing::Return(grpc::Status::OK)));
+    }
+
+    raft::consensus_module_t consensusModule{m_configs[1], raftClients(), tkvClients()};
     consensusModule.start();
-
-    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+    std::this_thread::sleep_for(1000ms);
     consensusModule.stop();
 }
 
-TEST_CASE("ConsensusModule Leader Election", "[ConsensusModule]")
+int main(int argc, char **argv)
 {
+    spdlog::set_level(spdlog::level::debug);
+
+    testing::InitGoogleTest(&argc, argv);
+    return RUN_ALL_TESTS();
 }

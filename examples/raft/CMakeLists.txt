@@ -7,9 +7,9 @@ target_link_libraries(RaftMain PRIVATE DB RaftProtoObjects TKVProtoObjects)
 
 add_executable(RaftTest "raft_test.cpp" "raft.cpp")
 set_target_properties(RaftTest PROPERTIES CXX_STANDARD 23)
-target_link_libraries(RaftTest Catch2::Catch2WithMain gtest::gtest DB
+target_link_libraries(RaftTest gtest::gtest DB
                       RaftProtoObjects TKVProtoObjects)
 
 # Register Catch2 tests with CTest
-include(Catch)
-catch_discover_tests(RaftTest)
+# include(Catch)
+# catch_discover_tests(RaftTest)

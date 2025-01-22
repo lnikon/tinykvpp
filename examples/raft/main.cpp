@@ -65,7 +65,9 @@ auto main(int argc, char *argv[]) -> int
         ++replicaId;
     }
 
-    raft::consensus_module_t consensusModule({.m_id = nodeId, .m_ip = nodeIps[nodeId - 1]}, std::move(replicas));
+    raft::consensus_module_t consensusModule({.m_id = nodeId, .m_ip = nodeIps[nodeId - 1]},
+                                             std::move(replicas),
+                                             std::vector<raft::tkvpp_node_grpc_client_t>{});
     if (!consensusModule.init())
     {
         spdlog::error("Failed to initialize the state machine");

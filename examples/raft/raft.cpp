@@ -548,7 +548,6 @@ void consensus_module_t::start()
 
 void consensus_module_t::stop()
 {
-    spdlog::info("before lock shutting down consensus module");
     absl::ReaderMutexLock locker{&m_stateMutex};
 
     spdlog::info("Shutting down consensus module");
@@ -670,9 +669,7 @@ void consensus_module_t::startElection()
                               voteGranted,
                               response.responderid());
 
-                spdlog::debug("Req lock before");
                 absl::WriterMutexLock locker(&m_stateMutex);
-                spdlog::debug("Req lock after");
                 if (responseTerm > m_currentTerm)
                 {
                     becomeFollower(responseTerm);
