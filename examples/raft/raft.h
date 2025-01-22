@@ -37,25 +37,6 @@ using timepoint_t = std::chrono::high_resolution_clock::time_point;
 // Valid IDs start from 1
 constexpr const id_t gInvalidId = 0;
 
-struct tkvpp_absl_try_unlock
-{
-    tkvpp_absl_try_unlock(absl::Mutex *mu)
-        : m_mu{mu}
-    {
-    }
-
-    ~tkvpp_absl_try_unlock()
-    {
-        if (m_mu)
-        {
-            m_mu->Unlock();
-        }
-    }
-
-  private:
-    absl::Mutex *m_mu{nullptr};
-};
-
 struct node_config_t
 {
     id_t m_id{gInvalidId};
@@ -66,7 +47,7 @@ struct node_config_t
  * Client for communicating with other nodes in the Raft cluster.
  * Handles RPC operations for consensus and key-value operations.
  */
-class node_client_t
+class tkvpp_node_grpc_client_t
 {
   public:
     /**
@@ -75,17 +56,14 @@ class node_client_t
      * @param nodeIp IP address of the target node
      * @throws std::runtime_error if connection cannot be established
      */
-    node_client_t(node_config_t config, std::unique_ptr<RaftService::StubInterface> pRaftStub);
-    virtual ~node_client_t() noexcept = default;
+    tkvpp_node_grpc_client_t(node_config_t config, std::unique_ptr<TinyKVPPService::StubInterface> pRaftStub);
+    virtual ~tkvpp_node_grpc_client_t() noexcept = default;
 
-    node_client_t(const node_client_t &) = delete;
-    auto operator=(const node_client_t &) -> node_client_t & = delete;
+    tkvpp_node_grpc_client_t(const tkvpp_node_grpc_client_t &) = delete;
+    auto operator=(const tkvpp_node_grpc_client_t &) -> tkvpp_node_grpc_client_t & = delete;
 
-    node_client_t(node_client_t &&) = default;
-    auto operator=(node_client_t &&) -> node_client_t & = default;
-
-    auto appendEntries(const AppendEntriesRequest &request, AppendEntriesResponse *response) -> bool;
-    auto requestVote(const RequestVoteRequest &request, RequestVoteResponse *response) -> bool;
+    tkvpp_node_grpc_client_t(tkvpp_node_grpc_client_t &&) = default;
+    auto operator=(tkvpp_node_grpc_client_t &&) -> tkvpp_node_grpc_client_t & = default;
 
     auto put(const PutRequest &request, PutResponse *pResponse) -> bool;
 
@@ -93,10 +71,41 @@ class node_client_t
     [[nodiscard]] auto ip() const -> ip_t;
 
   private:
-    node_config_t m_config{};
+    node_config_t                                   m_config{};
+    std::unique_ptr<TinyKVPPService::StubInterface> m_stub{nullptr};
+};
 
+/**
+ * Client for communicating with other nodes in the Raft cluster.
+ * Handles RPC operations for consensus and key-value operations.
+ */
+class raft_node_grpc_client_t
+{
+  public:
+    /**
+     * Constructs a client for communicating with a specific node.
+     * @param nodeId Unique identifier for the target node
+     * @param nodeIp IP address of the target node
+     * @throws std::runtime_error if connection cannot be established
+     */
+    raft_node_grpc_client_t(node_config_t config, std::unique_ptr<RaftService::StubInterface> pRaftStub);
+    virtual ~raft_node_grpc_client_t() noexcept = default;
+
+    raft_node_grpc_client_t(const raft_node_grpc_client_t &) = delete;
+    auto operator=(const raft_node_grpc_client_t &) -> raft_node_grpc_client_t & = delete;
+
+    raft_node_grpc_client_t(raft_node_grpc_client_t &&) = default;
+    auto operator=(raft_node_grpc_client_t &&) -> raft_node_grpc_client_t & = default;
+
+    auto appendEntries(const AppendEntriesRequest &request, AppendEntriesResponse *response) -> bool;
+    auto requestVote(const RequestVoteRequest &request, RequestVoteResponse *response) -> bool;
+
+    [[nodiscard]] auto id() const -> id_t;
+    [[nodiscard]] auto ip() const -> ip_t;
+
+  private:
+    node_config_t                               m_config{};
     std::unique_ptr<RaftService::StubInterface> m_stub{nullptr};
-    std::unique_ptr<TinyKVPPService::Stub>      m_kvStub{nullptr};
 };
 
 class consensus_module_t : public RaftService::Service,
@@ -106,7 +115,9 @@ class consensus_module_t : public RaftService::Service,
   public:
     // @id is the ID of the current node. Order of RaftServices in @replicas is important!
     /*consensus_module_t(id_t nodeId, std::vector<ip_t> replicas);*/
-    consensus_module_t(node_config_t nodeConfig, std::vector<node_client_t> replicas);
+    consensus_module_t(node_config_t                         nodeConfig,
+                       std::vector<raft_node_grpc_client_t>  replicas,
+                       std::vector<tkvpp_node_grpc_client_t> kvClients);
 
     grpc::Status AppendEntries(grpc::ServerContext        *pContext,
                                const AppendEntriesRequest *pRequest,
@@ -137,8 +148,8 @@ class consensus_module_t : public RaftService::Service,
     void               startElection();
     void               becomeFollower(uint32_t newTerm) ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_stateMutex);
     void               becomeLeader() ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_stateMutex);
-    void               sendHeartbeat(node_client_t &client) ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_stateMutex);
-    void               sendAppendEntriesRPC(node_client_t &client, std::vector<LogEntry> logEntries);
+    void               sendHeartbeat(raft_node_grpc_client_t &client) ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_stateMutex);
+    void               sendAppendEntriesRPC(raft_node_grpc_client_t &client, std::vector<LogEntry> logEntries);
     [[nodiscard]] auto waitForMajorityReplication(uint32_t logIndex) -> bool;
 
     // Utility methods
@@ -159,7 +170,8 @@ class consensus_module_t : public RaftService::Service,
     // NOLINTEND(modernize-use-trailing-return-type)
 
     // Map from client ID to a gRPC client.
-    std::unordered_map<id_t, std::optional<node_client_t>> m_replicas;
+    std::unordered_map<id_t, std::optional<raft_node_grpc_client_t>> m_replicas;
+    std::unordered_map<id_t, std::optional<tkvpp_node_grpc_client_t>> m_kvClients;
 
     // Stores ID and IP of the current node. Received from outside.
     node_config_t m_config;

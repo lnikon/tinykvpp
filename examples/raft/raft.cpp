@@ -45,7 +45,46 @@ auto generate_random_timeout() -> int
 namespace raft
 {
 
-node_client_t::node_client_t(node_config_t config, std::unique_ptr<RaftService::StubInterface> pRaftStub)
+/// tkvpp_node_grpc_client_t
+tkvpp_node_grpc_client_t::tkvpp_node_grpc_client_t(node_config_t                                   config,
+                                                   std::unique_ptr<TinyKVPPService::StubInterface> pStub)
+    : m_config{std::move(config)},
+      m_stub{std::move(pStub)}
+{
+    assert(m_config.m_id > 0);
+    assert(!m_config.m_ip.empty());
+}
+
+auto tkvpp_node_grpc_client_t::put(const PutRequest &request, PutResponse *pResponse) -> bool
+{
+    grpc::ClientContext context;
+    context.set_deadline(std::chrono::system_clock::now() + std::chrono::seconds(generate_random_timeout()));
+
+    grpc::Status status = m_stub->Put(&context, request, pResponse);
+    if (!status.ok())
+    {
+        spdlog::error("Put RPC call failed. Error code={} and message={}",
+                      static_cast<int>(status.error_code()),
+                      status.error_message());
+        return false;
+    }
+
+    return true;
+}
+
+auto tkvpp_node_grpc_client_t::id() const -> id_t
+{
+    return m_config.m_id;
+}
+
+auto tkvpp_node_grpc_client_t::ip() const -> ip_t
+{
+    return m_config.m_ip;
+}
+
+/// raft_node_grpc_client_t
+raft_node_grpc_client_t::raft_node_grpc_client_t(node_config_t                               config,
+                                                 std::unique_ptr<RaftService::StubInterface> pRaftStub)
     : m_config{std::move(config)},
       m_stub{std::move(pRaftStub)}
 {
@@ -53,7 +92,8 @@ node_client_t::node_client_t(node_config_t config, std::unique_ptr<RaftService::
     assert(!m_config.m_ip.empty());
 }
 
-auto node_client_t::appendEntries(const AppendEntriesRequest &request, AppendEntriesResponse *response) -> bool
+auto raft_node_grpc_client_t::appendEntries(const AppendEntriesRequest &request, AppendEntriesResponse *response)
+    -> bool
 {
     const auto RPC_TIMEOUT = std::chrono::seconds(generate_random_timeout());
 
@@ -73,7 +113,7 @@ auto node_client_t::appendEntries(const AppendEntriesRequest &request, AppendEnt
     return true;
 }
 
-auto node_client_t::requestVote(const RequestVoteRequest &request, RequestVoteResponse *response) -> bool
+auto raft_node_grpc_client_t::requestVote(const RequestVoteRequest &request, RequestVoteResponse *response) -> bool
 {
     const auto RPC_TIMEOUT = std::chrono::seconds(generate_random_timeout());
 
@@ -94,34 +134,19 @@ auto node_client_t::requestVote(const RequestVoteRequest &request, RequestVoteRe
     return true;
 }
 
-auto node_client_t::put(const PutRequest &request, PutResponse *pResponse) -> bool
-{
-    grpc::ClientContext context;
-    context.set_deadline(std::chrono::system_clock::now() + std::chrono::seconds(generate_random_timeout()));
-
-    grpc::Status status = m_kvStub->Put(&context, request, pResponse);
-    if (!status.ok())
-    {
-        spdlog::error("Put RPC call failed. Error code={} and message={}",
-                      static_cast<int>(status.error_code()),
-                      status.error_message());
-        return false;
-    }
-
-    return true;
-}
-
-auto node_client_t::id() const -> id_t
+auto raft_node_grpc_client_t::id() const -> id_t
 {
     return m_config.m_id;
 }
 
-auto node_client_t::ip() const -> ip_t
+auto raft_node_grpc_client_t::ip() const -> ip_t
 {
     return m_config.m_ip;
 }
 
-consensus_module_t::consensus_module_t(node_config_t nodeConfig, std::vector<node_client_t> replicas)
+consensus_module_t::consensus_module_t(node_config_t                         nodeConfig,
+                                       std::vector<raft_node_grpc_client_t>  replicas,
+                                       std::vector<tkvpp_node_grpc_client_t> kvClients)
     : m_config{std::move(nodeConfig)},
       m_currentTerm{0},
       m_votedFor{0},
@@ -131,8 +156,9 @@ consensus_module_t::consensus_module_t(node_config_t nodeConfig, std::vector<nod
       m_voteCount{0}
 {
     assert(m_config.m_id > 0);
-    // assert(replicas.size() > 0);
+    assert(replicas.size() > 0);
     assert(m_config.m_id <= replicas.size() + 1);
+    assert(replicas.size() == kvClients.size());
 
     grpc::ServerBuilder builder;
     builder.AddListeningPort(m_config.m_ip, grpc::InsecureServerCredentials());
@@ -163,6 +189,11 @@ consensus_module_t::consensus_module_t(node_config_t nodeConfig, std::vector<nod
         m_matchIndex[nodeClient.id()] = 0;
         m_nextIndex[nodeClient.id()] = 1;
         m_replicas[nodeClient.id()] = std::move(nodeClient);
+    }
+
+    for (auto &&nodeKvClient : kvClients)
+    {
+        m_kvClients[nodeKvClient.id()] = std::move(nodeKvClient);
     }
 }
 
@@ -358,7 +389,7 @@ auto consensus_module_t::Put(grpc::ServerContext *pContext, const PutRequest *pR
                      votedFor,
                      currentTerm);
 
-        if (!m_replicas[votedFor]->put(*pRequest, pResponse))
+        if (!m_kvClients[votedFor]->put(*pRequest, pResponse))
         {
             spdlog::error("Non-leader node={} was unable to forward put RPC to leader={}", m_config.m_id, votedFor);
         }
@@ -717,7 +748,7 @@ void consensus_module_t::becomeLeader()
     }
 }
 
-void consensus_module_t::sendHeartbeat(node_client_t &client)
+void consensus_module_t::sendHeartbeat(raft_node_grpc_client_t &client)
 {
     constexpr const auto heartbeatInterval{std::chrono::milliseconds(100)};
     constexpr const int  maxRetries{3};
@@ -800,10 +831,10 @@ void consensus_module_t::sendHeartbeat(node_client_t &client)
         });
 }
 
-void consensus_module_t::sendAppendEntriesRPC(node_client_t &client, std::vector<LogEntry> logEntries)
+void consensus_module_t::sendAppendEntriesRPC(raft_node_grpc_client_t &client, std::vector<LogEntry> logEntries)
 {
     std::thread(
-        [this](node_client_t &client, std::vector<LogEntry> logEntries)
+        [this](raft_node_grpc_client_t &client, std::vector<LogEntry> logEntries)
         {
             AppendEntriesRequest request;
             {

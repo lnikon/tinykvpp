@@ -34,7 +34,7 @@ TEST_CASE("NodeClient AppendEntries", "[NodeClient]")
         .WillOnce(testing::DoAll(testing::SetArgPointee<2>(response), testing::Return(grpc::Status::OK)))
         .WillOnce(testing::DoAll(testing::SetArgPointee<2>(response), testing::Return(grpc::Status::CANCELLED)));
 
-    raft::node_client_t nodeClient{nodeConfig, std::move(mockStub)};
+    raft::raft_node_grpc_client_t nodeClient{nodeConfig, std::move(mockStub)};
 
     AppendEntriesRequest request;
     EXPECT_EQ(nodeClient.appendEntries(request, &response), true);
@@ -81,7 +81,7 @@ TEST_CASE("ConsensusModule Initialization", "[ConsensusModule]")
         .Times(testing::AtLeast(1))
         .WillRepeatedly(testing::DoAll(testing::SetArgPointee<2>(aeResponse), testing::Return(grpc::Status::OK)));
 
-    std::vector<raft::node_client_t> replicas;
+    std::vector<raft::raft_node_grpc_client_t> replicas;
     replicas.emplace_back(nodeConfig2, std::move(mockStub2));
     replicas.emplace_back(nodeConfig3, std::move(mockStub3));
 

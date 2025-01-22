@@ -51,7 +51,7 @@ auto main(int argc, char *argv[]) -> int
         return EXIT_FAILURE;
     }
 
-    std::vector<raft::node_client_t> replicas;
+    std::vector<raft::raft_node_grpc_client_t> replicas;
     for (raft::id_t replicaId{1}; const auto &replicaIp : nodeIps)
     {
         if (replicaId != nodeId)
