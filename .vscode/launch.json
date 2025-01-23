@@ -40,7 +40,7 @@
                 "--id",
                 "1",
                 "--nodes",
-                "0.0.0.0:8080"
+                "0.0.0.0:8080,0.0.0.0:8081,0.0.0.0:8082"
             ], // Arguments to pass to the program
             "stopAtEntry": false, // Set to true to stop at the program's entry point
             "cwd": "${workspaceFolder}", // Current working directory

@@ -25,8 +25,6 @@
 
 using namespace std::chrono_literals;
 
-// AppendEntries RPC returns OK - NodeClient::appendEntries returns true
-// AppendEntries RPC returns CANCELLED - NodeClient::appendEntries returns false
 TEST(NodeClient, AppendEntries)
 {
     raft::node_config_t nodeConfig{.m_id = 1, .m_ip = "0.0.0.0:9090"};
@@ -65,9 +63,6 @@ class ConsensusModuleTest : public testing::Test
             m_raftClients.emplace(
                 id,
                 raft::raft_node_grpc_client_t(m_configs[id], std::unique_ptr<MockRaftServiceStub>(m_raftStubs[id])));
-
-            m_tkvClients.emplace(
-                id, raft::tkvpp_node_grpc_client_t(m_configs[id], std::make_unique<MockTinyKVPPServiceStub>()));
         }
     }
 
@@ -75,7 +70,6 @@ class ConsensusModuleTest : public testing::Test
     {
         m_raftStubs.clear();
         m_raftClients.clear();
-        m_tkvClients.clear();
     }
 
     const std::uint32_t clusterSize{3};
@@ -85,19 +79,10 @@ class ConsensusModuleTest : public testing::Test
     std::unordered_map<id_t, MockRaftServiceStub *>         m_raftStubs;
     std::unordered_map<id_t, raft::raft_node_grpc_client_t> m_raftClients;
 
-    std::unordered_map<id_t, std::unique_ptr<MockTinyKVPPServiceStub>> m_tkvStubs;
-    std::unordered_map<id_t, raft::tkvpp_node_grpc_client_t>           m_tkvClients;
-
     auto raftClients()
     {
         return m_raftClients | std::views::transform([](auto &&pair) { return std::move(pair.second); }) |
                std::ranges::to<std::vector<raft::raft_node_grpc_client_t>>();
-    }
-
-    auto tkvClients()
-    {
-        return m_tkvClients | std::views::transform([](auto &&pair) { return std::move(pair.second); }) |
-               std::ranges::to<std::vector<raft::tkvpp_node_grpc_client_t>>();
     }
 };
 
@@ -123,7 +108,7 @@ TEST_F(ConsensusModuleTest, Initialization)
             .WillRepeatedly(testing::DoAll(testing::SetArgPointee<2>(aeResponse), testing::Return(grpc::Status::OK)));
     }
 
-    raft::consensus_module_t consensusModule{m_configs[1], raftClients(), tkvClients()};
+    raft::consensus_module_t consensusModule{m_configs[1], raftClients()};
     consensusModule.start();
     std::this_thread::sleep_for(1000ms);
     consensusModule.stop();

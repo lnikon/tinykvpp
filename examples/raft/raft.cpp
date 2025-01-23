@@ -46,41 +46,42 @@ namespace raft
 {
 
 /// tkvpp_node_grpc_client_t
-tkvpp_node_grpc_client_t::tkvpp_node_grpc_client_t(node_config_t                                   config,
-                                                   std::unique_ptr<TinyKVPPService::StubInterface> pStub)
-    : m_config{std::move(config)},
-      m_stub{std::move(pStub)}
-{
-    assert(m_config.m_id > 0);
-    assert(!m_config.m_ip.empty());
-}
-
-auto tkvpp_node_grpc_client_t::put(const PutRequest &request, PutResponse *pResponse) -> bool
-{
-    grpc::ClientContext context;
-    context.set_deadline(std::chrono::system_clock::now() + std::chrono::seconds(generate_random_timeout()));
-
-    grpc::Status status = m_stub->Put(&context, request, pResponse);
-    if (!status.ok())
-    {
-        spdlog::error("Put RPC call failed. Error code={} and message={}",
-                      static_cast<int>(status.error_code()),
-                      status.error_message());
-        return false;
-    }
-
-    return true;
-}
-
-auto tkvpp_node_grpc_client_t::id() const -> id_t
-{
-    return m_config.m_id;
-}
-
-auto tkvpp_node_grpc_client_t::ip() const -> ip_t
-{
-    return m_config.m_ip;
-}
+// tkvpp_node_grpc_client_t::tkvpp_node_grpc_client_t(node_config_t                                   config,
+//                                                    std::unique_ptr<TinyKVPPService::StubInterface> pStub)
+//     : m_config{std::move(config)},
+//       m_stub{std::move(pStub)}
+// {
+//     assert(m_config.m_id > 0);
+//     assert(!m_config.m_ip.empty());
+// }
+//
+// auto tkvpp_node_grpc_client_t::put(const PutRequest &request, PutResponse *pResponse) -> bool
+// {
+//     grpc::ClientContext context;
+//     context.set_deadline(std::chrono::system_clock::now() + std::chrono::seconds(generate_random_timeout()));
+//
+//     grpc::Status status = m_stub->Put(&context, request, pResponse);
+//     if (!status.ok())
+//     {
+//         spdlog::error("Put RPC call failed. Error code={} and message={}",
+//                       static_cast<int>(status.error_code()),
+//                       status.error_message());
+//         return false;
+//     }
+//
+//     return true;
+// }
+//
+// auto tkvpp_node_grpc_client_t::id() const -> id_t
+// {
+//     return m_config.m_id;
+// }
+//
+// auto tkvpp_node_grpc_client_t::ip() const -> ip_t
+// {
+//     return m_config.m_ip;
+// }
+//
 
 /// raft_node_grpc_client_t
 raft_node_grpc_client_t::raft_node_grpc_client_t(node_config_t                               config,
@@ -144,9 +145,7 @@ auto raft_node_grpc_client_t::ip() const -> ip_t
     return m_config.m_ip;
 }
 
-consensus_module_t::consensus_module_t(node_config_t                         nodeConfig,
-                                       std::vector<raft_node_grpc_client_t>  replicas,
-                                       std::vector<tkvpp_node_grpc_client_t> kvClients)
+consensus_module_t::consensus_module_t(node_config_t nodeConfig, std::vector<raft_node_grpc_client_t> replicas)
     : m_config{std::move(nodeConfig)},
       m_currentTerm{0},
       m_votedFor{0},
@@ -158,7 +157,6 @@ consensus_module_t::consensus_module_t(node_config_t                         nod
     assert(m_config.m_id > 0);
     assert(replicas.size() > 0);
     assert(m_config.m_id <= replicas.size() + 1);
-    assert(replicas.size() == kvClients.size());
 
     grpc::ServerBuilder builder;
     builder.AddListeningPort(m_config.m_ip, grpc::InsecureServerCredentials());
@@ -169,13 +167,6 @@ consensus_module_t::consensus_module_t(node_config_t                         nod
         throw std::runtime_error(fmt::format("Failed to dynamic_cast ConsensusModule to RaftService"));
     }
     builder.RegisterService(raftService);
-
-    auto *tkvppService = dynamic_cast<TinyKVPPService::Service *>(this);
-    if (tkvppService == nullptr)
-    {
-        throw std::runtime_error(fmt::format("Failed to dynamic_cast ConsensusModule to TinyKVPPService"));
-    }
-    builder.RegisterService(tkvppService);
 
     m_raftServer = builder.BuildAndStart();
     if (!m_raftServer)
@@ -189,11 +180,6 @@ consensus_module_t::consensus_module_t(node_config_t                         nod
         m_matchIndex[nodeClient.id()] = 0;
         m_nextIndex[nodeClient.id()] = 1;
         m_replicas[nodeClient.id()] = std::move(nodeClient);
-    }
-
-    for (auto &&nodeKvClient : kvClients)
-    {
-        m_kvClients[nodeKvClient.id()] = std::move(nodeKvClient);
     }
 }
 
@@ -274,7 +260,7 @@ auto consensus_module_t::AppendEntries(grpc::ServerContext        *pContext,
         while (m_lastApplied < m_commitIndex)
         {
             ++m_lastApplied;
-            m_kv[m_log[m_lastApplied - 1].key()] = m_log[m_lastApplied - 1].value();
+            // TODO(lnikon): Update the state machine!
         }
     }
 
@@ -289,7 +275,10 @@ auto consensus_module_t::AppendEntries(grpc::ServerContext        *pContext,
         spdlog::error("Node={} is unable to persist votedFor", m_config.m_id, m_votedFor);
     }
 
-    m_leaderHeartbeatReceived.store(true);
+    {
+        absl::WriterMutexLock locker{&m_timerMutex};
+        m_leaderHeartbeatReceived.store(true);
+    }
 
     spdlog::debug("Node={} is resetting election timeout at term={}", m_config.m_id, m_currentTerm);
 
@@ -342,7 +331,11 @@ auto consensus_module_t::RequestVote(grpc::ServerContext      *pContext,
 
             spdlog::debug("Node={} votedFor={}", m_config.m_id, pRequest->candidateid());
 
-            m_leaderHeartbeatReceived.store(true);
+            {
+                absl::WriterMutexLock locker{&m_timerMutex};
+                m_leaderHeartbeatReceived.store(true);
+            }
+
             pResponse->set_term(m_currentTerm);
             pResponse->set_votegranted(1);
         }
@@ -351,102 +344,83 @@ auto consensus_module_t::RequestVote(grpc::ServerContext      *pContext,
     return grpc::Status::OK;
 }
 
-auto consensus_module_t::Put(grpc::ServerContext *pContext, const PutRequest *pRequest, PutResponse *pResponse)
-    -> grpc::Status
-{
-    (void)pContext;
-
-    spdlog::info("Node={} received Put request", m_config.m_id);
-
-    uint32_t currentTerm = 0;
-    uint32_t lastLogIndex = 0;
-    uint32_t votedFor = 0;
-    {
-        absl::MutexLock locker{&m_stateMutex};
-        if (m_state != NodeState::LEADER)
-        {
-            if (m_votedFor != gInvalidId)
-            {
-                votedFor = m_votedFor;
-            }
-            else
-            {
-                spdlog::error("Non-leader node={} received a put request. Leader at current term is unkown.",
-                              m_config.m_id);
-                pResponse->set_status("");
-                return grpc::Status::OK;
-            }
-        }
-
-        currentTerm = m_currentTerm;
-        lastLogIndex = getLastLogIndex() + 1;
-    }
-
-    if (votedFor != gInvalidId)
-    {
-        spdlog::info("Non-leader node={} received a put request. Forwarding to leader={} during currentTerm={}",
-                     m_config.m_id,
-                     votedFor,
-                     currentTerm);
-
-        if (!m_kvClients[votedFor]->put(*pRequest, pResponse))
-        {
-            spdlog::error("Non-leader node={} was unable to forward put RPC to leader={}", m_config.m_id, votedFor);
-        }
-
-        return grpc::Status::OK;
-    }
-
-    LogEntry logEntry;
-    logEntry.set_term(currentTerm);
-    logEntry.set_index(lastLogIndex);
-    logEntry.set_command(fmt::format("put:{}:{}", pRequest->key(), pRequest->value()));
-    logEntry.set_key(pRequest->key());
-    logEntry.set_value(pRequest->value());
-
-    {
-        absl::MutexLock locker{&m_stateMutex};
-        m_log.push_back(logEntry);
-    }
-
-    for (auto &[id, client] : m_replicas)
-    {
-        sendAppendEntriesRPC(client.value(), {logEntry});
-    }
-
-    absl::WriterMutexLock locker{&m_stateMutex};
-    bool                  success = waitForMajorityReplication(logEntry.index());
-    if (success)
-    {
-        spdlog::info("Node={} majority agreed on logEntry={}", m_config.m_id, logEntry.index());
-    }
-    else
-    {
-        spdlog::info("Node={} majority failed to agree on logEntry={}", m_config.m_id, logEntry.index());
-    }
-
-    return grpc::Status::OK;
-}
-
-auto consensus_module_t::Get(grpc::ServerContext *pContext, const GetRequest *pRequest, GetResponse *pResponse)
-    -> grpc::Status
-{
-    (void)pContext;
-
-    spdlog::info("Node={} recevied get request for key={}", m_config.m_id, pRequest->key());
-
-    absl::ReaderMutexLock locker{&m_stateMutex};
-    if (auto itKv = m_kv.find(pRequest->key()); itKv != m_kv.end())
-    {
-        pResponse->set_value(itKv->second);
-    }
-    else
-    {
-        pResponse->set_value(std::string());
-    }
-
-    return grpc::Status::OK;
-}
+// auto consensus_module_t::Put(grpc::ServerContext *pContext, const PutRequest *pRequest, PutResponse *pResponse)
+//     -> grpc::Status
+// {
+//     (void)pContext;
+//
+//     spdlog::info("Node={} received Put request", m_config.m_id);
+//
+//     uint32_t currentTerm = 0;
+//     uint32_t lastLogIndex = 0;
+//     uint32_t votedFor = 0;
+//     {
+//         absl::MutexLock locker{&m_stateMutex};
+//         if (m_state != NodeState::LEADER)
+//         {
+//             if (m_votedFor != gInvalidId)
+//             {
+//                 votedFor = m_votedFor;
+//             }
+//             else
+//             {
+//                 spdlog::error("Non-leader node={} received a put request. Leader at current term is unkown.",
+//                               m_config.m_id);
+//                 pResponse->set_status("");
+//                 return grpc::Status::OK;
+//             }
+//         }
+//
+//         currentTerm = m_currentTerm;
+//         lastLogIndex = getLastLogIndex() + 1;
+//     }
+//
+//     if (votedFor != gInvalidId)
+//     {
+//         spdlog::info("Non-leader node={} received a put request. Forwarding to leader={} during currentTerm={}",
+//                      m_config.m_id,
+//                      votedFor,
+//                      currentTerm);
+//
+//         // TODO(lnikon): How to handle redirects?
+//         // if (!m_kvClients[votedFor]->put(*pRequest, pResponse))
+//         {
+//             spdlog::error("Non-leader node={} was unable to forward put RPC to leader={}", m_config.m_id, votedFor);
+//         }
+//
+//         return grpc::Status::OK;
+//     }
+//
+//     LogEntry logEntry;
+//     logEntry.set_term(currentTerm);
+//     logEntry.set_index(lastLogIndex);
+//     logEntry.set_command(fmt::format("put:{}:{}", pRequest->key(), pRequest->value()));
+//     logEntry.set_key(pRequest->key());
+//     logEntry.set_value(pRequest->value());
+//
+//     {
+//         absl::MutexLock locker{&m_stateMutex};
+//         m_log.push_back(logEntry);
+//     }
+//
+//     for (auto &[id, client] : m_replicas)
+//     {
+//         sendAppendEntriesRPC(client.value(), {logEntry});
+//     }
+//
+//     absl::WriterMutexLock locker{&m_stateMutex};
+//     bool                  success = waitForMajorityReplication(logEntry.index());
+//     if (success)
+//     {
+//         spdlog::info("Node={} majority agreed on logEntry={}", m_config.m_id, logEntry.index());
+//     }
+//     else
+//     {
+//         spdlog::info("Node={} majority failed to agree on logEntry={}", m_config.m_id, logEntry.index());
+//     }
+//
+//     return grpc::Status::OK;
+// }
 
 auto consensus_module_t::init() -> bool
 {
@@ -466,6 +440,7 @@ void consensus_module_t::start()
     m_electionThread = std::jthread(
         [this](std::stop_token token)
         {
+            id_t currentLeaderId{gInvalidId};
             while (!token.stop_requested())
             {
                 if (m_shutdown)
@@ -475,6 +450,7 @@ void consensus_module_t::start()
 
                 {
                     absl::ReaderMutexLock locker{&m_stateMutex};
+                    currentLeaderId = m_config.m_id;
                     if (getState() == NodeState::LEADER)
                     {
                         continue;
@@ -490,7 +466,7 @@ void consensus_module_t::start()
 
                 // Wait until heartbeat timeouts or timer CV gets signaled
                 {
-                    absl::MutexLock locker(&m_timerMutex); // Lock the mutex using Abseil's MutexLock
+                    absl::WriterMutexLock locker(&m_timerMutex); // Lock the mutex using Abseil's MutexLock
 
                     // Determine the timeout duration
                     int64_t timeToWaitMs = generate_random_timeout();
@@ -506,9 +482,10 @@ void consensus_module_t::start()
                                currentTimeMs() >= timeToWaitDeadlineMs;
                     };
 
-                    spdlog::debug("Timer thread at node={} will block for {}ms for the leader to send a heartbeat",
+                    spdlog::debug("Timer thread at node={} will block for {}ms for the leader={} to send a heartbeat",
                                   m_config.m_id,
-                                  timeToWaitMs);
+                                  timeToWaitMs,
+                                  currentLeaderId);
 
                     // Wait for the condition to be met or timeout
                     bool heartbeatReceived = m_timerMutex.AwaitWithTimeout(absl::Condition(&heartbeatReceivedCondition),
@@ -524,7 +501,7 @@ void consensus_module_t::start()
                     // Otherwise, heartbeat timed out and node needs to start the new leader election
                     if (heartbeatReceived && m_leaderHeartbeatReceived.load())
                     {
-                        spdlog::debug("Node={} received heartbeat", m_config.m_id);
+                        spdlog::debug("Node={} received heartbeat from leader={}", m_config.m_id, currentLeaderId);
                         m_leaderHeartbeatReceived.store(false);
                     }
                     else
@@ -617,7 +594,9 @@ auto consensus_module_t::initializePersistentState() -> bool
 
     for (const auto &logEntry : m_log)
     {
-        m_kv[logEntry.key()] = logEntry.value();
+        (void)logEntry;
+        // TODO(lnikon): Should I update the state machine here?
+        // m_kv[logEntry.key()] = logEntry.value();
     }
 
     return true;
@@ -889,7 +868,8 @@ void consensus_module_t::sendAppendEntriesRPC(raft_node_grpc_client_t &client, s
                     while (m_lastApplied < m_commitIndex)
                     {
                         ++m_lastApplied;
-                        m_kv[m_log[m_lastApplied - 1].key()] = m_log[m_lastApplied - 1].value();
+                        // TODO(lnikon): Update the state machine
+                        // m_kv[m_log[m_lastApplied - 1].key()] = m_log[m_lastApplied - 1].value();
                     }
 
                     return;

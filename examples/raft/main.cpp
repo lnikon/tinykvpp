@@ -1,14 +1,13 @@
-#include <csignal>
-#include <grpcpp/create_channel.h>
+#include <grpcpp/server.h>
 #include <grpcpp/security/credentials.h>
 
 #include "raft.h"
 
-#include <grpcpp/server.h>
-
 #include <cxxopts.hpp>
 
 #include <spdlog/spdlog.h>
+
+#include <csignal>
 
 std::condition_variable gCv;
 
@@ -65,9 +64,7 @@ auto main(int argc, char *argv[]) -> int
         ++replicaId;
     }
 
-    raft::consensus_module_t consensusModule({.m_id = nodeId, .m_ip = nodeIps[nodeId - 1]},
-                                             std::move(replicas),
-                                             std::vector<raft::tkvpp_node_grpc_client_t>{});
+    raft::consensus_module_t consensusModule({.m_id = nodeId, .m_ip = nodeIps[nodeId - 1]}, std::move(replicas));
     if (!consensusModule.init())
     {
         spdlog::error("Failed to initialize the state machine");
