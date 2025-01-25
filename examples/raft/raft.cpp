@@ -605,9 +605,11 @@ auto consensus_module_t::initializePersistentState() -> bool
 void consensus_module_t::startElection()
 {
     RequestVoteRequest request;
+    std::uint32_t      newTerm{0};
     {
         absl::WriterMutexLock locker(&m_stateMutex);
-        m_currentTerm++;
+        newTerm = ++m_currentTerm;
+
         m_state = NodeState::CANDIDATE;
 
         spdlog::debug("Node={} starts election. New term={}", m_config.m_id, m_currentTerm);
@@ -629,7 +631,8 @@ void consensus_module_t::startElection()
     requesterThreads.reserve(m_replicas.size());
     for (auto &[id, client] : m_replicas)
     {
-        spdlog::debug("Node={} is creating RequestVoteRPC thread for the peer={}", m_config.m_id, id);
+        spdlog::debug(
+            "Node={} is creating RequestVoteRPC thread for the peer={} during term={}", m_config.m_id, id, newTerm);
         requesterThreads.emplace_back(
             [&client, request, this]()
             {
