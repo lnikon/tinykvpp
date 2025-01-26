@@ -7,6 +7,10 @@
 
 #include <spdlog/spdlog.h>
 
+#include <prometheus/counter.h>
+#include <prometheus/exposer.h>
+#include <prometheus/registry.h>
+
 #include <csignal>
 
 std::condition_variable gCv;

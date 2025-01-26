@@ -42,6 +42,7 @@ find_package(Celero CONFIG REQUIRED)
 find_package(protobuf CONFIG REQUIRED)
 find_package(gRPC CONFIG REQUIRED)
 find_package(GTest CONFIG REQUIRED)
+find_package(prometheus-cpp REQUIRED)
 
 include_directories(lib)
 
