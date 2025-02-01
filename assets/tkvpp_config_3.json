@@ -1,6 +1,6 @@
 {
   "logging": {
-    "loggingLevel": "info"
+    "loggingLevel": "debug"
   },
   "database": {
     "path": "./var/tkvpp",
@@ -21,7 +21,9 @@
   },
   "server": {
     "transport": "grpc",
-    "host": "localhost",
-    "port": 9000
+    "host": "0.0.0.0",
+    "port": 8083,
+    "id": 3,
+    "peers": ["0.0.0.0:8081","0.0.0.0:8082", "0.0.0.0:8083"]
   }
 }

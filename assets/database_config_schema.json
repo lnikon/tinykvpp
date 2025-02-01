@@ -77,6 +77,18 @@
                     "description": "Server port number",
                     "minimum": 1024,
                     "maximum": 65535
+                },
+                "id": {
+                    "type": "integer",
+                    "description": "ID of the node",
+                    "minimum": 1
+                },
+                "peers": {
+                    "type": "array",
+                    "description": "Array of IPv4 addresses of peers",
+                    "items": {
+                        "type": "string"
+                    }
                 }
             },
             "required": [

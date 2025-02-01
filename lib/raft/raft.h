@@ -124,6 +124,8 @@ class consensus_module_t : public RaftService::Service
     void               start();
     void               stop();
 
+    auto replicate(LogEntry logEntry) -> bool;
+
     // NOLINTBEGIN(modernize-use-trailing-return-type)
     [[nodiscard]] std::uint32_t         currentTerm() const;
     [[nodiscard]] id_t                  votedFor() const;
@@ -133,7 +135,7 @@ class consensus_module_t : public RaftService::Service
 
   private:
     // Logic behind Leader election and log replication
-    void               startElection();
+    void               startElection(absl::ReleasableMutexLock &locker) ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_stateMutex);
     void               becomeFollower(uint32_t newTerm) ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_stateMutex);
     void               becomeLeader() ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_stateMutex);
     void               sendHeartbeat(raft_node_grpc_client_t &client) ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_stateMutex);
@@ -155,6 +157,8 @@ class consensus_module_t : public RaftService::Service
 
     [[nodiscard]] bool flushPersistentState() ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_stateMutex);
     [[nodiscard]] bool restorePersistentState() ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_stateMutex);
+
+    void cleanupHeartbeatThreads() ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_stateMutex);
     // NOLINTEND(modernize-use-trailing-return-type)
 
     // Map from client ID to a gRPC client.
@@ -182,16 +186,14 @@ class consensus_module_t : public RaftService::Service
     std::unordered_map<id_t, uint32_t> m_nextIndex  ABSL_GUARDED_BY(m_stateMutex);
 
     // Election related fields
-    absl::Mutex                   m_timerMutex;
-    std::atomic<bool>             m_leaderHeartbeatReceived{false};
-    std::jthread m_electionThread ABSL_GUARDED_BY(m_stateMutex);
-    std::atomic<uint32_t>         m_voteCount{0};
+    std::atomic<bool>     m_leaderHeartbeatReceived;
+    std::atomic<uint32_t> m_voteCount{0};
+
+    // No need to guard @m_electionThread as it is managed only within main thread
+    std::jthread m_electionThread;
 
     // Stores clusterSize - 1 thread to send heartbeat to replicas
     std::vector<std::jthread> m_heartbeatThreads ABSL_GUARDED_BY(m_stateMutex);
-
-    // Serves incoming RPC's
-    std::jthread m_serverThread ABSL_GUARDED_BY(m_stateMutex);
 
     // Used to shutdown the entire consensus module
     bool m_shutdown{false};

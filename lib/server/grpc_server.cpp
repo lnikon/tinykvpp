@@ -20,9 +20,8 @@ tinykvpp_service_impl_t::tinykvpp_service_impl_t(db::shared_ptr_t db)
 {
 }
 
-auto tinykvpp_service_impl_t::Put(grpc::ServerContext *pContext,
-                                  const PutRequest    *pRequest,
-                                  PutResponse         *pResponse) -> grpc::Status
+auto tinykvpp_service_impl_t::Put(grpc::ServerContext *pContext, const PutRequest *pRequest, PutResponse *pResponse)
+    -> grpc::Status
 {
     (void)pContext;
 
@@ -40,9 +39,8 @@ auto tinykvpp_service_impl_t::Put(grpc::ServerContext *pContext,
     }
 }
 
-auto tinykvpp_service_impl_t::Get(grpc::ServerContext *pContext,
-                                  const GetRequest    *pRequest,
-                                  GetResponse         *pResponse) -> grpc::Status
+auto tinykvpp_service_impl_t::Get(grpc::ServerContext *pContext, const GetRequest *pRequest, GetResponse *pResponse)
+    -> grpc::Status
 {
     (void)pContext;
     try

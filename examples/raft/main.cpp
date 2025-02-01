@@ -1,7 +1,7 @@
 #include <grpcpp/server.h>
 #include <grpcpp/security/credentials.h>
 
-#include "raft.h"
+#include "raft/raft.h"
 
 #include <cxxopts.hpp>
 

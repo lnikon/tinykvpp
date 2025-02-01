@@ -3,6 +3,7 @@
 #include "memtable.h"
 #include "server/server.h"
 #include "server/server_kind.h"
+#include "raft/raft.h"
 
 #include <cstdint>
 #include <cstdio>
@@ -10,6 +11,8 @@
 #include <exception>
 #include <fstream>
 #include <string>
+#include <csignal>
+#include <variant>
 
 #include <nlohmann/json.hpp>
 #include <nlohmann/json-schema.hpp>
@@ -20,7 +23,6 @@
 
 #include <spdlog/common.h>
 #include <spdlog/spdlog.h>
-#include <variant>
 
 using tk_key_t = structures::memtable::memtable_t::record_t::key_t;
 using tk_value_t = structures::memtable::memtable_t::record_t::value_t;
@@ -108,6 +110,18 @@ static json database_config_schema = R"(
                     "description": "Server port number",
                     "minimum": 1024,
                     "maximum": 65535
+                },
+                "id": {
+                    "type": "integer",
+                    "description": "ID of the node",
+                    "minimum": 1
+                },
+                "peers": {
+                    "type": "array",
+                    "description": "Array of IPv4 addresses of peers",
+                    "items": {
+                        "type": "string"
+                    }
                 }
             },
             "required": [
@@ -166,6 +180,16 @@ static json database_config_schema = R"(
     }
 }
 )"_json;
+
+std::condition_variable gCv;
+
+static void signalHandler(int sig)
+{
+    if (sig == SIGTERM || sig == SIGINT)
+    {
+        gCv.notify_all();
+    }
+}
 
 using json = nlohmann::json;
 
@@ -343,6 +367,24 @@ auto loadServerConfig(const json &configJson, config::shared_ptr_t dbConfig)
     {
         throw std::runtime_error("\"transport\" is not specified in the config");
     }
+
+    if (configJson.contains("id"))
+    {
+        dbConfig->ServerConfig.id = configJson["id"].get<std::uint32_t>();
+    }
+    else
+    {
+        throw std::runtime_error("\"transport\" is not specified in the config");
+    }
+
+    if (configJson.contains("peers"))
+    {
+        dbConfig->ServerConfig.peers = configJson["peers"].get<std::vector<std::string>>();
+    }
+    else
+    {
+        throw std::runtime_error("\"transport\" is not specified in the config");
+    }
 }
 
 auto initializeDatabaseConfig(const json &configJson, const std::string &configPath) -> config::shared_ptr_t
@@ -374,6 +416,9 @@ auto main(int argc, char *argv[]) -> int
 {
     try
     {
+        std::signal(SIGTERM, signalHandler);
+        std::signal(SIGINT, signalHandler);
+
         cxxopts::Options options("tinykvpp", "A tiny database, powering big ideas");
         options.add_options()("c,config", "Path to JSON configuration of database", cxxopts::value<std::string>())(
             "help", "Print help");
@@ -402,38 +447,108 @@ auto main(int argc, char *argv[]) -> int
             return EXIT_FAILURE;
         }
 
-        const auto kind{server::from_string(dbConfig->ServerConfig.transport)};
-        if (!kind.has_value())
+        if (dbConfig->ServerConfig.id == 0)
         {
-            spdlog::info("\"transport\" is not determined. Exiting");
-            return EXIT_SUCCESS;
+            spdlog::error("ID of the node should be positve integer");
+            return EXIT_FAILURE;
         }
 
-        std::variant<std::monostate, server::server_t<server::grpc_communication_t>> server;
-        if (kind == server::communication_strategy_kind_k::grpc_k)
+        if (dbConfig->ServerConfig.peers.empty())
         {
-            server = server::main_server<server::communication_strategy_kind_k::grpc_k>(database);
-        }
-        else if (kind == server::communication_strategy_kind_k::tcp_k)
-        {
-            spdlog::warn("{} server is not supported. Exiting", server::to_string(kind.value()).value());
-            return EXIT_SUCCESS;
+            spdlog::error("List of node IPs can't be empty");
+            return EXIT_FAILURE;
         }
 
-        std::visit(
-            [](auto &server)
+        // Preprare config for replicas
+        std::vector<raft::raft_node_grpc_client_t> replicas;
+        for (raft::id_t replicaId{1}; const auto &replicaIp : dbConfig->ServerConfig.peers)
+        {
+            if (replicaId != dbConfig->ServerConfig.id)
             {
-                using T = std::decay_t<decltype(server)>;
-                if constexpr (std::is_same_v<T, std::monostate>)
-                {
-                    return;
-                }
-                else
-                {
-                    server.shutdown();
-                }
-            },
-            server);
+                std::unique_ptr<RaftService::Stub> stub{
+                    RaftService::NewStub(grpc::CreateChannel(replicaIp, grpc::InsecureChannelCredentials()))};
+
+                replicas.emplace_back(raft::node_config_t{.m_id = replicaId, .m_ip = replicaIp}, std::move(stub));
+                spdlog::info("replicaId={} replicaIp={}", replicaId, replicaIp);
+            }
+
+            ++replicaId;
+        }
+
+        // Create current nodes config
+        raft::node_config_t nodeConfig{
+            .m_id = dbConfig->ServerConfig.id,
+            .m_ip = fmt::format("{}:{}", database->config()->ServerConfig.host, database->config()->ServerConfig.port)};
+
+        // Start building gRPC server. Listen on current nodes host:port
+        grpc::ServerBuilder grpcBuilder;
+        grpcBuilder.AddListeningPort(nodeConfig.m_ip, grpc::InsecureServerCredentials());
+
+        // Create consensus module and add it into gRPC server
+        auto pConsensusModule = std::make_unique<raft::consensus_module_t>(nodeConfig, std::move(replicas));
+        if (!pConsensusModule->init())
+        {
+            spdlog::error("Failed to initialize the state machine");
+            return EXIT_FAILURE;
+        }
+        grpcBuilder.RegisterService(dynamic_cast<RaftService::Service *>(pConsensusModule.get()));
+
+        // Create gRPC server
+        std::unique_ptr<grpc::Server> pServer{std::unique_ptr<grpc::Server>(grpcBuilder.BuildAndStart())};
+
+        // Start consensus module and gRPC server
+        pConsensusModule->start();
+        auto serverThread = std::jthread([&pServer] { pServer->Wait(); });
+
+        // const auto kind{server::from_string(dbConfig->ServerConfig.transport)};
+        // if (!kind.has_value())
+        // {
+        //     spdlog::info("\"transport\" is not determined. Exiting");
+        //     return EXIT_SUCCESS;
+        // }
+
+        // std::variant<std::monostate, server::server_t<server::grpc_communication_t>> server;
+        // if (kind == server::communication_strategy_kind_k::grpc_k)
+        // {
+        //     server = server::main_server<server::communication_strategy_kind_k::grpc_k>(database);
+        // }
+        // else if (kind == server::communication_strategy_kind_k::tcp_k)
+        // {
+        //     spdlog::warn("{} server is not supported. Exiting", server::to_string(kind.value()).value());
+        //     return EXIT_SUCCESS;
+        // }
+        //
+        // std::visit(
+        //     [](auto &server)
+        //     {
+        //         using T = std::decay_t<decltype(server)>;
+        //         if constexpr (std::is_same_v<T, std::monostate>)
+        //         {
+        //             return;
+        //         }
+        //         else
+        //         {
+        //             server.shutdown();
+        //         }
+        //     },
+        //     server);
+
+        std::mutex                   mtx;
+        std::unique_lock<std::mutex> lock(mtx);
+        gCv.wait(lock);
+
+        spdlog::debug("Node={} is requesting server shutdown", nodeConfig.m_id);
+        pServer->Shutdown();
+
+        spdlog::debug("Node={} is joining the server thread", nodeConfig.m_id);
+        pServer->Shutdown();
+        if (serverThread.joinable())
+        {
+            serverThread.join();
+            spdlog::debug("Node={} joined the server thread", nodeConfig.m_id);
+        }
+
+        pConsensusModule->stop();
     }
     catch (const std::exception &e)
     {
