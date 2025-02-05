@@ -509,8 +509,8 @@ auto main(int argc, char *argv[]) -> int
         std::unique_ptr<grpc::Server> pServer{std::unique_ptr<grpc::Server>(grpcBuilder.BuildAndStart())};
 
         // Start consensus module and gRPC server
-        pConsensusModule->start();
         auto serverThread = std::jthread([&pServer] { pServer->Wait(); });
+        pConsensusModule->start();
 
         // const auto kind{server::from_string(dbConfig->ServerConfig.transport)};
         // if (!kind.has_value())

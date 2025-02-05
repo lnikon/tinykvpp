@@ -425,143 +425,22 @@ void consensus_module_t::start()
         {
             while (!token.stop_requested() && !m_shutdown)
             {
-                absl::ReleasableMutexLock locker{&m_stateMutex};
                 {
+                    absl::ReleasableMutexLock locker{&m_stateMutex};
                     {
                         if (getState() == NodeState::LEADER)
                         {
-                            std::this_thread::sleep_for(std::chrono::milliseconds(generate_random_timeout(50, 100)));
+                            continue;
                         }
                     }
                 }
 
-                auto currentTimeMs = []
+                if (waitForHeartbeat(token))
                 {
-                    return std::chrono::duration_cast<std::chrono::milliseconds>(
-                               std::chrono::high_resolution_clock::now().time_since_epoch())
-                        .count();
-                };
-
-                // Wait until heartbeat timeouts or timer CV gets signaled
-                {
-                    // Determine the timeout duration
-                    int64_t timeToWaitMs = generate_raft_timeout();
-                    int64_t timeToWaitDeadlineMs = currentTimeMs() + timeToWaitMs;
-
-                    // Wake up when
-                    // 1) Thread should be stopped
-                    // 2) Leader sent a heartbeat
-                    // 3) Wait for the heartbeat was too long
-                    auto heartbeatReceivedCondition = [this, &timeToWaitDeadlineMs, &token, currentTimeMs]()
-                    {
-                        return token.stop_requested() || m_leaderHeartbeatReceived.load() ||
-                               currentTimeMs() >= timeToWaitDeadlineMs;
-                    };
-
-                    spdlog::debug("Timer thread at node={} will block for {}ms for the leader={} to send a heartbeat",
-                                  m_config.m_id,
-                                  timeToWaitMs,
-                                  m_votedFor);
-
-                    // Wait for the condition to be met or timeout
-                    bool heartbeatReceived = m_stateMutex.AwaitWithTimeout(absl::Condition(&heartbeatReceivedCondition),
-                                                                           absl::Milliseconds(timeToWaitMs));
-
-                    if (token.stop_requested())
-                    {
-                        spdlog::info("Node={} election thread terminating due to stop request.", m_config.m_id);
-                        break;
-                    }
-
-                    // If timer CV gets signaled, then node has received the heartbeat from the leader.
-                    // Otherwise, heartbeat timed out and node needs to start the new leader election
-                    if (heartbeatReceived && m_leaderHeartbeatReceived.load())
-                    {
-                        spdlog::debug("Node={} received heartbeat from leader={}", m_config.m_id, m_votedFor);
-                        m_leaderHeartbeatReceived.store(false);
-                    }
-                    else
-                    {
-                        // startElection(locker);
-                        RequestVoteRequest request;
-                        std::uint32_t      newTerm{0};
-                        {
-                            // absl::WriterMutexLock locker(&m_stateMutex);
-                            newTerm = ++m_currentTerm;
-
-                            m_state = NodeState::CANDIDATE;
-
-                            spdlog::debug("Node={} starts election. New term={}", m_config.m_id, m_currentTerm);
-
-                            // Node in a canditate state should vote for itself.
-                            m_voteCount++;
-                            if (!updatePersistentState(std::nullopt, m_config.m_id))
-                            {
-                                spdlog::error("Node={} is unable to persist votedFor={}", m_config.m_id, m_votedFor);
-                            }
-
-                            request.set_term(m_currentTerm);
-                            request.set_candidateid(m_config.m_id);
-                            request.set_lastlogterm(getLastLogTerm());
-                            request.set_lastlogindex(getLastLogIndex());
-                        }
-
-                        // Shuld be moved into another function
-                        std::vector<std::jthread> requesterThreads;
-                        requesterThreads.reserve(m_replicas.size());
-                        for (auto &[id, client] : m_replicas)
-                        {
-                            spdlog::debug("Node={} is creating RequestVoteRPC thread for the peer={} during term={}",
-                                          m_config.m_id,
-                                          id,
-                                          newTerm);
-
-                            requesterThreads.emplace_back(
-                                [&client, request, this]()
-                                {
-                                    RequestVoteResponse response;
-                                    if (!client->requestVote(request, &response))
-                                    {
-                                        spdlog::error("RequestVote RPC failed in requester thread");
-                                        return;
-                                    }
-
-                                    auto responseTerm = response.term();
-                                    auto voteGranted = response.votegranted();
-
-                                    spdlog::debug("Received RequestVoteResponse in requester thread peerTerm={} "
-                                                  "voteGranted={} peer={}",
-                                                  responseTerm,
-                                                  voteGranted,
-                                                  response.responderid());
-
-                                    absl::WriterMutexLock locker(&m_stateMutex);
-                                    if (responseTerm > m_currentTerm)
-                                    {
-                                        becomeFollower(responseTerm);
-                                        return;
-                                    }
-
-                                    if (voteGranted != 0 && responseTerm == m_currentTerm)
-                                    {
-                                        m_voteCount++;
-                                        if (hasMajority(m_voteCount.load()))
-                                        {
-                                            becomeLeader();
-                                        }
-                                    }
-                                });
-                        }
-
-                        locker.Release();
-
-                        for (auto &thread : requesterThreads)
-                        {
-                            spdlog::debug("Node={} is joining RequestVoteRPC thread", m_config.m_id);
-                            thread.join();
-                        }
-                    }
+                    continue;
                 }
+
+                startElection();
             }
 
             spdlog::info("Election thread received stop_request");
@@ -622,82 +501,6 @@ auto consensus_module_t::initializePersistentState() -> bool
     }
 
     return true;
-}
-
-void consensus_module_t::startElection()
-{
-    // RequestVoteRequest request;
-    // std::uint32_t      newTerm{0};
-    // {
-    //     // absl::WriterMutexLock locker(&m_stateMutex);
-    //     newTerm = ++m_currentTerm;
-    //
-    //     m_state = NodeState::CANDIDATE;
-    //
-    //     spdlog::debug("Node={} starts election. New term={}", m_config.m_id, m_currentTerm);
-    //
-    //     // Node in a canditate state should vote for itself.
-    //     m_voteCount++;
-    //     if (!updatePersistentState(std::nullopt, m_config.m_id))
-    //     {
-    //         spdlog::error("Node={} is unable to persist votedFor={}", m_config.m_id, m_votedFor);
-    //     }
-    //
-    //     request.set_term(m_currentTerm);
-    //     request.set_candidateid(m_config.m_id);
-    //     request.set_lastlogterm(getLastLogTerm());
-    //     request.set_lastlogindex(getLastLogIndex());
-    // }
-    //
-    // locker.Release();
-    //
-    // std::vector<std::jthread> requesterThreads;
-    // requesterThreads.reserve(m_replicas.size());
-    // for (auto &[id, client] : m_replicas)
-    // {
-    //     spdlog::debug(
-    //         "Node={} is creating RequestVoteRPC thread for the peer={} during term={}", m_config.m_id, id, newTerm);
-    //     requesterThreads.emplace_back(
-    //         [&client, request, this]()
-    //         {
-    //             RequestVoteResponse response;
-    //             if (!client->requestVote(request, &response))
-    //             {
-    //                 spdlog::error("RequestVote RPC failed in requester thread");
-    //                 return;
-    //             }
-    //
-    //             auto responseTerm = response.term();
-    //             auto voteGranted = response.votegranted();
-    //
-    //             spdlog::debug("Received RequestVoteResponse in requester thread peerTerm={} voteGranted={} peer={}",
-    //                           responseTerm,
-    //                           voteGranted,
-    //                           response.responderid());
-    //
-    //             absl::WriterMutexLock locker(&m_stateMutex);
-    //             if (responseTerm > m_currentTerm)
-    //             {
-    //                 becomeFollower(responseTerm);
-    //                 return;
-    //             }
-    //
-    //             if (voteGranted != 0 && responseTerm == m_currentTerm)
-    //             {
-    //                 m_voteCount++;
-    //                 if (hasMajority(m_voteCount.load()))
-    //                 {
-    //                     becomeLeader();
-    //                 }
-    //             }
-    //         });
-    // }
-    //
-    // for (auto &thread : requesterThreads)
-    // {
-    //     spdlog::debug("Node={} is joining RequestVoteRPC thread", m_config.m_id);
-    //     thread.join();
-    // }
 }
 
 void consensus_module_t::becomeFollower(uint32_t newTerm)
@@ -817,6 +620,130 @@ void consensus_module_t::sendHeartbeat(raft_node_grpc_client_t &client)
                 std::this_thread::sleep_for(heartbeatInterval);
             }
         });
+}
+
+// Note(vbejanyan): Use return code instead of bool
+auto consensus_module_t::waitForHeartbeat(std::stop_token token) -> bool
+{
+    // Determine the timeout duration
+    const int64_t timeoutMs = generate_raft_timeout();
+    const auto    deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(timeoutMs);
+
+    // Wake up when
+    // 1) Thread should be stopped
+    // 2) Leader sent a heartbeat
+    // 3) Wait for the heartbeat was too long
+    auto heartbeatReceivedCondition = [this, deadline, token]()
+    {
+        return token.stop_requested() || m_leaderHeartbeatReceived.load() ||
+               std::chrono::steady_clock::now() >= deadline;
+    };
+
+    spdlog::debug(
+        "Timer thread at node={} will block for {}ms for the leader to send a heartbeat", m_config.m_id, timeoutMs);
+
+    // Wait for the condition to be met or timeout
+    absl::ReaderMutexLock locker{&m_stateMutex};
+    bool                  signaled =
+        m_stateMutex.AwaitWithTimeout(absl::Condition(&heartbeatReceivedCondition), absl::Milliseconds(timeoutMs));
+
+    if (token.stop_requested())
+    {
+        spdlog::info("Node={} election thread terminating due to stop request", m_config.m_id);
+        return true;
+    }
+
+    // If timer CV gets signaled, then node has received the heartbeat from the leader.
+    // Otherwise, heartbeat timed out and node needs to start the new leader election
+    if (signaled && m_leaderHeartbeatReceived.load())
+    {
+        spdlog::debug("Node={} received heartbeat from", m_config.m_id);
+        m_leaderHeartbeatReceived.store(false);
+        return true;
+    }
+
+    return false;
+}
+
+void consensus_module_t::startElection()
+{
+    std::uint32_t      newTerm{0};
+    RequestVoteRequest request;
+    {
+        absl::WriterMutexLock locker(&m_stateMutex);
+        newTerm = ++m_currentTerm;
+
+        m_state = NodeState::CANDIDATE;
+
+        spdlog::debug("Node={} starts election. New term={}", m_config.m_id, m_currentTerm);
+
+        // Node in a canditate state should vote for itself.
+        m_voteCount++;
+        if (!updatePersistentState(std::nullopt, m_config.m_id))
+        {
+            spdlog::error("Node={} is unable to persist votedFor={}", m_config.m_id, m_votedFor);
+        }
+
+        request.set_term(m_currentTerm);
+        request.set_candidateid(m_config.m_id);
+        request.set_lastlogterm(getLastLogTerm());
+        request.set_lastlogindex(getLastLogIndex());
+    }
+
+    sendRequestVoteRPCs(request, newTerm);
+}
+
+void consensus_module_t::sendRequestVoteRPCs(const RequestVoteRequest &request, std::uint64_t newTerm)
+{
+    std::vector<std::jthread> requesterThreads;
+    requesterThreads.reserve(m_replicas.size());
+    for (auto &[id, client] : m_replicas)
+    {
+        spdlog::debug(
+            "Node={} is creating RequestVoteRPC thread for the peer={} during term={}", m_config.m_id, id, newTerm);
+
+        requesterThreads.emplace_back(
+            [&client, request, this]()
+            {
+                RequestVoteResponse response;
+                if (!client->requestVote(request, &response))
+                {
+                    spdlog::error("RequestVote RPC failed in requester thread");
+                    return;
+                }
+
+                auto responseTerm = response.term();
+                auto voteGranted = response.votegranted();
+
+                spdlog::debug("Received RequestVoteResponse in requester thread peerTerm={} "
+                              "voteGranted={} peer={}",
+                              responseTerm,
+                              voteGranted,
+                              response.responderid());
+
+                absl::WriterMutexLock locker(&m_stateMutex);
+                if (responseTerm > m_currentTerm)
+                {
+                    becomeFollower(responseTerm);
+                    return;
+                }
+
+                if (voteGranted != 0 && responseTerm == m_currentTerm)
+                {
+                    m_voteCount++;
+                    if (hasMajority(m_voteCount.load()))
+                    {
+                        becomeLeader();
+                    }
+                }
+            });
+    }
+
+    for (auto &thread : requesterThreads)
+    {
+        spdlog::debug("Node={} is joining RequestVoteRPC thread", m_config.m_id);
+        thread.join();
+    }
 }
 
 void consensus_module_t::sendAppendEntriesRPC(raft_node_grpc_client_t &client, std::vector<LogEntry> logEntries)
@@ -1099,9 +1026,13 @@ void consensus_module_t::cleanupHeartbeatThreads()
     {
         spdlog::info("Joining heartbeat thread...");
         heartbeatThread.request_stop();
-        heartbeatThread.join();
-        spdlog::info("Heartbeat thread joined!");
+        if (heartbeatThread.joinable())
+        {
+            heartbeatThread.join();
+            spdlog::info("Heartbeat thread joined!");
+        }
     }
+    m_heartbeatThreads.clear();
     m_shutdownHeartbeatThreads = false;
     spdlog::info("Node={} existing heartbeat threads cleared", m_config.m_id);
 }

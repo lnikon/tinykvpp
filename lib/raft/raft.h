@@ -135,10 +135,13 @@ class consensus_module_t : public RaftService::Service
 
   private:
     // Logic behind Leader election and log replication
-    void               startElection() ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_stateMutex);
-    void               becomeFollower(uint32_t newTerm) ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_stateMutex);
-    void               becomeLeader() ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_stateMutex);
-    void               sendHeartbeat(raft_node_grpc_client_t &client) ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_stateMutex);
+    void becomeFollower(uint32_t newTerm) ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_stateMutex);
+    void becomeLeader() ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_stateMutex);
+    void sendHeartbeat(raft_node_grpc_client_t &client) ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_stateMutex);
+    auto waitForHeartbeat(std::stop_token token) -> bool;
+    void startElection();
+    void sendRequestVoteRPCs(const RequestVoteRequest& request, std::uint64_t newTerm);
+
     void               sendAppendEntriesRPC(raft_node_grpc_client_t &client, std::vector<LogEntry> logEntries);
     [[nodiscard]] auto waitForMajorityReplication(uint32_t logIndex) -> bool;
 
@@ -166,9 +169,6 @@ class consensus_module_t : public RaftService::Service
 
     // Stores ID and IP of the current node. Received from outside.
     node_config_t m_config;
-
-    // gRPC server to receive Raft RPCs
-    std::unique_ptr<grpc::Server> m_raftServer{nullptr};
 
     // Persistent state on all servers
     mutable absl::Mutex         m_stateMutex;
