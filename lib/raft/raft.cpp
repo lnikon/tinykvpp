@@ -27,16 +27,21 @@ auto constructFilename(std::string_view filename, std::uint32_t peerId) -> std::
     return fmt::format("{}_NODE_{}", filename, peerId);
 }
 
-auto generate_random_timeout() -> int
+auto generate_random_timeout(const int minTimeout, const int maxTimeout) -> int
 {
-    const int minTimeout{150};
-    const int maxTimeout{300};
+    static thread_local std::random_device randomDevice;
+    static thread_local std::mt19937       gen(randomDevice());
 
-    std::random_device              randomDevice;
-    std::mt19937                    gen(randomDevice());
     std::uniform_int_distribution<> dist(minTimeout, maxTimeout);
-
     return dist(gen);
+}
+
+auto generate_raft_timeout()
+{
+    constexpr const int minTimeout{150};
+    constexpr const int maxTimeout{300};
+
+    return generate_random_timeout(minTimeout, maxTimeout);
 }
 
 } // namespace
@@ -57,7 +62,7 @@ namespace raft
 // auto tkvpp_node_grpc_client_t::put(const PutRequest &request, PutResponse *pResponse) -> bool
 // {
 //     grpc::ClientContext context;
-//     context.set_deadline(std::chrono::system_clock::now() + std::chrono::seconds(generate_random_timeout()));
+//     context.set_deadline(std::chrono::system_clock::now() + std::chrono::seconds(generate_raft_timeout()));
 //
 //     grpc::Status status = m_stub->Put(&context, request, pResponse);
 //     if (!status.ok())
@@ -95,7 +100,7 @@ raft_node_grpc_client_t::raft_node_grpc_client_t(node_config_t                  
 auto raft_node_grpc_client_t::appendEntries(const AppendEntriesRequest &request, AppendEntriesResponse *response)
     -> bool
 {
-    const auto RPC_TIMEOUT = std::chrono::seconds(generate_random_timeout());
+    const auto RPC_TIMEOUT = std::chrono::seconds(generate_raft_timeout());
 
     grpc::ClientContext context;
     context.set_deadline(std::chrono::system_clock::now() + RPC_TIMEOUT);
@@ -115,7 +120,7 @@ auto raft_node_grpc_client_t::appendEntries(const AppendEntriesRequest &request,
 
 auto raft_node_grpc_client_t::requestVote(const RequestVoteRequest &request, RequestVoteResponse *response) -> bool
 {
-    const auto RPC_TIMEOUT = std::chrono::seconds(generate_random_timeout());
+    const auto RPC_TIMEOUT = std::chrono::seconds(generate_raft_timeout());
 
     grpc::ClientContext context;
     context.set_deadline(std::chrono::system_clock::now() + RPC_TIMEOUT);
@@ -418,18 +423,15 @@ void consensus_module_t::start()
     m_electionThread = std::jthread(
         [this](std::stop_token token)
         {
-            while (!token.stop_requested())
+            while (!token.stop_requested() && !m_shutdown)
             {
-                if (m_shutdown)
-                {
-                    break;
-                }
-
                 absl::ReleasableMutexLock locker{&m_stateMutex};
                 {
-                    if (getState() == NodeState::LEADER)
                     {
-                        continue;
+                        if (getState() == NodeState::LEADER)
+                        {
+                            std::this_thread::sleep_for(std::chrono::milliseconds(generate_random_timeout(50, 100)));
+                        }
                     }
                 }
 
@@ -443,7 +445,7 @@ void consensus_module_t::start()
                 // Wait until heartbeat timeouts or timer CV gets signaled
                 {
                     // Determine the timeout duration
-                    int64_t timeToWaitMs = generate_random_timeout();
+                    int64_t timeToWaitMs = generate_raft_timeout();
                     int64_t timeToWaitDeadlineMs = currentTimeMs() + timeToWaitMs;
 
                     // Wake up when
@@ -513,6 +515,7 @@ void consensus_module_t::start()
                                           m_config.m_id,
                                           id,
                                           newTerm);
+
                             requesterThreads.emplace_back(
                                 [&client, request, this]()
                                 {
