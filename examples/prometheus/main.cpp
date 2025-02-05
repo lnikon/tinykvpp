@@ -1,12 +1,10 @@
-#include <cxxopts.hpp>
-
-#include <spdlog/spdlog.h>
-
 #include <prometheus/counter.h>
 #include <prometheus/exposer.h>
 #include <prometheus/registry.h>
 
-auto main(int argc, char *argv[]) -> int
+#include <thread>
+
+auto main() -> int
 {
     using namespace prometheus;
 
@@ -46,13 +44,24 @@ auto main(int argc, char *argv[]) -> int
         const auto random_value = std::rand();
 
         if (random_value & 1)
+        {
             tcp_rx_counter.Increment();
+        }
+
         if (random_value & 2)
+        {
             tcp_tx_counter.Increment();
+        }
+
         if (random_value & 4)
+        {
             udp_rx_counter.Increment();
+        }
+
         if (random_value & 8)
+        {
             udp_tx_counter.Increment();
+        }
 
         const std::array<std::string, 4> methods = {"GET", "PUT", "POST", "HEAD"};
         auto                             method = methods.at(random_value % methods.size());

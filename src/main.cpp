@@ -181,13 +181,13 @@ static json database_config_schema = R"(
 }
 )"_json;
 
-std::condition_variable gCv;
+std::atomic<bool> gShutdown{false};
 
 static void signalHandler(int sig)
 {
     if (sig == SIGTERM || sig == SIGINT)
     {
-        gCv.notify_all();
+        gShutdown.store(true);
     }
 }
 
@@ -533,9 +533,10 @@ auto main(int argc, char *argv[]) -> int
         //     },
         //     server);
 
-        std::mutex                   mtx;
-        std::unique_lock<std::mutex> lock(mtx);
-        gCv.wait(lock);
+        while (!gShutdown)
+        {
+            // Spin until the process externally killed
+        }
 
         spdlog::debug("Node={} is requesting server shutdown", nodeConfig.m_id);
         pServer->Shutdown();

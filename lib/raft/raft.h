@@ -135,7 +135,7 @@ class consensus_module_t : public RaftService::Service
 
   private:
     // Logic behind Leader election and log replication
-    void               startElection(absl::ReleasableMutexLock &locker) ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_stateMutex);
+    void               startElection() ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_stateMutex);
     void               becomeFollower(uint32_t newTerm) ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_stateMutex);
     void               becomeLeader() ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_stateMutex);
     void               sendHeartbeat(raft_node_grpc_client_t &client) ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_stateMutex);

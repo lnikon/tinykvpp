@@ -7,7 +7,6 @@
 #include <fstream>
 #include <random>
 #include <ranges>
-#include <stdexcept>
 #include <thread>
 #include <utility>
 
@@ -505,8 +504,7 @@ void consensus_module_t::start()
                             request.set_lastlogindex(getLastLogIndex());
                         }
 
-                        locker.Release();
-
+                        // Shuld be moved into another function
                         std::vector<std::jthread> requesterThreads;
                         requesterThreads.reserve(m_replicas.size());
                         for (auto &[id, client] : m_replicas)
@@ -551,6 +549,8 @@ void consensus_module_t::start()
                                     }
                                 });
                         }
+
+                        locker.Release();
 
                         for (auto &thread : requesterThreads)
                         {
@@ -621,80 +621,80 @@ auto consensus_module_t::initializePersistentState() -> bool
     return true;
 }
 
-void consensus_module_t::startElection(absl::ReleasableMutexLock &locker)
+void consensus_module_t::startElection()
 {
-    RequestVoteRequest request;
-    std::uint32_t      newTerm{0};
-    {
-        // absl::WriterMutexLock locker(&m_stateMutex);
-        newTerm = ++m_currentTerm;
-
-        m_state = NodeState::CANDIDATE;
-
-        spdlog::debug("Node={} starts election. New term={}", m_config.m_id, m_currentTerm);
-
-        // Node in a canditate state should vote for itself.
-        m_voteCount++;
-        if (!updatePersistentState(std::nullopt, m_config.m_id))
-        {
-            spdlog::error("Node={} is unable to persist votedFor={}", m_config.m_id, m_votedFor);
-        }
-
-        request.set_term(m_currentTerm);
-        request.set_candidateid(m_config.m_id);
-        request.set_lastlogterm(getLastLogTerm());
-        request.set_lastlogindex(getLastLogIndex());
-    }
-
-    locker.Release();
-
-    std::vector<std::jthread> requesterThreads;
-    requesterThreads.reserve(m_replicas.size());
-    for (auto &[id, client] : m_replicas)
-    {
-        spdlog::debug(
-            "Node={} is creating RequestVoteRPC thread for the peer={} during term={}", m_config.m_id, id, newTerm);
-        requesterThreads.emplace_back(
-            [&client, request, this]()
-            {
-                RequestVoteResponse response;
-                if (!client->requestVote(request, &response))
-                {
-                    spdlog::error("RequestVote RPC failed in requester thread");
-                    return;
-                }
-
-                auto responseTerm = response.term();
-                auto voteGranted = response.votegranted();
-
-                spdlog::debug("Received RequestVoteResponse in requester thread peerTerm={} voteGranted={} peer={}",
-                              responseTerm,
-                              voteGranted,
-                              response.responderid());
-
-                absl::WriterMutexLock locker(&m_stateMutex);
-                if (responseTerm > m_currentTerm)
-                {
-                    becomeFollower(responseTerm);
-                    return;
-                }
-
-                if (voteGranted != 0 && responseTerm == m_currentTerm)
-                {
-                    m_voteCount++;
-                    if (hasMajority(m_voteCount.load()))
-                    {
-                        becomeLeader();
-                    }
-                }
-            });
-    }
-
-    for (auto &thread : requesterThreads)
-    {
-        spdlog::debug("Node={} is joining RequestVoteRPC thread", m_config.m_id);
-        thread.join();
-    }
+    // RequestVoteRequest request;
+    // std::uint32_t      newTerm{0};
+    // {
+    //     // absl::WriterMutexLock locker(&m_stateMutex);
+    //     newTerm = ++m_currentTerm;
+    //
+    //     m_state = NodeState::CANDIDATE;
+    //
+    //     spdlog::debug("Node={} starts election. New term={}", m_config.m_id, m_currentTerm);
+    //
+    //     // Node in a canditate state should vote for itself.
+    //     m_voteCount++;
+    //     if (!updatePersistentState(std::nullopt, m_config.m_id))
+    //     {
+    //         spdlog::error("Node={} is unable to persist votedFor={}", m_config.m_id, m_votedFor);
+    //     }
+    //
+    //     request.set_term(m_currentTerm);
+    //     request.set_candidateid(m_config.m_id);
+    //     request.set_lastlogterm(getLastLogTerm());
+    //     request.set_lastlogindex(getLastLogIndex());
+    // }
+    //
+    // locker.Release();
+    //
+    // std::vector<std::jthread> requesterThreads;
+    // requesterThreads.reserve(m_replicas.size());
+    // for (auto &[id, client] : m_replicas)
+    // {
+    //     spdlog::debug(
+    //         "Node={} is creating RequestVoteRPC thread for the peer={} during term={}", m_config.m_id, id, newTerm);
+    //     requesterThreads.emplace_back(
+    //         [&client, request, this]()
+    //         {
+    //             RequestVoteResponse response;
+    //             if (!client->requestVote(request, &response))
+    //             {
+    //                 spdlog::error("RequestVote RPC failed in requester thread");
+    //                 return;
+    //             }
+    //
+    //             auto responseTerm = response.term();
+    //             auto voteGranted = response.votegranted();
+    //
+    //             spdlog::debug("Received RequestVoteResponse in requester thread peerTerm={} voteGranted={} peer={}",
+    //                           responseTerm,
+    //                           voteGranted,
+    //                           response.responderid());
+    //
+    //             absl::WriterMutexLock locker(&m_stateMutex);
+    //             if (responseTerm > m_currentTerm)
+    //             {
+    //                 becomeFollower(responseTerm);
+    //                 return;
+    //             }
+    //
+    //             if (voteGranted != 0 && responseTerm == m_currentTerm)
+    //             {
+    //                 m_voteCount++;
+    //                 if (hasMajority(m_voteCount.load()))
+    //                 {
+    //                     becomeLeader();
+    //                 }
+    //             }
+    //         });
+    // }
+    //
+    // for (auto &thread : requesterThreads)
+    // {
+    //     spdlog::debug("Node={} is joining RequestVoteRPC thread", m_config.m_id);
+    //     thread.join();
+    // }
 }
 
 void consensus_module_t::becomeFollower(uint32_t newTerm)
