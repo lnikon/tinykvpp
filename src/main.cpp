@@ -416,8 +416,17 @@ auto main(int argc, char *argv[]) -> int
 {
     try
     {
-        std::signal(SIGTERM, signalHandler);
-        std::signal(SIGINT, signalHandler);
+        if (std::signal(SIGTERM, signalHandler) == SIG_ERR)
+        {
+            spdlog::error("Unable to set signal handler for ");
+            return EXIT_FAILURE;
+        }
+
+        if (std::signal(SIGINT, signalHandler) == SIG_ERR)
+        {
+            spdlog::error("Unable to set signal handler for ");
+            return EXIT_FAILURE;
+        }
 
         cxxopts::Options options("tinykvpp", "A tiny database, powering big ideas");
         options.add_options()("c,config", "Path to JSON configuration of database", cxxopts::value<std::string>())(
