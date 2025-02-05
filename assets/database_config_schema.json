@@ -94,7 +94,9 @@
             "required": [
                 "transport",
                 "host",
-                "port"
+                "port",
+                "id",
+                "peers"
             ]
         }
     },

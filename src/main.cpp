@@ -12,6 +12,7 @@
 #include <fstream>
 #include <string>
 #include <csignal>
+#include <thread>
 #include <variant>
 
 #include <nlohmann/json.hpp>
@@ -127,7 +128,9 @@ static json database_config_schema = R"(
             "required": [
                 "transport",
                 "host",
-                "port"
+                "port",
+                "id",
+                "peers"
             ]
         }
     },
@@ -183,7 +186,7 @@ static json database_config_schema = R"(
 
 std::atomic<bool> gShutdown{false};
 
-static void signalHandler(int sig)
+static void signalHandler(int sig) noexcept
 {
     if (sig == SIGTERM || sig == SIGINT)
     {
@@ -545,13 +548,13 @@ auto main(int argc, char *argv[]) -> int
         while (!gShutdown)
         {
             // Spin until the process externally killed
+            std::this_thread::yield();
         }
 
         spdlog::debug("Node={} is requesting server shutdown", nodeConfig.m_id);
         pServer->Shutdown();
 
         spdlog::debug("Node={} is joining the server thread", nodeConfig.m_id);
-        pServer->Shutdown();
         if (serverThread.joinable())
         {
             serverThread.join();
