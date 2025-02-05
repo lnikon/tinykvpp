@@ -374,7 +374,7 @@ auto loadServerConfig(const json &configJson, config::shared_ptr_t dbConfig)
     }
     else
     {
-        throw std::runtime_error("\"transport\" is not specified in the config");
+        throw std::runtime_error("\"id\" is not specified in the config");
     }
 
     if (configJson.contains("peers"))
@@ -383,7 +383,7 @@ auto loadServerConfig(const json &configJson, config::shared_ptr_t dbConfig)
     }
     else
     {
-        throw std::runtime_error("\"transport\" is not specified in the config");
+        throw std::runtime_error("\"id\" is not specified in the config");
     }
 }
 
