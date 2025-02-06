@@ -505,6 +505,10 @@ auto main(int argc, char *argv[]) -> int
         }
         grpcBuilder.RegisterService(dynamic_cast<RaftService::Service *>(pConsensusModule.get()));
 
+        // Create KV service and add it into gRPC server
+        auto kvService = std::make_unique<server::tinykvpp_service_impl_t>(database);
+        grpcBuilder.RegisterService(kvService.get());
+
         // Create gRPC server
         std::unique_ptr<grpc::Server> pServer{std::unique_ptr<grpc::Server>(grpcBuilder.BuildAndStart())};
 
@@ -547,7 +551,6 @@ auto main(int argc, char *argv[]) -> int
 
         while (!gShutdown)
         {
-            // Spin until the process externally killed
             std::this_thread::yield();
         }
 
