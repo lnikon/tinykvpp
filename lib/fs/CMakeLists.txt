@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.25)
-project(zkv)
+project(frankie)
 
 add_library(FS "append_only_file.cpp"
     "random_access_file.cpp"

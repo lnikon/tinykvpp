@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.25)
-project(zkv)
+project(frankie)
 
 add_library(RaftLib "raft.cpp")
 set_target_properties(RaftLib PROPERTIES CXX_STANDARD 23)

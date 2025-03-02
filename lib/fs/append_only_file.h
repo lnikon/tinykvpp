@@ -9,17 +9,24 @@
 namespace fs
 {
 
+// TODO(lnikon): Parametrize by stream_based_t and posix_based_t
 struct append_only_file_t
 {
     using data_t = std::string;
 
     explicit append_only_file_t(fs::path_t path);
     append_only_file_t() = default;
+    append_only_file_t(const append_only_file_t &) = delete;
+    append_only_file_t &operator=(const append_only_file_t &) = delete;
     ~append_only_file_t() noexcept;
+
+    append_only_file_t(append_only_file_t &&) noexcept = default;
+    auto operator=(append_only_file_t &&) noexcept -> append_only_file_t & = default;
 
     auto open() noexcept -> bool;
     auto open(fs::path_t path) noexcept -> bool;
     auto is_open() noexcept -> bool;
+    [[nodiscard]] auto path() const noexcept -> fs::path_t;
 
     /**
      * @brief Flush buffered data into the disk and close the underlying stream
@@ -68,6 +75,10 @@ inline auto append_only_file_t::open(fs::path_t path) noexcept -> bool
 inline auto append_only_file_t::is_open() noexcept -> bool
 {
     return m_out.is_open();
+}
+inline auto append_only_file_t::path() const noexcept -> fs::path_t
+{
+    return m_path;
 }
 
 inline auto append_only_file_t::close() noexcept -> bool

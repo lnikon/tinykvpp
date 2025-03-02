@@ -1,9 +1,10 @@
 #include "config.h"
 #include "db.h"
 #include "memtable.h"
-#include "server/server.h"
-#include "server/server_kind.h"
 #include "raft/raft.h"
+#include "wal/common.h"
+#include "wal/wal.h"
+#include "wal/log_storage_builder.h"
 
 #include <cstdint>
 #include <cstdio>
@@ -13,7 +14,6 @@
 #include <string>
 #include <csignal>
 #include <thread>
-#include <variant>
 
 #include <nlohmann/json.hpp>
 #include <nlohmann/json-schema.hpp>
@@ -34,153 +34,142 @@ using nlohmann::json_schema::json_validator;
 // JSON schema for the configuration file
 static json database_config_schema = R"(
 {
-    "$id": "https://json-schema.hyperjump.io/schema",
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$title": "Schema for tinykvpp's JSON config",
-    "type": "object",
-    "properties": {
-        "logging": {
-            "type": "object",
-            "properties": {
-                "loggingLevel": {
-                    "$ref": "#/$defs/loggingLevel"
-                }
-            },
-            "required": [
-                "loggingLevel"
-            ]
-        },
-        "database": {
-            "type": "object",
-            "description": "Core database configuration settings",
-            "properties": {
-                "path": {
-                    "type": "string",
-                    "description": "Database storage directory path"
-                },
-                "walFilename": {
-                    "type": "string",
-                    "description": "Write-ahead log filename"
-                },
-                "manifestFilenamePrefix": {
-                    "type": "string",
-                    "description": "Prefix for manifest files"
-                }
-            },
-            "required": [
-                "path",
-                "walFilename",
-                "manifestFilenamePrefix"
-            ]
-        },
-        "lsmtree": {
-            "type": "object",
-            "properties": {
-                "memtableFlushThreshold": {
-                    "type": "number",
-                    "description": "The threshold of bytes at which the memtable should be flushed",
-                    "default": 1024
-                },
-                "levelZeroCompaction": {
-                    "$ref": "#/$defs/compaction"
-                },
-                "levelNonZeroCompaction": {
-                    "$ref": "#/$defs/compaction"
-                }
-            },
-            "required": [
-                "memtableFlushThreshold",
-                "maximumLevels",
-                "levelZeroCompaction",
-                "levelNonZeroCompaction"
-            ]
-        },
-        "server": {
-            "type": "object",
-            "description": "Server configuration settings",
-            "properties": {
-                "transport": {
-                    "$ref": "#/$defs/serverTransport"
-                },
-                "host": {
-                    "type": "string",
-                    "description": "Server host address"
-                },
-                "port": {
-                    "type": "number",
-                    "description": "Server port number",
-                    "minimum": 1024,
-                    "maximum": 65535
-                },
-                "id": {
-                    "type": "integer",
-                    "description": "ID of the node",
-                    "minimum": 1
-                },
-                "peers": {
-                    "type": "array",
-                    "description": "Array of IPv4 addresses of peers",
-                    "items": {
-                        "type": "string"
-                    }
-                }
-            },
-            "required": [
-                "transport",
-                "host",
-                "port",
-                "id",
-                "peers"
-            ]
-        }
-    },
-    "required": [
-        "database",
-        "lsmtree",
-        "server"
-    ],
-    "$defs": {
-        "serverTransport": {
-            "type": "string",
-            "enum": [
-                "grpc",
-                "tcp"
-            ]
-        },
+  "$id": "https://json-schema.hyperjump.io/schema",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$title": "Schema for tinykvpp's JSON config",
+  "type": "object",
+  "properties": {
+    "logging": {
+      "type": "object",
+      "properties": {
         "loggingLevel": {
-            "type": "string",
-            "enum": [
-                "info",
-                "debug",
-                "trace",
-                "off"
-            ]
-        },
-        "compactionStrategy": {
-            "type": "string",
-            "enum": [
-                "levelled",
-                "tiered"
-            ]
-        },
-        "compaction": {
-            "type": "object",
-            "properties": {
-                "compactionStrategy": {
-                    "$ref": "#/$defs/compactionStrategy"
-                },
-                "compactionThreshold": {
-                    "type": "number",
-                    "description": "Number of files that trigger compaction",
-                    "minimum": 1
-                }
-            },
-            "required": [
-                "compactionStrategy",
-                "compactionThreshold"
-            ]
+          "$ref": "#/$defs/loggingLevel"
         }
+      },
+      "required": ["loggingLevel"]
+    },
+    "database": {
+      "type": "object",
+      "description": "Core database configuration settings",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Database storage directory path"
+        },
+        "manifestFilenamePrefix": {
+          "type": "string",
+          "description": "Prefix for manifest files"
+        }
+      },
+      "required": ["path", "manifestFilenamePrefix"]
+    },
+    "wal": {
+      "type": "object",
+      "description": "WAL configuration",
+      "properties": {
+        "enable": {
+          "type": "boolean",
+          "description": "Enable/disable the WAL"
+        },
+        "type": {
+          "$ref": "#/$defs/walStorageType"
+        },
+        "filename": {
+          "type": "string",
+          "description": "Write-ahead Log filename"
+        }
+      },
+      "required": ["enable", "type", "filename"]
+    },
+    "lsmtree": {
+      "type": "object",
+      "properties": {
+        "memtableFlushThreshold": {
+          "type": "integer",
+          "description": "The threshold of bytes at which the memtable should be flushed",
+          "minimum": 1,
+          "default": 1024
+        },
+        "levelZeroCompaction": {
+          "$ref": "#/$defs/compaction"
+        },
+        "levelNonZeroCompaction": {
+          "$ref": "#/$defs/compaction"
+        }
+      },
+      "required": [
+        "memtableFlushThreshold",
+        "maximumLevels",
+        "levelZeroCompaction",
+        "levelNonZeroCompaction"
+      ]
+    },
+    "server": {
+      "type": "object",
+      "description": "Server configuration settings",
+      "properties": {
+        "transport": {
+          "$ref": "#/$defs/serverTransport"
+        },
+        "host": {
+          "type": "string",
+          "description": "Server host address"
+        },
+        "port": {
+          "type": "integer",
+          "description": "Server port number",
+          "minimum": 1024,
+          "maximum": 65535
+        },
+        "id": {
+          "type": "integer",
+          "description": "ID of the node",
+          "minimum": 1
+        },
+        "peers": {
+          "type": "array",
+          "description": "Array of IPv4 addresses of peers",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": ["transport", "host", "port", "id", "peers"]
     }
+  },
+  "required": ["database", "lsmtree", "server"],
+  "$defs": {
+    "serverTransport": {
+      "type": "string",
+      "enum": ["grpc", "tcp"]
+    },
+    "loggingLevel": {
+      "type": "string",
+      "enum": ["info", "debug", "trace", "off"]
+    },
+    "compactionStrategy": {
+      "type": "string",
+      "enum": ["levelled", "tiered"]
+    },
+    "walStorageType": {
+      "type": "string",
+      "enum": ["inMemory", "persistent"]
+    },
+    "compaction": {
+      "type": "object",
+      "properties": {
+        "compactionStrategy": {
+          "$ref": "#/$defs/compactionStrategy"
+        },
+        "compactionThreshold": {
+          "type": "integer",
+          "description": "Number of files that trigger compaction",
+          "minimum": 1
+        }
+      },
+      "required": ["compactionStrategy", "compactionThreshold"]
+    }
+  }
 }
 )"_json;
 
@@ -264,6 +253,36 @@ auto loadDatabaseConfig(const json &configJson) -> config::shared_ptr_t
     }
 
     return dbConfig;
+}
+
+void loadWALConfig(const json &walConfig, config::shared_ptr_t dbConfig)
+{
+    if (walConfig.contains("enable"))
+    {
+        dbConfig->WALConfig.enable = walConfig["enable"].get<bool>();
+    }
+    else
+    {
+        throw std::runtime_error("\"wal.enable\" is not specified in config");
+    }
+
+    if (walConfig.contains("type"))
+    {
+        dbConfig->WALConfig.storageType = wal::from_string(walConfig["type"].get<std::string>());
+    }
+    else
+    {
+        throw std::runtime_error("\"wal.type\" is not specified in config");
+    }
+
+    if (walConfig.contains("path"))
+    {
+        dbConfig->WALConfig.path = walConfig["path"].get<std::string>();
+    }
+    else
+    {
+        throw std::runtime_error("\"wal.path\" is not specified in config");
+    }
 }
 
 void loadLSMTreeConfig(const json &lsmtreeConfig, config::shared_ptr_t dbConfig, const std::string &configPath)
@@ -403,6 +422,15 @@ auto initializeDatabaseConfig(const json &configJson, const std::string &configP
         throw std::runtime_error("\"lsmtree\" is not specified in config: " + configPath);
     }
 
+    if (configJson.contains("wal"))
+    {
+        loadWALConfig(configJson["wal"], dbConfig);
+    }
+    else
+    {
+        throw std::runtime_error("\"wal\" is not specified in config: " + configPath);
+    }
+
     if (configJson.contains("server"))
     {
         loadServerConfig(configJson["server"], dbConfig);
@@ -451,21 +479,43 @@ auto main(int argc, char *argv[]) -> int
 
         configureLogging(configJson["logging"]["loggingLevel"].get<std::string>());
 
-        auto dbConfig = initializeDatabaseConfig(configJson, configPath);
-        auto database = db::make_shared(dbConfig);
-        if (!database->open())
+        auto pDbConfig = initializeDatabaseConfig(configJson, configPath);
+        if (pDbConfig->WALConfig.storageType == wal::log_storage_type_k::undefined_k)
+        {
+            spdlog::error("Undefined WAL storage type");
+            return EXIT_FAILURE;
+        }
+
+        if (pDbConfig->WALConfig.storageType == wal::log_storage_type_k::persistent_k)
+        {
+            if (!std::filesystem::exists(pDbConfig->WALConfig.path))
+            {
+                spdlog::error("WAL path does not exist: {}", pDbConfig->WALConfig.path.c_str());
+                return EXIT_FAILURE;
+            }
+        }
+
+        auto wal = wal::wal_builder_t{}.build(pDbConfig->WALConfig.storageType, pDbConfig->WALConfig.path);
+        if (!wal.has_value())
+        {
+            spdlog::error("Unable to build wal");
+            return EXIT_FAILURE;
+        }
+
+        auto pDatabase = db::make_shared(pDbConfig, wal);
+        if (!pDatabase->open())
         {
             spdlog::error("Unable to open the database");
             return EXIT_FAILURE;
         }
 
-        if (dbConfig->ServerConfig.id == 0)
+        if (pDbConfig->ServerConfig.id == 0)
         {
             spdlog::error("ID of the node should be positve integer");
             return EXIT_FAILURE;
         }
 
-        if (dbConfig->ServerConfig.peers.empty())
+        if (pDbConfig->ServerConfig.peers.empty())
         {
             spdlog::error("List of node IPs can't be empty");
             return EXIT_FAILURE;
@@ -473,9 +523,9 @@ auto main(int argc, char *argv[]) -> int
 
         // Preprare config for replicas
         std::vector<raft::raft_node_grpc_client_t> replicas;
-        for (raft::id_t replicaId{1}; const auto &replicaIp : dbConfig->ServerConfig.peers)
+        for (raft::id_t replicaId{1}; const auto &replicaIp : pDbConfig->ServerConfig.peers)
         {
-            if (replicaId != dbConfig->ServerConfig.id)
+            if (replicaId != pDbConfig->ServerConfig.id)
             {
                 std::unique_ptr<RaftService::Stub> stub{
                     RaftService::NewStub(grpc::CreateChannel(replicaIp, grpc::InsecureChannelCredentials()))};
@@ -489,8 +539,9 @@ auto main(int argc, char *argv[]) -> int
 
         // Create current nodes config
         raft::node_config_t nodeConfig{
-            .m_id = dbConfig->ServerConfig.id,
-            .m_ip = fmt::format("{}:{}", database->config()->ServerConfig.host, database->config()->ServerConfig.port)};
+            .m_id = pDbConfig->ServerConfig.id,
+            .m_ip =
+                fmt::format("{}:{}", pDatabase->config()->ServerConfig.host, pDatabase->config()->ServerConfig.port)};
 
         // Start building gRPC server. Listen on current nodes host:port
         grpc::ServerBuilder grpcBuilder;
@@ -506,7 +557,7 @@ auto main(int argc, char *argv[]) -> int
         grpcBuilder.RegisterService(dynamic_cast<RaftService::Service *>(pConsensusModule.get()));
 
         // Create KV service and add it into gRPC server
-        auto kvService = std::make_unique<server::tinykvpp_service_impl_t>(database);
+        auto kvService = std::make_unique<server::tinykvpp_service_impl_t>(pDatabase);
         grpcBuilder.RegisterService(kvService.get());
 
         // Create gRPC server
@@ -515,39 +566,6 @@ auto main(int argc, char *argv[]) -> int
         // Start consensus module and gRPC server
         auto serverThread = std::jthread([&pServer] { pServer->Wait(); });
         pConsensusModule->start();
-
-        // const auto kind{server::from_string(dbConfig->ServerConfig.transport)};
-        // if (!kind.has_value())
-        // {
-        //     spdlog::info("\"transport\" is not determined. Exiting");
-        //     return EXIT_SUCCESS;
-        // }
-
-        // std::variant<std::monostate, server::server_t<server::grpc_communication_t>> server;
-        // if (kind == server::communication_strategy_kind_k::grpc_k)
-        // {
-        //     server = server::main_server<server::communication_strategy_kind_k::grpc_k>(database);
-        // }
-        // else if (kind == server::communication_strategy_kind_k::tcp_k)
-        // {
-        //     spdlog::warn("{} server is not supported. Exiting", server::to_string(kind.value()).value());
-        //     return EXIT_SUCCESS;
-        // }
-        //
-        // std::visit(
-        //     [](auto &server)
-        //     {
-        //         using T = std::decay_t<decltype(server)>;
-        //         if constexpr (std::is_same_v<T, std::monostate>)
-        //         {
-        //             return;
-        //         }
-        //         else
-        //         {
-        //             server.shutdown();
-        //         }
-        //     },
-        //     server);
 
         while (!gShutdown)
         {

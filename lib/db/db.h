@@ -2,6 +2,7 @@
 
 #include "structures/memtable/memtable.h"
 #include "wal/wal.h"
+#include "wal/wal_builder.h"
 #include <config/config.h>
 #include <db/db_config.h>
 #include <structures/lsmtree/lsmtree.h>
@@ -19,7 +20,7 @@ class db_t
      *
      * @param config
      */
-    explicit db_t(config::shared_ptr_t config);
+    explicit db_t(config::shared_ptr_t config, wal::wal_variant_t wal);
 
     /**
      * @brief Open database
@@ -45,6 +46,10 @@ class db_t
      */
     auto get(const structures::lsmtree::key_t &key) -> std::optional<structures::memtable::memtable_t::record_t>;
 
+    /**
+     *
+     * @return Return configuration passed to the database during the start
+     */
     auto config() const noexcept -> config::shared_ptr_t;
 
   private:
@@ -52,7 +57,7 @@ class db_t
 
     config::shared_ptr_t           m_config;
     manifest::shared_ptr_t         m_manifest;
-    wal::shared_ptr_t              m_wal;
+    wal::wal_variant_t             m_wal;
     structures::lsmtree::lsmtree_t m_lsmTree;
 };
 

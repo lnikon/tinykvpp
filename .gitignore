@@ -1054,4 +1054,3 @@ dkms.conf
 *.dis
 clion-conan-release-build/*
 segments/*
-wal

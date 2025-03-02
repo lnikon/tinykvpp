@@ -1,4 +1,4 @@
-#include "db/wal/wal.h"
+#include "wal/wal.h"
 #include "structures/memtable/memtable.h"
 #include <absl/synchronization/mutex.h>
 #include <db/manifest/manifest.h>
@@ -28,7 +28,7 @@ using segment_operation_k = db::manifest::manifest_t::segment_record_t::operatio
 
 lsmtree_t::lsmtree_t(const config::shared_ptr_t &pConfig,
                      db::manifest::shared_ptr_t  pManifest,
-                     db::wal::shared_ptr_t       pWal) noexcept
+                     wal::shared_ptr_t           pWal) noexcept
     : m_pConfig{pConfig},
       m_table{std::make_optional<memtable::memtable_t>()},
       m_pManifest{std::move(pManifest)},
@@ -107,7 +107,7 @@ void lsmtree_t::put(const structures::lsmtree::key_t &key, const structures::lsm
 
     // Record addition of the new key into the WAL and add record into memtable
     auto record{record_t{key, value}};
-    m_pWal->add({.op = db::wal::wal_t::operation_k::add_k, .kv = record});
+    // m_pWal->add({.op = wal::wal_t::operation_k::add_k, .kv = record});
     m_table->emplace(std::move(record));
 
     // TODO: Most probably this if block will causes periodic latencies during
@@ -293,14 +293,14 @@ auto lsmtree_t::restore_from_wal() noexcept -> bool
     {
         switch (record.op)
         {
-        case db::wal::wal_t::operation_k::add_k:
+        case wal::wal_t::operation_k::add_k:
         {
             assert(m_table.has_value());
             spdlog::debug("Recovering record {} from WAL", stringify_record(record.kv));
             m_table->emplace(record.kv);
             break;
         }
-        case db::wal::wal_t::operation_k::delete_k:
+        case wal::wal_t::operation_k::delete_k:
         {
             spdlog::debug("Recovery of delete records from WAS is not supported");
             break;

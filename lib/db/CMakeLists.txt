@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.25)
-project(zkv)
+project(frankie)
 
-add_library(DB "db.cpp" "manifest/manifest.cpp" "wal/wal.cpp")
+add_library(DB "db.cpp" "manifest/manifest.cpp")
 
 set_target_properties(DB PROPERTIES CXX_STANDARD 23)
 target_include_directories(DB INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
@@ -18,6 +18,7 @@ target_link_libraries(DB PUBLIC
     MemTable
     Config
     HashIndex
+    WAL
 )
 
 add_executable(DBTest "db_test.cpp")

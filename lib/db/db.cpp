@@ -6,15 +6,15 @@
 namespace db
 {
 
-db_t::db_t(config::shared_ptr_t config)
+db_t::db_t(config::shared_ptr_t config, wal::wal_variant_t wal)
     : m_config{config},
       m_manifest{manifest::make_shared(config)},
-      m_wal{wal::make_shared(config->DatabaseConfig.DatabasePath / wal::wal_filename())},
+      m_wal{std::move(wal)},
       m_lsmTree{config, m_manifest, m_wal}
 {
 }
 
-// TODO(lnikon): use error_code_t
+// TODO(lnikon): 1) Use error_code_t. 2) Move into database_builder_t.
 auto db_t::open() -> bool
 {
     if (!prepare_directory_structure())
@@ -37,20 +37,6 @@ auto db_t::open() -> bool
         return false;
     }
 
-    // Open the WAL
-    if (!m_wal->open())
-    {
-        spdlog::error("unable to open WAL file. path={}", m_wal->path().string());
-        return false;
-    }
-
-    // Recover WAL
-    if (!m_wal->recover())
-    {
-        spdlog::error("unable to recover WAL file. path={}", m_wal->path().string());
-        return false;
-    }
-
     // Restore lsmtree based on manifest and WAL
     if (!m_lsmTree.recover())
     {
@@ -64,13 +50,8 @@ auto db_t::open() -> bool
 // TODO(lnikon): Indicate on insertion failure
 void db_t::put(const structures::lsmtree::key_t &key, const structures::lsmtree::value_t &value)
 {
-    // ConsensusModule m_cm;
-    // if (!m_cm.replicate(key, value))
-    // {
-    //     spdlog::error("ConensusModule is unable to replicate");
-    //     return;
-    // }
-
+    auto record{structures::memtable::memtable_t::record_t{key, value}};
+    std::visit([record](auto &wal) { wal.add({.op = wal::operation_k::add_k, .kv = record}); }, m_wal);
     m_lsmTree.put(key, value);
 }
 

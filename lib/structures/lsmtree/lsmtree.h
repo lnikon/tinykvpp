@@ -4,7 +4,7 @@
 #include "structures/memtable/memtable.h"
 #include <atomic>
 #include <db/manifest/manifest.h>
-#include <db/wal/wal.h>
+#include <wal/wal.h>
 #include <structures/lsmtree/levels/levels.h>
 #include <structures/lsmtree/lsmtree_config.h>
 #include <structures/lsmtree/lsmtree_types.h>
@@ -28,7 +28,7 @@ class lsmtree_t
      */
     explicit lsmtree_t(const config::shared_ptr_t &pConfig,
                        db::manifest::shared_ptr_t  pManifest,
-                       db::wal::shared_ptr_t       pWal) noexcept;
+                       wal::shared_ptr_t           pWal) noexcept;
 
     /**
      * @brief Deleted default constructor for the lsmtree_t class.
@@ -164,7 +164,7 @@ class lsmtree_t
     absl::Mutex                         m_mutex;
     std::optional<memtable::memtable_t> m_table;
     db::manifest::shared_ptr_t          m_pManifest;
-    db::wal::shared_ptr_t               m_pWal;
+    wal::shared_ptr_t               m_pWal;
     levels::levels_t                    m_levels;
 
     // Communication channels. Thread-safe queues for inter-thread

@@ -7,6 +7,11 @@
     "walFilename": "wal",
     "manifestFilenamePrefix": "manifest_"
   },
+  "wal": {
+    "enable": true,
+    "filename": "wal",
+    "type": "inMemory"
+  },
   "lsmtree": {
     "memtableFlushThreshold": 1024,
     "maximumLevels": 12,

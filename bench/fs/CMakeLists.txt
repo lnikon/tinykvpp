@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.25)
-project(zkv)
+project(frankie)
 
 #add_executable(open_write_streams "open_write_streams.cpp")
 #target_link_libraries(open_write_streams benchmark::benchmark)

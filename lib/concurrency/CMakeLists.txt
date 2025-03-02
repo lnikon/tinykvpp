@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.25)
-project(zkv)
+project(frankie)
 
 add_library(Concurrency "thread_safe_queue.h" "thread_safe_queue.cpp")
 

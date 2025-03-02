@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.25)
-project(zkv)
+project(frankie)
 
 add_executable(absl_try_mutex absl_try_mutex.cpp)
 set_target_properties(absl_try_mutex PROPERTIES CXX_STANDARD 23)

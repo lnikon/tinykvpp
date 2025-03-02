@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.25)
-project(zkv)
+project(frankie)
 
 add_subdirectory(config)
 add_subdirectory(db)
@@ -9,3 +9,4 @@ add_subdirectory(concurrency)
 add_subdirectory(proto)
 add_subdirectory(server)
 add_subdirectory(raft)
+add_subdirectory(wal)

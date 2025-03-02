@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.25)
-project(zkv)
+project(frankie)
 
 # Proto for TinyKVPP
 set(TINYKVPP_PROTO_FILE "${CMAKE_CURRENT_LIST_DIR}/TinyKVPP.proto")

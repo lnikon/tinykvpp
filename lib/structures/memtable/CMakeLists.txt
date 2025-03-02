@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.25)
-project(zkv)
+project(frankie)
 
 add_library(MemTable "memtable.cpp")
 target_compile_features(MemTable PUBLIC cxx_std_23)
