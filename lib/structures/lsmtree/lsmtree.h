@@ -1,17 +1,14 @@
 #ifndef STRUCTURES_LSMTREE_LSMTREE_T_H
 #define STRUCTURES_LSMTREE_LSMTREE_T_H
 
-#include "structures/memtable/memtable.h"
+#include <optional>
 #include <atomic>
+
 #include <db/manifest/manifest.h>
 #include <wal/wal.h>
 #include <structures/lsmtree/levels/levels.h>
-#include <structures/lsmtree/lsmtree_config.h>
 #include <structures/lsmtree/lsmtree_types.h>
 #include "concurrency/thread_safe_queue.h"
-
-#include <cassert>
-#include <optional>
 
 namespace structures::lsmtree
 {
@@ -24,11 +21,11 @@ class lsmtree_t
      *
      * @param pConfig Shared pointer to the configuration object.
      * @param pManifest Shared pointer to the database manifest.
-     * @param pWal Shared pointer to the write-ahead log.
+     * @param wal Shared pointer to the write-ahead log.
      */
     explicit lsmtree_t(const config::shared_ptr_t &pConfig,
                        db::manifest::shared_ptr_t  pManifest,
-                       wal::shared_ptr_t           pWal) noexcept;
+                       wal::wal_wrapper_t         &wal) noexcept;
 
     /**
      * @brief Deleted default constructor for the lsmtree_t class.
@@ -164,7 +161,7 @@ class lsmtree_t
     absl::Mutex                         m_mutex;
     std::optional<memtable::memtable_t> m_table;
     db::manifest::shared_ptr_t          m_pManifest;
-    wal::shared_ptr_t               m_pWal;
+    wal::wal_wrapper_t                 &m_wal;
     levels::levels_t                    m_levels;
 
     // Communication channels. Thread-safe queues for inter-thread

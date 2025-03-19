@@ -2,9 +2,7 @@
 #include "db.h"
 #include "memtable.h"
 #include "raft/raft.h"
-#include "wal/common.h"
-#include "wal/wal.h"
-#include "wal/log_storage_builder.h"
+#include "server/grpc_server.h"
 
 #include <cstdint>
 #include <cstdio>
@@ -46,7 +44,9 @@ static json database_config_schema = R"(
           "$ref": "#/$defs/loggingLevel"
         }
       },
-      "required": ["loggingLevel"]
+      "required": [
+        "loggingLevel"
+      ]
     },
     "database": {
       "type": "object",
@@ -61,7 +61,10 @@ static json database_config_schema = R"(
           "description": "Prefix for manifest files"
         }
       },
-      "required": ["path", "manifestFilenamePrefix"]
+      "required": [
+        "path",
+        "manifestFilenamePrefix"
+      ]
     },
     "wal": {
       "type": "object",
@@ -71,24 +74,27 @@ static json database_config_schema = R"(
           "type": "boolean",
           "description": "Enable/disable the WAL"
         },
-        "type": {
+        "storageType": {
           "$ref": "#/$defs/walStorageType"
         },
         "filename": {
           "type": "string",
-          "description": "Write-ahead Log filename"
+          "description": "Write-Ahead Log filename"
         }
       },
-      "required": ["enable", "type", "filename"]
+      "required": [
+        "enable",
+        "storageType",
+        "filename"
+      ]
     },
-    "lsmtree": {
+    "lsm": {
       "type": "object",
       "properties": {
-        "memtableFlushThreshold": {
+        "flushThreshold": {
           "type": "integer",
           "description": "The threshold of bytes at which the memtable should be flushed",
-          "minimum": 1,
-          "default": 1024
+          "minimum": 1
         },
         "levelZeroCompaction": {
           "$ref": "#/$defs/compaction"
@@ -98,7 +104,7 @@ static json database_config_schema = R"(
         }
       },
       "required": [
-        "memtableFlushThreshold",
+        "flushThreshold",
         "maximumLevels",
         "levelZeroCompaction",
         "levelNonZeroCompaction"
@@ -134,26 +140,51 @@ static json database_config_schema = R"(
           }
         }
       },
-      "required": ["transport", "host", "port", "id", "peers"]
+      "required": [
+        "transport",
+        "host",
+        "port",
+        "id",
+        "peers"
+      ]
     }
   },
-  "required": ["database", "lsmtree", "server"],
+  "required": [
+    "database",
+    "wal",
+    "lsm",
+    "server"
+  ],
   "$defs": {
     "serverTransport": {
       "type": "string",
-      "enum": ["grpc", "tcp"]
+      "enum": [
+        "grpc",
+        "tcp"
+      ]
     },
     "loggingLevel": {
       "type": "string",
-      "enum": ["info", "debug", "trace", "off"]
+      "enum": [
+        "info",
+        "debug",
+        "trace",
+        "off"
+      ]
     },
     "compactionStrategy": {
       "type": "string",
-      "enum": ["levelled", "tiered"]
+      "enum": [
+        "levelled",
+        "tiered"
+      ]
     },
     "walStorageType": {
       "type": "string",
-      "enum": ["inMemory", "persistent"]
+      "enum": [
+        "inMemory",
+        "persistent"
+      ]
     },
     "compaction": {
       "type": "object",
@@ -167,7 +198,10 @@ static json database_config_schema = R"(
           "minimum": 1
         }
       },
-      "required": ["compactionStrategy", "compactionThreshold"]
+      "required": [
+        "compactionStrategy",
+        "compactionThreshold"
+      ]
     }
   }
 }
@@ -266,34 +300,34 @@ void loadWALConfig(const json &walConfig, config::shared_ptr_t dbConfig)
         throw std::runtime_error("\"wal.enable\" is not specified in config");
     }
 
-    if (walConfig.contains("type"))
+    if (walConfig.contains("storageType"))
     {
-        dbConfig->WALConfig.storageType = wal::from_string(walConfig["type"].get<std::string>());
+        dbConfig->WALConfig.storageType = wal::from_string(walConfig["storageType"].get<std::string>());
     }
     else
     {
-        throw std::runtime_error("\"wal.type\" is not specified in config");
+        throw std::runtime_error("\"wal.storageType\" is not specified in config");
     }
 
-    if (walConfig.contains("path"))
+    if (walConfig.contains("filename"))
     {
-        dbConfig->WALConfig.path = walConfig["path"].get<std::string>();
+        dbConfig->WALConfig.path = walConfig["filename"].get<std::string>();
     }
     else
     {
-        throw std::runtime_error("\"wal.path\" is not specified in config");
+        throw std::runtime_error("\"wal.filename\" is not specified in config");
     }
 }
 
 void loadLSMTreeConfig(const json &lsmtreeConfig, config::shared_ptr_t dbConfig, const std::string &configPath)
 {
-    if (lsmtreeConfig.contains("memtableFlushThreshold"))
+    if (lsmtreeConfig.contains("flushThreshold"))
     {
-        dbConfig->LSMTreeConfig.DiskFlushThresholdSize = lsmtreeConfig["memtableFlushThreshold"].get<uint64_t>();
+        dbConfig->LSMTreeConfig.DiskFlushThresholdSize = lsmtreeConfig["flushThreshold"].get<uint64_t>();
     }
     else
     {
-        throw std::runtime_error("\"memtableFlushThreshold\" is not specified in config: " + configPath);
+        throw std::runtime_error("\"flushThreshold\" is not specified in config: " + configPath);
     }
 
     if (lsmtreeConfig.contains("levelZeroCompaction"))
@@ -413,13 +447,13 @@ auto initializeDatabaseConfig(const json &configJson, const std::string &configP
 {
     auto dbConfig = loadDatabaseConfig(configJson);
 
-    if (configJson.contains("lsmtree"))
+    if (configJson.contains("lsm"))
     {
-        loadLSMTreeConfig(configJson["lsmtree"], dbConfig, configPath);
+        loadLSMTreeConfig(configJson["lsm"], dbConfig, configPath);
     }
     else
     {
-        throw std::runtime_error("\"lsmtree\" is not specified in config: " + configPath);
+        throw std::runtime_error("\"lsm\" is not specified in config: " + configPath);
     }
 
     if (configJson.contains("wal"))
@@ -449,13 +483,13 @@ auto main(int argc, char *argv[]) -> int
     {
         if (std::signal(SIGTERM, signalHandler) == SIG_ERR)
         {
-            spdlog::error("Unable to set signal handler for ");
+            spdlog::error("Unable to set signal handler for SIGTERM");
             return EXIT_FAILURE;
         }
 
         if (std::signal(SIGINT, signalHandler) == SIG_ERR)
         {
-            spdlog::error("Unable to set signal handler for ");
+            spdlog::error("Unable to set signal handler for SIGINT");
             return EXIT_FAILURE;
         }
 
@@ -486,23 +520,43 @@ auto main(int argc, char *argv[]) -> int
             return EXIT_FAILURE;
         }
 
-        if (pDbConfig->WALConfig.storageType == wal::log_storage_type_k::persistent_k)
+        std::optional<wal::wal_wrapper_t>                           wal = std::nullopt;
+        std::expected<wal::wal_wrapper_t, wal::wal_builder_error_t> expected =
+            std::unexpected(wal::wal_builder_error_t::kUndefined);
+
+        if (pDbConfig->WALConfig.storageType == wal::log_storage_type_k::in_memory_k)
         {
-            if (!std::filesystem::exists(pDbConfig->WALConfig.path))
+            expected = wal::wal_builder_t<wal::log::storage_tags::in_memory_tag>{}.build();
+        }
+        else if (pDbConfig->WALConfig.storageType == wal::log_storage_type_k::file_based_persistent_k)
+        {
+            if (pDbConfig->WALConfig.storageType == wal::log_storage_type_k::file_based_persistent_k)
             {
-                spdlog::error("WAL path does not exist: {}", pDbConfig->WALConfig.path.c_str());
-                return EXIT_FAILURE;
+                if (!exists(pDbConfig->WALConfig.path))
+                {
+                    spdlog::error("WAL path does not exist: {}", pDbConfig->WALConfig.path.c_str());
+                    return EXIT_FAILURE;
+                }
             }
+
+            expected =
+                wal::wal_builder_t<wal::log::storage_tags::file_backend_tag>{}.set_file_path(pDbConfig->WALConfig.path).build();
         }
 
-        auto wal = wal::wal_builder_t{}.build(pDbConfig->WALConfig.storageType, pDbConfig->WALConfig.path);
-        if (!wal.has_value())
+        if (!expected.has_value())
         {
-            spdlog::error("Unable to build wal");
+            spdlog::error("Unable to build WAL. Error={}", wal::to_string(expected.error()));
             return EXIT_FAILURE;
         }
 
-        auto pDatabase = db::make_shared(pDbConfig, wal);
+        wal = std::make_optional(std::move(expected.value()));
+        if (!wal.has_value())
+        {
+            spdlog::error("Unable to build WAL. Undefined error");
+            return EXIT_FAILURE;
+        }
+
+        auto pDatabase = db::make_shared(pDbConfig, std::move(wal.value()));
         if (!pDatabase->open())
         {
             spdlog::error("Unable to open the database");
@@ -521,7 +575,7 @@ auto main(int argc, char *argv[]) -> int
             return EXIT_FAILURE;
         }
 
-        // Preprare config for replicas
+        // Prepare config for replicas
         std::vector<raft::raft_node_grpc_client_t> replicas;
         for (raft::id_t replicaId{1}; const auto &replicaIp : pDbConfig->ServerConfig.peers)
         {
@@ -557,7 +611,7 @@ auto main(int argc, char *argv[]) -> int
         grpcBuilder.RegisterService(dynamic_cast<RaftService::Service *>(pConsensusModule.get()));
 
         // Create KV service and add it into gRPC server
-        auto kvService = std::make_unique<server::tinykvpp_service_impl_t>(pDatabase);
+        auto kvService = std::make_unique<server::grpc_communication::tinykvpp_service_impl_t>(pDatabase);
         grpcBuilder.RegisterService(kvService.get());
 
         // Create gRPC server

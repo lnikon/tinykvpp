@@ -7,8 +7,13 @@
     "walFilename": "wal",
     "manifestFilenamePrefix": "manifest_"
   },
-  "lsmtree": {
-    "memtableFlushThreshold": 1024,
+  "wal": {
+    "enable": true,
+    "filename": "wal",
+    "storageType": "inMemory"
+  },
+  "lsm": {
+    "flushThreshold": 1024,
     "maximumLevels": 12,
     "levelZeroCompaction": {
       "compactionStrategy": "levelled",
@@ -24,6 +29,6 @@
     "host": "0.0.0.0",
     "port": 8083,
     "id": 3,
-    "peers": ["0.0.0.0:8081","0.0.0.0:8082", "0.0.0.0:8083"]
+    "peers": ["0.0.0.0:8081", "0.0.0.0:8082", "0.0.0.0:8083"]
   }
 }

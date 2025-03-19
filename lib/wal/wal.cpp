@@ -2,5 +2,4 @@
 
 namespace wal
 {
-
 } // namespace wal

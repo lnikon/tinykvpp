@@ -1,17 +1,18 @@
 cmake_minimum_required(VERSION 3.25)
 project(frankie)
 
-add_library(WAL "wal.cpp")
+add_library(WAL wal.cpp common.cpp)
 
 set_target_properties(WAL PROPERTIES CXX_STANDARD 23)
 target_include_directories(WAL INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(WAL PUBLIC
-    abseil::abseil
-    spdlog::spdlog
-    fmt::fmt
-    nlohmann_json::nlohmann_json
-    nlohmann_json_schema_validator
-    Config
+        abseil::abseil
+        spdlog::spdlog
+        fmt::fmt
+        nlohmann_json::nlohmann_json
+        nlohmann_json_schema_validator
+        Config
+        FS
 )
 
 # add_executable(WALTest "wal_test.cpp")

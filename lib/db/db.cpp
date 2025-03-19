@@ -6,7 +6,7 @@
 namespace db
 {
 
-db_t::db_t(config::shared_ptr_t config, wal::wal_variant_t wal)
+db_t::db_t(config::shared_ptr_t config, wal::wal_wrapper_t wal)
     : m_config{config},
       m_manifest{manifest::make_shared(config)},
       m_wal{std::move(wal)},
@@ -51,7 +51,6 @@ auto db_t::open() -> bool
 void db_t::put(const structures::lsmtree::key_t &key, const structures::lsmtree::value_t &value)
 {
     auto record{structures::memtable::memtable_t::record_t{key, value}};
-    std::visit([record](auto &wal) { wal.add({.op = wal::operation_k::add_k, .kv = record}); }, m_wal);
     m_lsmTree.put(key, value);
 }
 

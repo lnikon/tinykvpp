@@ -1,18 +1,17 @@
-#include "wal/wal.h"
-#include "structures/memtable/memtable.h"
 #include <absl/synchronization/mutex.h>
+
+#include <spdlog/spdlog.h>
+
+#include <optional>
+#include <stop_token>
+#include <cassert>
+
+#include "structures/memtable/memtable.h"
 #include <db/manifest/manifest.h>
 #include <structures/lsmtree/lsmtree_types.h>
 #include <structures/lsmtree/segments/helpers.h>
 #include <structures/lsmtree/lsmtree.h>
 #include <structures/lsmtree/segments/lsmtree_segment_factory.h>
-
-#include <optional>
-#include <stop_token>
-#include <sstream>
-#include <cassert>
-
-#include <spdlog/spdlog.h>
 
 namespace structures::lsmtree
 {
@@ -28,11 +27,11 @@ using segment_operation_k = db::manifest::manifest_t::segment_record_t::operatio
 
 lsmtree_t::lsmtree_t(const config::shared_ptr_t &pConfig,
                      db::manifest::shared_ptr_t  pManifest,
-                     wal::shared_ptr_t           pWal) noexcept
+                     wal::wal_wrapper_t         &wal) noexcept
     : m_pConfig{pConfig},
       m_table{std::make_optional<memtable::memtable_t>()},
       m_pManifest{std::move(pManifest)},
-      m_pWal{std::move(pWal)},
+      m_wal{wal},
       m_levels{pConfig, m_pManifest},
       m_recovered(false),
       m_flushing_thread(
@@ -107,7 +106,7 @@ void lsmtree_t::put(const structures::lsmtree::key_t &key, const structures::lsm
 
     // Record addition of the new key into the WAL and add record into memtable
     auto record{record_t{key, value}};
-    // m_pWal->add({.op = wal::wal_t::operation_k::add_k, .kv = record});
+    m_wal.add({.op = wal::operation_k::add_k, .kv = record});
     m_table->emplace(std::move(record));
 
     // TODO: Most probably this if block will causes periodic latencies during
@@ -121,7 +120,7 @@ void lsmtree_t::put(const structures::lsmtree::key_t &key, const structures::lsm
         m_table = std::make_optional<memtable::memtable_t>();
 
         // Reset the Write-Ahead Log (WAL) to start logging anew
-        m_pWal->reset();
+        m_wal.reset();
     }
 }
 
@@ -177,7 +176,7 @@ auto lsmtree_t::recover() noexcept -> bool
     // Restore memtable from WAL
     if (!restore_from_wal())
     {
-        spdlog::error("Unable to restore WAL at {}", m_pWal->path().c_str());
+        spdlog::error("Unable to restore WAL at {}", m_pConfig->WALConfig.path.c_str());
         return false;
     }
 
@@ -279,6 +278,7 @@ auto lsmtree_t::restore_from_manifest() noexcept -> bool
     return true;
 }
 
+// TODO(lnikon): See the comment for restore_from_wal
 auto lsmtree_t::restore_from_wal() noexcept -> bool
 {
     auto stringify_record = [](const memtable_t::record_t &record) -> std::string
@@ -288,19 +288,18 @@ auto lsmtree_t::restore_from_wal() noexcept -> bool
         return strStream.str();
     };
 
-    const auto &records{m_pWal->records()};
-    for (const auto &record : records)
+    for (const auto &records{m_wal.records()}; const auto &record : records)
     {
         switch (record.op)
         {
-        case wal::wal_t::operation_k::add_k:
+        case wal::operation_k::add_k:
         {
             assert(m_table.has_value());
             spdlog::debug("Recovering record {} from WAL", stringify_record(record.kv));
             m_table->emplace(record.kv);
             break;
         }
-        case wal::wal_t::operation_k::delete_k:
+        case wal::operation_k::delete_k:
         {
             spdlog::debug("Recovery of delete records from WAS is not supported");
             break;

@@ -10,10 +10,10 @@
   "wal": {
     "enable": true,
     "filename": "wal",
-    "type": "inMemory"
+    "storageType": "inMemory"
   },
-  "lsmtree": {
-    "memtableFlushThreshold": 1024,
+  "lsm": {
+    "flushThreshold": 1024,
     "maximumLevels": 12,
     "levelZeroCompaction": {
       "compactionStrategy": "levelled",

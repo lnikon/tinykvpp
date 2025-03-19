@@ -18,38 +18,11 @@ enum class log_storage_type_k : int8_t
 {
     undefined_k = -1,
     in_memory_k,
-    persistent_k
+    file_based_persistent_k
 };
 
-auto to_string(log_storage_type_k type) -> std::string
-{
-    if (type == log_storage_type_k::in_memory_k)
-    {
-        return std::string{"inMemory"};
-    }
-
-    if (type == log_storage_type_k::persistent_k)
-    {
-        return std::string{"persistent"};
-    }
-
-    return std::string{"undefined"};
-}
-
-auto from_string(const std::string &type) -> log_storage_type_k
-{
-    if (type == "inMemory")
-    {
-        return log_storage_type_k::in_memory_k;
-    }
-
-    if (type == "persistent")
-    {
-        return log_storage_type_k::persistent_k;
-    }
-
-    return log_storage_type_k::undefined_k;
-}
+auto to_string(log_storage_type_k type) -> std::string;
+auto from_string(const std::string &type) -> log_storage_type_k;
 
 struct record_t
 {

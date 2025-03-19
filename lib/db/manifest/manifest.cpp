@@ -58,7 +58,8 @@ auto manifest_t::open() -> bool
 {
     m_name = latest_manifest_filename(m_config->DatabaseConfig.DatabasePath);
     m_path = m_config->DatabaseConfig.DatabasePath / m_name;
-    return m_log.open(m_path);
+    m_log = std::make_optional(m_path.c_str());
+    return true;
 }
 
 auto manifest_t::path() -> fs::path_t
@@ -66,7 +67,7 @@ auto manifest_t::path() -> fs::path_t
     return m_path;
 }
 
-void manifest_t::add(record_t info)
+bool manifest_t::add(record_t info)
 {
     auto infoToString = [](auto &&info) -> std::string
     {
@@ -82,11 +83,13 @@ void manifest_t::add(record_t info)
         {
             spdlog::debug("Skipped record details: {}", std::visit(infoToString, info));
         }
-        return;
+        return true;
     }
 
     m_records.emplace_back(info);
-    m_log.write(std::visit(infoToString, info));
+    const std::string& infoSerialized = std::visit(infoToString, info);
+    ssize_t res = m_log->append({infoSerialized.c_str(), infoSerialized.size()});
+    return res >= 0;
 }
 
 // trim from start (in place)
@@ -115,7 +118,7 @@ auto manifest_t::recover() -> bool
     std::int32_t record_type_int{0};
     std::string  line;
 
-    auto stringStream = m_log.stream();
+    auto stringStream = m_log->stream();
     while (std::getline(stringStream, line))
     {
         if (trim(line).empty())

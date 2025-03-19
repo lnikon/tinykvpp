@@ -195,7 +195,7 @@ struct manifest_t
      *
      * @param info
      */
-    void add(record_t info);
+    [[nodiscard]] bool add(record_t info);
 
     /**
      * @brief
@@ -232,12 +232,12 @@ struct manifest_t
     void disable();
 
   private:
-    config::shared_ptr_t   m_config;
-    std::string            m_name;
-    fs::path_t             m_path;
-    storage_t              m_records;
-    fs::append_only_file_t m_log;
-    bool                   m_enabled{false};
+    config::shared_ptr_t                  m_config;
+    std::string                           m_name;
+    fs::path_t                            m_path;
+    storage_t                             m_records;
+    std::optional<fs::append_only_file_t> m_log;
+    bool                                  m_enabled{false};
 };
 
 using shared_ptr_t = std::shared_ptr<manifest_t>;

@@ -11,7 +11,9 @@
           "$ref": "#/$defs/loggingLevel"
         }
       },
-      "required": ["loggingLevel"]
+      "required": [
+        "loggingLevel"
+      ]
     },
     "database": {
       "type": "object",
@@ -26,7 +28,10 @@
           "description": "Prefix for manifest files"
         }
       },
-      "required": ["path", "manifestFilenamePrefix"]
+      "required": [
+        "path",
+        "manifestFilenamePrefix"
+      ]
     },
     "wal": {
       "type": "object",
@@ -36,24 +41,27 @@
           "type": "boolean",
           "description": "Enable/disable the WAL"
         },
-        "type": {
+        "storageType": {
           "$ref": "#/$defs/walStorageType"
         },
         "filename": {
           "type": "string",
-          "description": "Write-ahead Log filename"
+          "description": "Write-Ahead Log filename"
         }
       },
-      "required": ["enable", "type", "filename"]
+      "required": [
+        "enable",
+        "storageType",
+        "filename"
+      ]
     },
-    "lsmtree": {
+    "lsm": {
       "type": "object",
       "properties": {
-        "memtableFlushThreshold": {
+        "flushThreshold": {
           "type": "integer",
           "description": "The threshold of bytes at which the memtable should be flushed",
-          "minimum": 1,
-          "default": 1024
+          "minimum": 1
         },
         "levelZeroCompaction": {
           "$ref": "#/$defs/compaction"
@@ -63,7 +71,7 @@
         }
       },
       "required": [
-        "memtableFlushThreshold",
+        "flushThreshold",
         "maximumLevels",
         "levelZeroCompaction",
         "levelNonZeroCompaction"
@@ -99,26 +107,51 @@
           }
         }
       },
-      "required": ["transport", "host", "port", "id", "peers"]
+      "required": [
+        "transport",
+        "host",
+        "port",
+        "id",
+        "peers"
+      ]
     }
   },
-  "required": ["database", "lsmtree", "server"],
+  "required": [
+    "database",
+    "wal",
+    "lsm",
+    "server"
+  ],
   "$defs": {
     "serverTransport": {
       "type": "string",
-      "enum": ["grpc", "tcp"]
+      "enum": [
+        "grpc",
+        "tcp"
+      ]
     },
     "loggingLevel": {
       "type": "string",
-      "enum": ["info", "debug", "trace", "off"]
+      "enum": [
+        "info",
+        "debug",
+        "trace",
+        "off"
+      ]
     },
     "compactionStrategy": {
       "type": "string",
-      "enum": ["levelled", "tiered"]
+      "enum": [
+        "levelled",
+        "tiered"
+      ]
     },
     "walStorageType": {
       "type": "string",
-      "enum": ["inMemory", "persistent"]
+      "enum": [
+        "inMemory",
+        "persistent"
+      ]
     },
     "compaction": {
       "type": "object",
@@ -132,7 +165,10 @@
           "minimum": 1
         }
       },
-      "required": ["compactionStrategy", "compactionThreshold"]
+      "required": [
+        "compactionStrategy",
+        "compactionThreshold"
+      ]
     }
   }
 }
