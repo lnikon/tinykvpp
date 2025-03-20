@@ -530,17 +530,17 @@ auto main(int argc, char *argv[]) -> int
         }
         else if (pDbConfig->WALConfig.storageType == wal::log_storage_type_k::file_based_persistent_k)
         {
+            const auto walPath{pDbConfig->DatabaseConfig.DatabasePath / pDbConfig->WALConfig.path};
             if (pDbConfig->WALConfig.storageType == wal::log_storage_type_k::file_based_persistent_k)
             {
-                if (!exists(pDbConfig->WALConfig.path))
+                if (!exists(walPath))
                 {
                     spdlog::error("WAL path does not exist: {}", pDbConfig->WALConfig.path.c_str());
                     return EXIT_FAILURE;
                 }
             }
 
-            expected =
-                wal::wal_builder_t<wal::log::storage_tags::file_backend_tag>{}.set_file_path(pDbConfig->WALConfig.path).build();
+            expected = wal::wal_builder_t<wal::log::storage_tags::file_backend_tag>{}.set_file_path(walPath).build();
         }
 
         if (!expected.has_value())

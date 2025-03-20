@@ -24,6 +24,7 @@ auto manifest_filename() -> std::string
 auto latest_manifest_filename(const fs::path_t &databasePath) -> std::string
 {
     const auto current_path{databasePath / current_filename};
+    spdlog::info("[VAGAG]: databasePath=${} current_path=${}", databasePath.string(), current_path.string());
     if (!fs::stdfs::exists(current_path))
     {
         std::ofstream current(current_path);
@@ -58,7 +59,9 @@ auto manifest_t::open() -> bool
 {
     m_name = latest_manifest_filename(m_config->DatabaseConfig.DatabasePath);
     m_path = m_config->DatabaseConfig.DatabasePath / m_name;
-    m_log = std::make_optional(m_path.c_str());
+    spdlog::info("[VAGAG] m_path={}", m_path.string());
+    m_log.emplace(fs::append_only_file_t{m_path.c_str()});
+
     return true;
 }
 
@@ -87,8 +90,8 @@ bool manifest_t::add(record_t info)
     }
 
     m_records.emplace_back(info);
-    const std::string& infoSerialized = std::visit(infoToString, info);
-    ssize_t res = m_log->append({infoSerialized.c_str(), infoSerialized.size()});
+    const std::string &infoSerialized = std::visit(infoToString, info);
+    ssize_t            res = m_log->append({infoSerialized.c_str(), infoSerialized.size()});
     return res >= 0;
 }
 

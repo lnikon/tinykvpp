@@ -7,8 +7,6 @@
 
 #include "fs/types.h"
 #include "wal/common.h"
-#include "fs/append_only_file.h"
-#include "structures/memtable/memtable.h"
 #include "log/log.h"
 
 namespace wal

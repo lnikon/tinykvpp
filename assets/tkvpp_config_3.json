@@ -1,6 +1,6 @@
 {
   "logging": {
-    "loggingLevel": "debug"
+    "loggingLevel": "info"
   },
   "database": {
     "path": "./var/tkvpp",
@@ -10,7 +10,7 @@
   "wal": {
     "enable": true,
     "filename": "wal",
-    "storageType": "inMemory"
+    "storageType": "persistent"
   },
   "lsm": {
     "flushThreshold": 1024,

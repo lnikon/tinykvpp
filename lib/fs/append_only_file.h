@@ -15,13 +15,18 @@ static constexpr std::size_t gBufferSize{4096ULL};
 
 class append_only_file_t
 {
-    int      fd_;
-    io_uring ring_;
+    int      fd_{-1};
+    io_uring ring_{};
 
   public:
     append_only_file_t(const char *path, bool direct_io = false);
 
     ~append_only_file_t();
+
+    append_only_file_t(const append_only_file_t &) = delete;
+    auto operator=(const append_only_file_t &) -> append_only_file_t & = delete;
+
+    append_only_file_t(append_only_file_t &&other) noexcept;
 
     ssize_t append(std::string_view data);
 
