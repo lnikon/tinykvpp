@@ -12,16 +12,14 @@ namespace structures::lsmtree
 
 // TOD(vahag): WTF is this file?
 
-template <typename T>
-struct generic_reader_t
+template <typename T> struct generic_reader_t
 {
     void read(T &result)
     {
     }
 };
 
-template <typename T>
-struct generic_writer_t
+template <typename T> struct generic_writer_t
 {
     void write(T &result)
     {
@@ -54,6 +52,6 @@ struct lsmtree_segment_reader_t : generic_writer_t<lsmtree_segment_reader_t>
 {
 };
 
-}  // namespace structures::lsmtree
+} // namespace structures::lsmtree
 
-#endif  // ZKV_LSMTREEREADERWRITER_H
+#endif // ZKV_LSMTREEREADERWRITER_H

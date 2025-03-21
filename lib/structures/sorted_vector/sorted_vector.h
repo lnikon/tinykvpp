@@ -30,7 +30,7 @@ template <typename Data, typename Comparator = std::less<Data>> class sorted_vec
     auto find(Data data, Comparator comparator = Comparator()) const -> std::optional<Data>;
 
     [[nodiscard]] auto size() const -> size_type;
-    auto at(index_type index) -> Data &;
+    auto               at(index_type index) -> Data &;
 
     auto begin() -> iterator;
     auto end() -> iterator;
@@ -73,7 +73,7 @@ void sorted_vector_t<Data, Comparator>::emplace(Data data, Comparator comparator
 template <typename Data, typename Comparator>
 auto sorted_vector_t<Data, Comparator>::find(Data data, Comparator comparator) const -> std::optional<Data>
 {
-    auto dataIt = std::lower_bound(m_data.begin(), m_data.end(), data, comparator);
+    auto       dataIt = std::lower_bound(m_data.begin(), m_data.end(), data, comparator);
     const bool found = (dataIt != m_data.end()) && !comparator(data, *dataIt);
     return found ? std::make_optional(*dataIt) : std::nullopt;
     ;

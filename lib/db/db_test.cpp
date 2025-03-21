@@ -9,10 +9,10 @@
 TEST_CASE("db interface validation", "[db]")
 {
     config::shared_ptr_t pConfig{config::make_shared()};
-    auto pSegmentStorage{structures::lsmtree::segments::storage::make_shared()};
-    auto manifest{db::manifest::make_shared(pConfig)};
-    auto wal{db::wal::make_shared("wal")};
-    auto lsmTree{structures::lsmtree::lsmtree_t{pConfig, manifest, wal}};
+    auto                 pSegmentStorage{structures::lsmtree::segments::storage::make_shared()};
+    auto                 manifest{db::manifest::make_shared(pConfig)};
+    auto                 wal{db::wal::make_shared("wal")};
+    auto                 lsmTree{structures::lsmtree::lsmtree_t{pConfig, manifest, wal}};
 
     SECTION("fail when db path is empty")
     {

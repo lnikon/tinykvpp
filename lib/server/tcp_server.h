@@ -15,8 +15,7 @@ class tcp_communication_t final
     void shutdown() const noexcept;
 };
 
-static_assert(
-    server::communication_strategy_t<tcp_communication_t>,
-    "TCPServerCommunication must satisfy CommunicationStrategy concept");
+static_assert(server::communication_strategy_t<tcp_communication_t>,
+              "TCPServerCommunication must satisfy CommunicationStrategy concept");
 
 } // namespace server::tcp_communication

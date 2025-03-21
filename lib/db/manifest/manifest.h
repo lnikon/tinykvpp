@@ -72,8 +72,9 @@ struct manifest_t
 
         /**
          * @brief Serialize manifest segment record into stream.
-         *        Format: <operation-type><whitespace><segment-name><whitespace><level-index>
-         *                |int            |char       |string       |char       |int
+         *        Format:
+         * <operation-type><whitespace><segment-name><whitespace><level-index>
+         *                |int        |char         |string     |char        |int
          *
          * @tparam stream_gt
          * @param os

@@ -39,8 +39,8 @@ class regular_segment_t final
      *
      * @param offset
      */
-    [[nodiscard]] auto record(const hashindex::hashindex_t::offset_t &offset)
-        -> std::optional<memtable::memtable_t::record_t>;
+    [[nodiscard]] auto
+    record(const hashindex::hashindex_t::offset_t &offset) -> std::optional<memtable::memtable_t::record_t>;
 
     /**
      * @brief
@@ -97,10 +97,10 @@ class regular_segment_t final
   private:
     void restore_index();
 
-    const fs::path_t m_path;
+    const fs::path_t    m_path;
     const types::name_t m_name;
 
-    hashindex::hashindex_t m_hashIndex;
+    hashindex::hashindex_t              m_hashIndex;
     std::optional<memtable::memtable_t> m_memtable;
 
     std::optional<memtable::memtable_t::record_t::key_t> m_minKey;

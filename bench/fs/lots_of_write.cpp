@@ -14,14 +14,14 @@
 void fstream_test()
 {
     const std::string filename("test_stream_3.txt");
-    std::fstream fs(filename, std::fstream::in | std::fstream::out | std::fstream::app | std::fstream::ate);
+    std::fstream      fs(filename, std::fstream::in | std::fstream::out | std::fstream::app | std::fstream::ate);
     if (!fs.is_open())
     {
         std::cerr << "unable to open" << filename << '\n';
         exit(EXIT_FAILURE);
     }
 
-    size_t count{9 * 1024};
+    size_t      count{9 * 1024};
     std::string payload("aaa");
     while (count-- != 0)
     {
@@ -32,14 +32,14 @@ void fstream_test()
 void posix_write_test()
 {
     const std::string filename("test_stream_2.txt");
-    int fd = open(filename.c_str(), O_WRONLY | O_APPEND | O_CREAT, 0644);
+    int               fd = open(filename.c_str(), O_WRONLY | O_APPEND | O_CREAT, 0644);
     if (fd == -1)
     {
         std::cerr << "Unable to open " << filename << '\n';
     }
 
     std::string payload("bbbbb");
-    size_t count{9 * 1024};
+    size_t      count{9 * 1024};
     while (count-- != 0)
     {
         write(fd, payload.c_str(), payload.size());

@@ -33,8 +33,8 @@ TEST_CASE("Emplace and Find", "[MemTable]")
 TEST_CASE("Check record size before and after insertion", "[MemTable]")
 {
     {
-        memtable_t mt;
-        record_key_t k{"B"};
+        memtable_t     mt;
+        record_key_t   k{"B"};
         record_value_t v{"123"};
 
         mt.emplace(record_t{k, v});
@@ -48,8 +48,8 @@ TEST_CASE("Check record size before and after insertion", "[MemTable]")
     }
 
     {
-        memtable_t mt;
-        record_key_t k{"B"};
+        memtable_t     mt;
+        record_key_t   k{"B"};
         record_value_t v{"123"};
 
         mt.emplace(record_t{k, v});
@@ -63,8 +63,8 @@ TEST_CASE("Check record size before and after insertion", "[MemTable]")
     }
 
     {
-        memtable_t mt;
-        record_key_t k{"B"};
+        memtable_t     mt;
+        record_key_t   k{"B"};
         record_value_t v{"123.456"};
 
         auto record = record_t{k, v};
@@ -83,8 +83,8 @@ TEST_CASE("Check record size before and after insertion", "[MemTable]")
 TEST_CASE("Check size", "[MemTable]")
 {
     memtable_t mt;
-    auto k1 = record_key_t{"B"}, k2 = record_key_t{"A"}, k3 = record_key_t{"Z"};
-    auto v1 = record_value_t{"123"}, v2 = record_value_t{"34.44"}, v3 = record_value_t{"Hello"};
+    auto       k1 = record_key_t{"B"}, k2 = record_key_t{"A"}, k3 = record_key_t{"Z"};
+    auto       v1 = record_value_t{"123"}, v2 = record_value_t{"34.44"}, v3 = record_value_t{"Hello"};
     mt.emplace(record_t{k1, v1});
     mt.emplace(record_t{k2, v2});
     mt.emplace(record_t{k3, v3});

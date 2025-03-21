@@ -4,7 +4,8 @@ namespace config
 {
 
 /**
- * @brief Name of directory inside the database root dir where segments should be stored
+ * @brief Name of directory inside the database root dir where segments should
+ * be stored
  */
 constexpr const std::string_view SegmentsDirectoryName{"segments"};
 

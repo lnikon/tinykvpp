@@ -39,7 +39,7 @@ struct append_only_file_t
     auto stream() const noexcept -> std::stringstream;
 
   private:
-    path_t m_path;
+    path_t       m_path;
     std::fstream m_out;
 };
 
@@ -80,7 +80,8 @@ inline auto append_only_file_t::close() noexcept -> bool
     m_out.flush();
     m_out.close();
 
-    // TODO(lnikon): Do we need to recover when we're unable to close the stream?
+    // TODO(lnikon): Do we need to recover when we're unable to close the
+    // stream?
     return m_out.bad();
 }
 
@@ -100,7 +101,7 @@ inline auto append_only_file_t::write(const data_t &data) noexcept -> bool
 inline auto append_only_file_t::stream() const noexcept -> std::stringstream
 {
     std::stringstream fileStringStream;
-    std::fstream fileStream(m_path);
+    std::fstream      fileStream(m_path);
     if (fileStream.is_open())
     {
         fileStringStream << fileStream.rdbuf();
