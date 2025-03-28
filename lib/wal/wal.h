@@ -14,27 +14,53 @@ namespace wal
 
 using namespace log;
 
-// trim from start(in place)
-inline void ltrim(std::string &str)
-{
-    str.erase(str.begin(), std::find_if(str.begin(), str.end(), [](unsigned char ch) { return !std::isspace(ch); }));
-}
-
-// trim from end (in place)
-inline void rtrim(std::string &s)
-{
-    s.erase(std::find_if(s.rbegin(), s.rend(), [](unsigned char ch) { return !std::isspace(ch); }).base(), s.end());
-}
-
-inline auto trim(std::string &s) -> std::string &
-{
-    rtrim(s);
-    ltrim(s);
-    return s;
-}
-
 // TStorage represents the actual storage of logs - it can be simple disk-based log, or a log replicated by Raft
 template <TLogConcept TLog> class wal_t
+/**
+ * @brief A Write-Ahead Log (WAL) manager for recording and recovering log entries.
+ *
+ * The wal_t class encapsulates operations for managing a write-ahead log file,
+ * including constructing the WAL with a given log interface, adding new records,
+ * resetting (i.e., closing, removing, and reopening) the log file, and recovering
+ * previously recorded log entries.
+ *
+ * Constructors:
+ *   - wal_t(TLog log) noexcept:
+ *       Constructs a wal_t instance using the specified TLog log interface.
+ *   - wal_t(const wal_t &other):
+ *       Copy constructor. Creates a new instance as a copy of an existing wal_t object.
+ *   - wal_t(wal_t &&other) noexcept:
+ *       Move constructor. Creates a new instance by acquiring the resources of an existing wal_t object.
+ *
+ * Assignment Operators:
+ *   - operator=(const wal_t &other):
+ *       Copy assignment operator. Assigns the content of one wal_t object to another.
+ *   - operator=(wal_t &&other) noexcept:
+ *       Move assignment operator. Transfers the content from one wal_t object to another.
+ *
+ * Destructor:
+ *   - ~wal_t() = default:
+ *       Default destructor.
+ *
+ * Member Functions:
+ *   - void add(const record_t &rec) noexcept:
+ *       Appends a new record to the internal records and writes it to the file system.
+ *       A debug message is logged detailing the content of the record.
+ *
+ *   - void reset() noexcept:
+ *       Resets the WAL by closing the current log file and removing it from the file system.
+ *       Attempts to reopen the log file and throws a std::runtime_error if reopening fails.
+ *       Logs an informational message upon successful reset.
+ *
+ *   - [[nodiscard]] auto records() const -> std::vector<record_t>:
+ *       Recovers WAL records by reading, parsing, and processing the log file entries.
+ *       Reads each log entry into a string stream, processes them line by line, and trims empty lines.
+ *       For each valid log entry, a record_t instance is constructed and a debug message is logged.
+ *       Returns a vector containing all successfully recovered WAL records.
+ *
+ * Logging:
+ *   - Uses spdlog for logging informational and debug messages during operations.
+ */
 {
   public:
     /**
@@ -70,60 +96,21 @@ template <TLogConcept TLog> class wal_t
      *
      * @throws std::runtime_error if the log file cannot be reopened.
      */
-    void reset() noexcept;
+    auto reset() noexcept -> bool;
 
     /**
-     * @brief Recovers the Write-Ahead Log (WAL) by reading and parsing log records.
+     * @brief Parses and recovers write-ahead log (WAL) records.
      *
-     * This function attempts to recover the WAL by reading log records from the
-     * internal log stream. Each non-empty line in the log stream is parsed into
-     * a record_t object, which is then stored in the m_log container. The
-     * function logs the start and end of the recovery process, as well as each
-     * recovered record for debugging purposes.
+     * This method iterates over the underlying log storage to extract and reconstruct WAL records.
+     * It reads each log entry into a string stream, processes them line by line, and trims empty lines.
+     * For each non-empty line, it constructs a record_t instance by reading from a corresponding
+     * string stream and logs debug messages with the recovered record content.
      *
-     * @return true Always returns true indicating the recovery process completed.
+     * @return std::vector<record_t> A vector containing all successfully recovered WAL records.
+     *
+     * @note The function logs both informational and debug outputs to trace the recovery process.
      */
-    [[nodiscard]] auto records() const -> std::vector<record_t>
-    {
-        auto recordToString = [](const record_t &rec)
-        {
-            std::stringstream strStream;
-            rec.write(strStream);
-            return strStream.str();
-        };
-
-        spdlog::info("wal_t::records() called");
-        auto logStream = std::stringstream{};
-        for (std::size_t idx{0}; idx < m_log.size(); ++idx)
-        {
-            if (auto logLine{m_log.read(idx)}; logLine.has_value())
-            {
-                logStream << logLine.value();
-            }
-        }
-
-        std::string           line;
-        std::vector<record_t> result;
-        while (std::getline(logStream, line))
-        {
-            if (trim(line).empty())
-            {
-                spdlog::debug("wal::records() empty line after trim. skipping");
-                continue;
-            }
-
-            std::istringstream lineStream(line);
-            record_t           rec;
-            rec.read(lineStream);
-
-            spdlog::debug("Recovered WAL record {}", recordToString(rec));
-
-            result.emplace_back(std::move(rec));
-        }
-        spdlog::info("WAL recovery finished");
-
-        return result;
-    }
+    [[nodiscard]] auto records() const -> std::vector<record_t>;
 
   private:
     TLog m_log;
@@ -146,9 +133,9 @@ class wal_wrapper_t
         std::visit([&](auto &wal) { return wal.add(std::move(rec)); }, m_wal);
     }
 
-    auto reset() noexcept -> void
+    auto reset() noexcept
     {
-        std::visit([&](auto &wal) { wal.reset(); }, m_wal);
+        return std::visit([&](auto &wal) { return wal.reset(); }, m_wal);
     }
 
     [[nodiscard]] auto records()
@@ -207,16 +194,59 @@ template <TLogConcept TLog> auto wal_t<TLog>::operator=(wal_t &&other) noexcept 
 
 template <TLogConcept<std::string> TLog> void wal_t<TLog>::add(const record_t &rec) noexcept
 {
-    std::stringstream strStream;
-    rec.write(strStream);
-    m_log.append(strStream.str());
+    std::stringstream stream;
+    rec.write(stream);
+    stream << '\n';
+    m_log.append(stream.str());
 
-    spdlog::debug("Added new WAL entry {}", strStream.str());
+    spdlog::debug("Added new WAL entry {}", stream.str());
 }
 
-template <TLogConcept<std::string> TLog> void wal_t<TLog>::reset() noexcept
+template <TLogConcept<std::string> TLog> auto wal_t<TLog>::reset() noexcept -> bool
 {
-    m_log.reset();
+    return m_log.reset();
+}
+
+template <TLogConcept<std::string> TLog> [[nodiscard]] auto wal_t<TLog>::records() const -> std::vector<record_t>
+{
+    auto recordToString = [](const record_t &rec)
+    {
+        std::stringstream strStream;
+        rec.write(strStream);
+        return strStream.str();
+    };
+
+    spdlog::info("wal_t::records() called");
+    auto logStream = std::stringstream{};
+    for (std::size_t idx{0}; idx < m_log.size(); ++idx)
+    {
+        if (auto logLine{m_log.read(idx)}; logLine.has_value())
+        {
+            logStream << logLine.value();
+        }
+    }
+
+    std::string           line;
+    std::vector<record_t> result;
+    while (std::getline(logStream, line))
+    {
+        if (absl::StripAsciiWhitespace(line).empty())
+        {
+            spdlog::debug("wal::records() empty line after trim. skipping");
+            continue;
+        }
+
+        std::istringstream lineStream(line);
+        record_t           rec;
+        rec.read(lineStream);
+
+        spdlog::debug("Recovered WAL record {}", recordToString(rec));
+
+        result.emplace_back(std::move(rec));
+    }
+    spdlog::info("WAL recovery finished");
+
+    return result;
 }
 
 enum class wal_builder_error_t : std::uint8_t

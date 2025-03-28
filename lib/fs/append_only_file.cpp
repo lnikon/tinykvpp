@@ -32,7 +32,23 @@ fs::append_only_file_t::append_only_file_t(append_only_file_t &&other) noexcept
     other.ring_ = io_uring{};
 }
 
-fs::append_only_file_t::~append_only_file_t()
+auto fs::append_only_file_t::operator=(append_only_file_t &&other) noexcept -> append_only_file_t &
+{
+    if (this == &other)
+    {
+        return *this;
+    }
+
+    fd_ = other.fd_;
+    ring_ = other.ring_;
+
+    other.fd_ = -1;
+    other.ring_ = io_uring{};
+
+    return *this;
+}
+
+fs::append_only_file_t::~append_only_file_t() noexcept
 {
     // Skip destructor call on moved-from objects
     if (fd_ == -1)

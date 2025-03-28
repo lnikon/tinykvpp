@@ -175,15 +175,15 @@ auto levels_t::size() const noexcept -> levels_t::levels_storage_t::size_type
     m_pManifest->add(
         db::manifest::manifest_t::segment_record_t{.op = segment_operation_k::add_segment_k, .name = name, .level = 0});
 
-    auto pSegement{m_levels[0]->segment(std::move(memtable), name)};
-    if (pSegement)
+    auto pSegment{m_levels[0]->segment(std::move(memtable), name)};
+    if (pSegment)
     {
         if (!m_level0_segment_flushed_notification.HasBeenNotified())
         {
             m_level0_segment_flushed_notification.Notify();
         }
     }
-    return pSegement;
+    return pSegment;
 }
 
 auto levels_t::restore() noexcept -> void

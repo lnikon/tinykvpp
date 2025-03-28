@@ -30,3 +30,20 @@
 *.exe
 *.out
 *.app
+
+# Project-specific
+*.bak
+*.tmp
+*.log
+*.swp
+*.user
+*.vim
+*.Vim
+*.txt
+.idea
+.fleet
+.cache
+build
+var
+tmp
+current

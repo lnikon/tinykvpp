@@ -2,6 +2,8 @@
 
 #include <spdlog/spdlog.h>
 
+#include <absl/strings/ascii.h>
+
 #include <utility>
 #include <expected>
 
@@ -33,10 +35,6 @@ struct storage_backend_config_t
     fs::path_t file_path;
 };
 
-/**
- * @brief A CRTP base class for storage backend. Implements TStorageBackendConcept
- * @tparam Derived A CRTP derived class
- */
 template <typename Derived> class storage_backend_base_t
 {
   public:
@@ -47,7 +45,7 @@ template <typename Derived> class storage_backend_base_t
         return static_cast<Derived *>(this)->write_impl(data, offset, size);
     }
 
-    [[nodiscard]] auto read(std::size_t offset, std::size_t size) -> std::vector<std::byte>
+    [[nodiscard]] auto read(std::size_t offset, std::size_t size) -> std::string
     {
         return static_cast<Derived *>(this)->read_impl(offset, size);
     }
@@ -114,24 +112,30 @@ class file_storage_backend_t : public storage_backend_base_t<file_storage_backen
     {
     }
 
-    file_storage_backend_t(const file_storage_backend_t &other) = delete;
-
     file_storage_backend_t(file_storage_backend_t &&other) noexcept
         : storage_backend_base_t<file_storage_backend_t>{std::move(other)},
           m_file{std::move(other.m_file)}
     {
     }
 
-    file_storage_backend_t &operator=(file_storage_backend_t other)
+    auto operator=(file_storage_backend_t &&other) noexcept -> file_storage_backend_t &
     {
-        using std::swap;
-        swap(*this, other);
+        if (this != &other)
+        {
+            m_file = std::move(other.m_file);
+        }
         return *this;
     }
+
+    file_storage_backend_t(const file_storage_backend_t &other) = delete;
+    auto operator=(const file_storage_backend_t &) noexcept -> file_storage_backend_t & = delete;
+
+    ~file_storage_backend_t() = default;
 
     friend class storage_backend_base_t;
 
   private:
+    // TODO(lnikon): Use StrongTypes for adjacent parameters with similar type
     [[nodiscard]] auto write_impl(const char *data, std::size_t offset, std::size_t size) -> bool
     {
         (void)offset;
@@ -139,11 +143,11 @@ class file_storage_backend_t : public storage_backend_base_t<file_storage_backen
         return res >= 0;
     }
 
-    [[nodiscard]] auto read_impl(std::size_t offset, std::size_t size) -> std::vector<std::byte>
+    [[nodiscard]] auto read_impl(std::size_t offset, std::size_t size) -> std::string
     {
-        std::vector<std::byte> buffer(size);
-        ssize_t                res = m_file.read(offset, reinterpret_cast<char *>(buffer.data()), size);
-        if (res < 0)
+        std::string buffer;
+        buffer.resize(size);
+        if (const ssize_t res = m_file.read(offset, buffer.data(), size); res < 0)
         {
             spdlog::error("Failed to read from file storage. Offset={}, size={}", offset, size);
             return {};
@@ -188,14 +192,7 @@ class file_storage_backend_builder_t final : public storage_backend_builder_t<fi
 
     [[nodiscard]] auto build_impl() -> std::expected<file_storage_backend_t, storage_backend_builder_error_t> override
     {
-        // TODO(lnikon): fs::append_only_file_t will throw if unable to open the file. This is bad strategy, I know. I
-        // TODO(lnikon): promise I'll fix this.
-        fs::append_only_file_t file(config().file_path.c_str());
-        // if (!file.is_open())
-        // {
-        // return std::unexpected(storage_backend_builder_error_t::kUnableToOpenFile);
-        // }
-        return file_storage_backend_t(std::move(file));
+        return file_storage_backend_t(fs::append_only_file_t(config().file_path.c_str()));
     }
 };
 
@@ -223,12 +220,20 @@ template <TStorageBackendConcept TBackendStorage> class persistent_log_storage_t
     explicit persistent_log_storage_t(TBackendStorage &&backendStorage)
         : m_backendStorage(std::move(backendStorage))
     {
+        const std::string  raw = m_backendStorage.read(0, m_backendStorage.size());
+        std::istringstream stream(raw);
+        for (std::string line; std::getline(stream, line);)
+        {
+            if (absl::StripAsciiWhitespace(line).empty())
+            {
+                continue;
+            }
+            m_inMemoryLog.emplace_back(std::move(line));
+        }
     }
 
   public:
     persistent_log_storage_t() = delete;
-
-    persistent_log_storage_t(const persistent_log_storage_t &other) = delete;
 
     persistent_log_storage_t(persistent_log_storage_t &&other) noexcept
         : m_backendStorage{std::move(other.m_backendStorage)},
@@ -236,12 +241,15 @@ template <TStorageBackendConcept TBackendStorage> class persistent_log_storage_t
     {
     }
 
-    persistent_log_storage_t &operator=(persistent_log_storage_t other)
+    auto operator=(persistent_log_storage_t other) noexcept -> persistent_log_storage_t &
     {
         using std::swap;
         swap(*this, other);
         return *this;
     }
+
+    auto operator=(persistent_log_storage_t &&) -> persistent_log_storage_t & = delete;
+    persistent_log_storage_t(const persistent_log_storage_t &other) = delete;
 
     void append(std::string entry)
     {
@@ -252,21 +260,22 @@ template <TStorageBackendConcept TBackendStorage> class persistent_log_storage_t
         m_inMemoryLog.emplace_back(std::move(entry));
     }
 
+    ~persistent_log_storage_t() noexcept = default;
+
     [[nodiscard]] auto read(const size_t index) const -> std::optional<std::string>
     {
-        return index < m_inMemoryLog.size() ? std::make_optional(m_inMemoryLog[index]) : std::nullopt;
+        if (index < m_inMemoryLog.size())
+        {
+            return std::make_optional(m_inMemoryLog[index]);
+        }
+
+        return std::nullopt;
     }
 
     [[nodiscard]] auto reset() -> bool
     {
         m_inMemoryLog.clear();
-        m_backendStorage.reset();
-        return false;
-    }
-
-    [[nodiscard]] auto recover() noexcept -> bool
-    {
-        return false;
+        return m_backendStorage.reset();
     }
 
     [[nodiscard]] auto size() const -> std::size_t
@@ -308,8 +317,8 @@ template <TStorageBackendConcept TBackendStorage> class persistent_log_storage_b
     persistent_log_storage_builder_t(const persistent_log_storage_builder_t &) = delete;
     auto operator=(const persistent_log_storage_builder_t &) -> persistent_log_storage_builder_t & = delete;
 
-    persistent_log_storage_builder_t(persistent_log_storage_builder_t &&) = default;
-    auto operator=(persistent_log_storage_builder_t &&) -> persistent_log_storage_builder_t & = default;
+    persistent_log_storage_builder_t(persistent_log_storage_builder_t &&) noexcept = default;
+    auto operator=(persistent_log_storage_builder_t &&) noexcept -> persistent_log_storage_builder_t & = default;
 
     ~persistent_log_storage_builder_t() = default;
 

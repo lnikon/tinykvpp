@@ -2,7 +2,6 @@
 
 #include <optional>
 #include <string>
-#include <vector>
 
 namespace wal::log
 {
@@ -10,7 +9,7 @@ namespace wal::log
 template <typename T>
 concept TStorageBackendConcept = requires(T backend, const char *data, std::size_t offset, std::size_t size) {
     { backend.write(data, offset, size) } -> std::same_as<bool>;
-    { backend.read(offset, size) } -> std::same_as<std::vector<std::byte>>;
+    { backend.read(offset, size) } -> std::same_as<std::string>;
     { backend.size() } -> std::same_as<std::size_t>;
     { backend.reset() } -> std::same_as<bool>;
 };
@@ -31,4 +30,4 @@ concept TLogConcept = requires(const T const_log, T log, Entry entry, std::size_
     { const_log.size() } -> std::same_as<std::size_t>;
 };
 
-} // namespace log
+} // namespace wal::log

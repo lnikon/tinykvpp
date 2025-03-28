@@ -7,22 +7,22 @@
 namespace wal
 {
 
-auto to_string(log_storage_type_k type) -> std::string
+[[nodiscard]] auto to_string(log_storage_type_k type) noexcept -> std::string_view
 {
     if (type == log_storage_type_k::in_memory_k)
     {
-        return std::string{"inMemory"};
+        return std::string_view{"inMemory"};
     }
 
     if (type == log_storage_type_k::file_based_persistent_k)
     {
-        return std::string{"persistent"};
+        return std::string_view{"persistent"};
     }
 
-    return std::string{"undefined"};
+    return std::string_view{"undefined"};
 }
 
-auto from_string(const std::string &type) -> log_storage_type_k
+[[nodiscard]] auto from_string(std::string_view type) noexcept -> log_storage_type_k
 {
     if (type == "inMemory")
     {
@@ -37,4 +37,4 @@ auto from_string(const std::string &type) -> log_storage_type_k
     return log_storage_type_k::undefined_k;
 }
 
-}
+} // namespace wal

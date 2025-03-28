@@ -29,7 +29,10 @@ struct object_backend_tag
 template <TLogStorageConcept TStorage> class log_t
 {
   public:
-    explicit log_t(TStorage storage)
+    log_t() = delete;
+
+    explicit log_t(TStorage storage) noexcept
+
         : m_storage(std::move(storage))
     {
     }
@@ -39,29 +42,34 @@ template <TLogStorageConcept TStorage> class log_t
     {
     }
 
-    log_t &operator=(log_t other)
+    auto operator=(log_t &&other) noexcept -> log_t &
     {
         using std::swap;
         swap(*this, other);
         return *this;
     }
 
+    log_t(const log_t &) noexcept = delete;
+    auto operator=(const log_t &) noexcept -> log_t & = delete;
+
+    ~log_t() noexcept = default;
+
     void append(std::string entry) noexcept
     {
         m_storage.append(std::move(entry));
     }
 
-    [[nodiscard]] auto read(std::size_t index) const -> std::optional<std::string>
+    [[nodiscard]] auto read(std::size_t index) const noexcept -> std::optional<std::string>
     {
         return m_storage.read(index);
     }
 
-    [[nodiscard]] auto reset() -> bool
+    [[nodiscard]] auto reset() noexcept -> bool
     {
         return m_storage.reset();
     }
 
-    [[nodiscard]] auto size() const -> std::size_t
+    [[nodiscard]] auto size() const noexcept -> std::size_t
     {
         return m_storage.size();
     }
@@ -100,7 +108,7 @@ template <typename TStorageTag> class log_builder_t
 
     template <typename T = TStorageTag>
         requires std::is_same_v<T, storage_tags::file_backend_tag>
-    log_builder_t &set_file_path(fs::path_t path)
+    auto set_file_path(fs::path_t path) -> log_builder_t &
     {
         m_file_path = std::move(path);
         return *this;
@@ -108,7 +116,7 @@ template <typename TStorageTag> class log_builder_t
 
     template <typename T = TStorageTag>
         requires std::is_same_v<T, storage_tags::object_backend_tag>
-    log_builder_t &set_url(std::string url)
+    auto set_url(std::string url) -> log_builder_t &
     {
         m_url = std::move(url);
         return *this;

@@ -59,7 +59,6 @@ auto manifest_t::open() -> bool
 {
     m_name = latest_manifest_filename(m_config->DatabaseConfig.DatabasePath);
     m_path = m_config->DatabaseConfig.DatabasePath / m_name;
-    spdlog::info("[VAGAG] m_path={}", m_path.string());
     m_log.emplace(fs::append_only_file_t{m_path.c_str()});
 
     return true;
@@ -102,16 +101,17 @@ inline void ltrim(std::string &s)
 }
 
 // trim from end (in place)
-inline void rtrim(std::string &s)
+inline void rtrim(std::string &str)
 {
-    s.erase(std::find_if(s.rbegin(), s.rend(), [](unsigned char ch) { return !std::isspace(ch); }).base(), s.end());
+    str.erase(std::find_if(str.rbegin(), str.rend(), [](unsigned char ch) { return !std::isspace(ch); }).base(),
+              str.end());
 }
 
-inline auto trim(std::string &s) -> std::string &
+inline auto trim(std::string &str) -> std::string &
 {
-    rtrim(s);
-    ltrim(s);
-    return s;
+    rtrim(str);
+    ltrim(str);
+    return str;
 }
 
 auto manifest_t::recover() -> bool

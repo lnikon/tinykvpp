@@ -5,6 +5,7 @@
 #include <optional>
 #include <stop_token>
 #include <cassert>
+#include <utility>
 
 #include "structures/memtable/memtable.h"
 #include <db/manifest/manifest.h>
@@ -278,7 +279,6 @@ auto lsmtree_t::restore_from_manifest() noexcept -> bool
     return true;
 }
 
-// TODO(lnikon): See the comment for restore_from_wal
 auto lsmtree_t::restore_from_wal() noexcept -> bool
 {
     auto stringify_record = [](const memtable_t::record_t &record) -> std::string
@@ -306,7 +306,7 @@ auto lsmtree_t::restore_from_wal() noexcept -> bool
         }
         default:
         {
-            spdlog::error("Unkown WAL operation {}", static_cast<std::int32_t>(record.op));
+            spdlog::error("Unkown WAL operation {}", std::to_underlying(record.op));
             break;
         }
         };

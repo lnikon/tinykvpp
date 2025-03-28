@@ -41,7 +41,7 @@ struct manifest_t
         {
             undefined_k = -1,
             add_segment_k = 0,
-            remove_segment_k,
+            remove_segment_k = 1,
         };
 
         [[nodiscard]] static auto ToString(operation_k operation) -> std::string

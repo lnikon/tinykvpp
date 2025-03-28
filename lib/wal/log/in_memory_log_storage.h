@@ -12,32 +12,43 @@ namespace wal::log
 class in_memory_log_storage_t
 {
   public:
+    // Used to construct an empty storage
     in_memory_log_storage_t() = default;
 
-    in_memory_log_storage_t(const in_memory_log_storage_t &other) = delete;
+    explicit in_memory_log_storage_t(std::vector<std::string> m_log)
+        : m_log(std::move(m_log))
+    {
+    }
 
     in_memory_log_storage_t(in_memory_log_storage_t &&other) noexcept
         : m_log{std::move(other.m_log)}
     {
     }
 
-    in_memory_log_storage_t &operator=(in_memory_log_storage_t other)
+    auto operator=(in_memory_log_storage_t other) noexcept -> in_memory_log_storage_t &
     {
-        using std::swap;
-        swap(*this, other);
+        if (this == &other)
+        {
+            return *this;
+        }
+
+        m_log = std::move(other.m_log);
+
         return *this;
     }
 
+    auto operator=(in_memory_log_storage_t &&) -> in_memory_log_storage_t & = delete;
+    in_memory_log_storage_t(const in_memory_log_storage_t &other) = delete;
+
+    ~in_memory_log_storage_t() noexcept = default;
+
     void append(std::string entry)
     {
-        // std::lock_guard<std::mutex> lock(mutex_);
         m_log.emplace_back(std::move(entry));
     }
 
-    // Declare read() as const. The mutex is mutable so that it can be locked in a const method.
     [[nodiscard]] auto read(size_t index) const -> std::optional<std::string>
     {
-        // std::lock_guard<std::mutex> lock(mutex_);
         if (index < m_log.size())
         {
             return m_log[index];
@@ -77,4 +88,4 @@ class in_memory_storage_builder_t
     }
 };
 
-} // namespace log
+} // namespace wal::log
