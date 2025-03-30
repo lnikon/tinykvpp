@@ -1,9 +1,13 @@
-#include "structures/lsmtree/segments/helpers.h"
+#include <absl/strings/ascii.h>
+
+#include <fmt/format.h>
+
+#include <spdlog/spdlog.h>
+
+#include <structures/lsmtree/segments/helpers.h>
 #include <db/manifest/manifest.h>
 #include <filesystem>
-#include <fmt/format.h>
 #include <fstream>
-#include <spdlog/spdlog.h>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -24,7 +28,6 @@ auto manifest_filename() -> std::string
 auto latest_manifest_filename(const fs::path_t &databasePath) -> std::string
 {
     const auto current_path{databasePath / current_filename};
-    spdlog::info("[VAGAG]: databasePath=${} current_path=${}", databasePath.string(), current_path.string());
     if (!fs::stdfs::exists(current_path))
     {
         std::ofstream current(current_path);
@@ -59,7 +62,7 @@ auto manifest_t::open() -> bool
 {
     m_name = latest_manifest_filename(m_config->DatabaseConfig.DatabasePath);
     m_path = m_config->DatabaseConfig.DatabasePath / m_name;
-    m_log.emplace(fs::append_only_file_t{m_path.c_str()});
+    m_log.emplace(std::move(fs::append_only_file_builder_t{}.build(m_path.c_str(), true).value()));
 
     return true;
 }
@@ -69,7 +72,7 @@ auto manifest_t::path() -> fs::path_t
     return m_path;
 }
 
-bool manifest_t::add(record_t info)
+auto manifest_t::add(record_t info) -> bool
 {
     auto infoToString = [](auto &&info) -> std::string
     {
@@ -89,77 +92,64 @@ bool manifest_t::add(record_t info)
     }
 
     m_records.emplace_back(info);
+
     const std::string &infoSerialized = std::visit(infoToString, info);
-    ssize_t            res = m_log->append({infoSerialized.c_str(), infoSerialized.size()});
-    return res >= 0;
-}
-
-// trim from start (in place)
-inline void ltrim(std::string &s)
-{
-    s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](unsigned char ch) { return !std::isspace(ch); }));
-}
-
-// trim from end (in place)
-inline void rtrim(std::string &str)
-{
-    str.erase(std::find_if(str.rbegin(), str.rend(), [](unsigned char ch) { return !std::isspace(ch); }).base(),
-              str.end());
-}
-
-inline auto trim(std::string &str) -> std::string &
-{
-    rtrim(str);
-    ltrim(str);
-    return str;
+    return m_log->append({infoSerialized.c_str(), infoSerialized.size()})
+        .transform([](ssize_t res) { return res >= 0; })
+        .value_or(false);
 }
 
 auto manifest_t::recover() -> bool
 {
     spdlog::info("Manifest recovery started");
 
-    std::int32_t record_type_int{0};
-    std::string  line;
+    return m_log->stream()
+        .and_then(
+            [this](std::stringstream stream) -> std::expected<void, fs::file_error_t>
+            {
+                std::int32_t record_type_int{0};
+                std::string  line;
+                while (std::getline(stream, line))
+                {
+                    if (absl::StripAsciiWhitespace(line).empty())
+                    {
+                        continue;
+                    }
 
-    auto stringStream = m_log->stream();
-    while (std::getline(stringStream, line))
-    {
-        if (trim(line).empty())
-        {
-            continue;
-        }
+                    std::istringstream lineStream(line);
+                    lineStream >> record_type_int;
+                    const auto record_type = static_cast<record_type_k>(record_type_int);
+                    switch (record_type)
+                    {
+                    case record_type_k::segment_k:
+                    {
+                        segment_record_t record;
+                        record.read(lineStream);
+                        spdlog::debug("recovered segment_record={}", record.ToString());
+                        m_records.emplace_back(record);
+                        break;
+                    }
+                    case record_type_k::level_k:
+                    {
+                        level_record_t record;
+                        record.read(lineStream);
+                        spdlog::debug("recovered level_record={}", record.ToString());
+                        m_records.emplace_back(record);
+                        break;
+                    }
+                    default:
+                    {
+                        spdlog::error("unhandled record_type_int={}. Skipping record.", record_type_int);
+                        break;
+                    }
+                    }
+                }
+                spdlog::info("Manifest recovery finished");
 
-        std::istringstream lineStream(line);
-        lineStream >> record_type_int;
-        const auto record_type = static_cast<record_type_k>(record_type_int);
-        switch (record_type)
-        {
-        case record_type_k::segment_k:
-        {
-            segment_record_t record;
-            record.read(lineStream);
-            spdlog::debug("recovered segment_record={}", record.ToString());
-            m_records.emplace_back(record);
-            break;
-        }
-        case record_type_k::level_k:
-        {
-            level_record_t record;
-            record.read(lineStream);
-            spdlog::debug("recovered level_record={}", record.ToString());
-            m_records.emplace_back(record);
-            break;
-        }
-        default:
-        {
-            spdlog::error("unhandled record_type_int={}. Skipping record.", record_type_int);
-            break;
-        }
-        }
-    }
-    spdlog::info("Manifest recovery finished");
 
-    return true;
+                return {};
+            })
+        .has_value();
 }
 
 auto manifest_t::path() const noexcept -> fs::path_t

@@ -1,21 +1,37 @@
 #include "append_only_file.h"
+#include "fs/common.h"
 
+#include <liburing.h>
+#include <spdlog/spdlog.h>
+
+#include <cstdio>
 #include <cstring>
-#include <iostream>
+#include <fcntl.h>
+#include <stdexcept>
+#include <format>
 
-fs::append_only_file_t::append_only_file_t(const char *path, bool direct_io)
-    : fd_(open(path, O_RDWR | O_CREAT | O_APPEND | (direct_io ? O_DIRECT : 0), 0644))
+namespace fs
 {
-    // TODO(lnikon): Maybe better to use separate is_open() interface?
-    if (fd_ < 0)
-    {
-        throw std::runtime_error(std::format("Failed to open file path={} errno={}", path, strerror(errno)));
-    }
 
-    std::cout << "[VAGAG]: opened file: " << path << "; fd=" << fd_ << "\n" << std::endl;
+/**
+ * Default buffer size to use with io_uring
+ */
+static constexpr std::size_t kBufferSize{4096ULL};
 
-    // io_uring initialization
-    io_uring_queue_init(128, &ring_, 0);
+/**
+ * Default permissions to open a file with
+ */
+static constexpr int kDefaultFilePermissions = 0644;
+
+/**
+ * Default number of entries to use with io_uring queues
+ */
+static constexpr int kIOUringQueueEntries = 128;
+
+fs::append_only_file_t::append_only_file_t(int fd, io_uring ring) noexcept
+    : m_fd(fd),
+      m_ring(ring)
+{
 }
 
 fs::append_only_file_t::append_only_file_t(append_only_file_t &&other) noexcept
@@ -25,11 +41,11 @@ fs::append_only_file_t::append_only_file_t(append_only_file_t &&other) noexcept
         return;
     }
 
-    fd_ = other.fd_;
-    ring_ = other.ring_;
+    m_fd = other.m_fd;
+    m_ring = other.m_ring;
 
-    other.fd_ = -1;
-    other.ring_ = io_uring{};
+    other.m_fd = -1;
+    other.m_ring = io_uring{};
 }
 
 auto fs::append_only_file_t::operator=(append_only_file_t &&other) noexcept -> append_only_file_t &
@@ -39,11 +55,11 @@ auto fs::append_only_file_t::operator=(append_only_file_t &&other) noexcept -> a
         return *this;
     }
 
-    fd_ = other.fd_;
-    ring_ = other.ring_;
+    m_fd = other.m_fd;
+    m_ring = other.m_ring;
 
-    other.fd_ = -1;
-    other.ring_ = io_uring{};
+    other.m_fd = -1;
+    other.m_ring = io_uring{};
 
     return *this;
 }
@@ -51,85 +67,201 @@ auto fs::append_only_file_t::operator=(append_only_file_t &&other) noexcept -> a
 fs::append_only_file_t::~append_only_file_t() noexcept
 {
     // Skip destructor call on moved-from objects
-    if (fd_ == -1)
+    // TODO: Need a reference counting for this class to close the last instance
+    if (m_fd == -1)
     {
         return;
     }
 
-    io_uring_queue_exit(&ring_);
-    close(fd_);
+    io_uring_queue_exit(&m_ring);
+    close(m_fd);
 }
 
-ssize_t fs::append_only_file_t::append(std::string_view data)
+auto fs::append_only_file_t::append(std::string_view data) noexcept -> std::expected<ssize_t, file_error_t>
 {
-    io_uring_sqe *sqe = io_uring_get_sqe(&ring_);
-    auto          iov = iovec{.iov_base = const_cast<char *>(data.data()), .iov_len = data.size()};
-    io_uring_prep_writev(sqe, fd_, &iov, 1, 0);
+    io_uring_sqe *sqe = io_uring_get_sqe(&m_ring);
+    if (sqe == nullptr)
+    {
+        return std::unexpected(file_error_t{
+            .code = file_error_code_k::write_failed,
+            .system_errno = 0,
+            .message = std::format("Failed to get io_uring sqe. fd={}", m_fd),
+        });
+    }
+
+    auto iov = iovec{.iov_base = const_cast<char *>(data.data()), .iov_len = data.size()};
+    io_uring_prep_writev(sqe, m_fd, &iov, 1, 0);
     sqe->flags |= IOSQE_IO_LINK;
 
-    io_uring_submit(&ring_);
+    io_uring_submit(&m_ring);
     io_uring_cqe *cqe;
-    io_uring_wait_cqe(&ring_, &cqe);
+    io_uring_wait_cqe(&m_ring, &cqe);
     auto res = cqe->res;
+    io_uring_cqe_seen(&m_ring, cqe);
 
-    io_uring_cqe_seen(&ring_, cqe);
+    if (res < 0)
+    {
+        return std::unexpected(file_error_t{
+            .code = file_error_code_k::write_failed,
+            .system_errno = -res,
+            .message = std::format("Write operation failed. fd={}", m_fd),
+        });
+    }
     return res;
 }
 
-ssize_t fs::append_only_file_t::read(size_t offset, char *buffer, size_t size)
+auto fs::append_only_file_t::read(size_t offset, char *buffer, size_t size) noexcept
+    -> std::expected<ssize_t, file_error_t>
 {
-    return pread(fd_, buffer, size, offset);
-}
-
-void fs::append_only_file_t::flush()
-{
-
-    fsync(fd_);
-}
-
-void fs::append_only_file_t::reset()
-{
-    ftruncate(fd_, 0);
-    lseek(fd_, 0, SEEK_SET);
-}
-
-auto fs::append_only_file_t::stream() -> std::stringstream
-{
-    if (size() == 0)
+    // return pread(m_fd, buffer, size, offset);
+    ssize_t res = pread(m_fd, buffer, size, offset);
+    if (res < 0)
     {
-        return {};
+        return std::unexpected(file_error_t{
+            .code = file_error_code_k::read_failed,
+            .system_errno = errno,
+            .message = std::format("Read operation failed. fd={}", m_fd),
+        });
+    }
+    return res;
+}
+
+auto fs::append_only_file_t::size() const noexcept -> std::expected<std::size_t, file_error_t>
+{
+    struct stat st;
+    if (fstat(m_fd, &st) == -1)
+    {
+        return std::unexpected(file_error_t{
+            .code = file_error_code_k::stat_failed,
+            .system_errno = errno,
+            .message = std::format("Failed to get file size. fd={}", m_fd),
+        });
+    }
+    return static_cast<std::size_t>(st.st_size);
+}
+
+auto fs::append_only_file_t::flush() noexcept -> std::expected<void, file_error_t>
+{
+    if (fsync(m_fd) != 0)
+    {
+        return std::unexpected(file_error_t{
+            .code = file_error_code_k::flush_failed,
+            .system_errno = errno,
+            .message = std::format("Flush operation failed. fd={}", m_fd),
+        });
+    }
+    return {};
+}
+
+auto fs::append_only_file_t::reset() noexcept -> std::expected<void, file_error_t>
+{
+    if (ftruncate(m_fd, 0) != 0)
+    {
+        return std::unexpected(
+            file_error_t::from_errno(file_error_code_k::truncate_failed, errno, "File truncate operation failed"));
     }
 
-    std::string       buffer(gBufferSize, '\0');
+    if (lseek(m_fd, 0, SEEK_SET) < 0)
+    {
+        return std::unexpected(
+            file_error_t::from_errno(file_error_code_k::seek_failed, errno, "File seek operation failed"));
+    }
+
+    return {};
+}
+
+auto fs::append_only_file_t::stream() noexcept -> std::expected<std::stringstream, file_error_t>
+{
+    auto size_result = size();
+    if (!size_result)
+    {
+        return std::unexpected(size_result.error());
+    }
+
+    if (*size_result == 0)
+    {
+        return std::stringstream{};
+    }
+
+    std::string       buffer(kBufferSize, '\0');
     std::size_t       offset{0};
     std::stringstream result;
 
     while (true)
     {
-        ssize_t res = read(offset, buffer.data(), gBufferSize);
-        if (res == 0)
+        auto read_result = read(offset, buffer.data(), kBufferSize);
+        if (!read_result)
         {
-            break;
+            return std::unexpected(read_result.error());
         }
 
-        if (res == -1)
+        auto bytes_read = *read_result;
+        if (bytes_read == 0)
         {
-            throw std::runtime_error(std::format("Failed to read from file. fd={} errno={}", fd_, strerror(errno)));
+            break; // End of file
         }
 
-        result.write(buffer.data(), res);
-        offset += res;
+        result.write(buffer.data(), bytes_read);
+        offset += bytes_read;
     }
 
     return result;
 }
 
-auto fs::append_only_file_t::size() const -> std::size_t
+/**
+ * @brief Creates an append-only file with the specified path.
+ *
+ * This function creates or opens a file in append-only mode. The file can be opened
+ * with direct I/O if specified. The function initializes an io_uring for asynchronous
+ * I/O operations on the file.
+ *
+ * @param path The path to the file to be opened or created.
+ * @param direct_io If true, the file is opened with O_DIRECT flag for direct I/O.
+ *
+ * @return On success, returns an append_only_file_t object. On failure, returns
+ *         a file_error with details about what went wrong:
+ *         - file_error_code_k::open_failed if path is empty or open() fails
+ *         - file_error_code_k::io_uring_init_failed if io_uring initialization fails
+ *
+ * @note Uses kDefaultFilePermissions for file creation and kIOUringQueueEntries
+ *       for the io_uring queue depth.
+ */
+auto append_only_file_builder_t::build(std::string path, bool direct_io)
+    -> std::expected<append_only_file_t, file_error_t>
 {
-    struct stat st;
-    if (fstat(fd_, &st) == -1)
+    if (path.empty())
     {
-        throw std::runtime_error(std::format("Failed to get file size. fd={} errno={}", fd_, strerror(errno)));
+        return std::unexpected(file_error_t{
+            .code = file_error_code_k::open_failed,
+            .system_errno = errno,
+            .message = std::format("Provided file path is empty"),
+        });
     }
-    return st.st_size;
+
+    int fdes = open(path.data(), O_RDWR | O_CREAT | O_APPEND | (direct_io ? O_DIRECT : 0), kDefaultFilePermissions);
+    if (fdes < 0)
+    {
+        return std::unexpected(file_error_t{
+            .code = file_error_code_k::open_failed,
+            .system_errno = errno,
+            .message = std::format("Failed to open file. path={}", path),
+        });
+    }
+
+    io_uring ring{};
+    if (int res = io_uring_queue_init(kIOUringQueueEntries, &ring, 0); res < 0)
+    {
+        close(fdes);
+        return std::unexpected(file_error_t{
+            .code = file_error_code_k::io_uring_init_failed,
+            .system_errno = errno,
+            .message = std::format("io_uring_queue_init failed"),
+        });
+    }
+
+    spdlog::debug("Opened file. path={}, fd={}", path, fdes);
+
+    return append_only_file_t{fdes, ring};
 }
+
+} // namespace fs
