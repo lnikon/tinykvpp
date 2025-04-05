@@ -130,42 +130,53 @@ class consensus_module_t : public RaftService::Service
     [[nodiscard]] std::uint32_t         currentTerm() const;
     [[nodiscard]] id_t                  votedFor() const;
     [[nodiscard]] std::vector<LogEntry> log() const;
-    [[nodiscard]] NodeState             getState() ABSL_SHARED_LOCKS_REQUIRED(m_stateMutex);
+    [[nodiscard]] NodeState             getState() const ABSL_SHARED_LOCKS_REQUIRED(m_stateMutex);
     // NOLINTEND(modernize-use-trailing-return-type)
 
   private:
-    // Logic behind Leader election and log replication
+    // ---- State transitions ----
     void becomeFollower(uint32_t newTerm) ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_stateMutex);
     void becomeLeader() ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_stateMutex);
-    bool sendHeartbeat(raft_node_grpc_client_t &client);
-    auto waitForHeartbeat(std::stop_token token) -> bool;
+    // --------
 
+    // ---- Heartbeat ----
+    void runHeartbeatThread(std::stop_token token);
+    auto waitForHeartbeat(std::stop_token token) -> bool;
+    void sendAppendEntriesRPC(raft_node_grpc_client_t &client, std::vector<LogEntry> logEntries);
+    // --------
+
+    // ---- Leader election ----
     void runElectionThread(std::stop_token token) noexcept;
     void startElection();
     void sendRequestVoteRPCs(const RequestVoteRequest &request, std::uint64_t newTerm);
+    // --------
 
-    void               sendAppendEntriesRPC(raft_node_grpc_client_t &client, std::vector<LogEntry> logEntries);
-    [[nodiscard]] auto waitForMajorityReplication(uint32_t logIndex) -> bool;
-
-    // Utility methods
-    // NOLINTBEGIN(modernize-use-trailing-return-type)
-    [[nodiscard]] bool     initializePersistentState() ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_stateMutex);
+    // ---- Constant utility methods ----
     [[nodiscard]] uint32_t getLastLogIndex() const ABSL_SHARED_LOCKS_REQUIRED(m_stateMutex);
     [[nodiscard]] uint32_t getLastLogTerm() const ABSL_SHARED_LOCKS_REQUIRED(m_stateMutex);
     [[nodiscard]] auto     hasMajority(uint32_t votes) const -> bool;
     [[nodiscard]] uint32_t getLogTerm(uint32_t index) const ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_stateMutex);
-    [[nodiscard]] uint32_t findMajorityIndexMatch() ABSL_SHARED_LOCKS_REQUIRED(m_stateMutex);
+    [[nodiscard]] uint32_t findMajorityIndexMatch() const ABSL_SHARED_LOCKS_REQUIRED(m_stateMutex);
+    [[nodiscard]] auto     waitForMajorityReplication(uint32_t logIndex) const -> bool;
+    // --------
 
+    // ---- Persistent state management ----
+    // TODO(lnikon): Move into separate class
+    [[nodiscard]] bool initializePersistentState() ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_stateMutex);
     [[nodiscard]] bool updatePersistentState(std::optional<std::uint32_t> commitIndex,
                                              std::optional<std::uint32_t> votedFor)
         ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_stateMutex);
 
     [[nodiscard]] bool flushPersistentState() ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_stateMutex);
     [[nodiscard]] bool restorePersistentState() ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_stateMutex);
+    // --------
 
-    void cleanupHeartbeatThreads() ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_stateMutex);
-    // NOLINTEND(modernize-use-trailing-return-type)
+    // ---- Cleanup ----
+    void cleanupHeartbeatThread();
+    void cleanupElectionThread();
+    // --------
 
+    // ---- Member fields ----
     // Map from client ID to a gRPC client.
     std::unordered_map<id_t, std::optional<raft_node_grpc_client_t>> m_replicas;
 
@@ -191,11 +202,9 @@ class consensus_module_t : public RaftService::Service
     std::atomic<bool>     m_leaderHeartbeatReceived;
     std::atomic<uint32_t> m_voteCount{0};
 
-    // No need to guard @m_electionThread as it is managed only within main thread
+    // Threads for election and heartbeat
     std::jthread m_electionThread;
-
-    // Stores clusterSize - 1 thread to send heartbeat to replicas
-    std::jthread m_heartbeatThread               ABSL_GUARDED_BY(m_stateMutex);
+    std::jthread m_heartbeatThread;
 
     // Used to shutdown the entire consensus module
     bool m_shutdown{false};

@@ -450,19 +450,15 @@ void consensus_module_t::start()
 
 void consensus_module_t::stop()
 {
+    spdlog::info("Shutting down consensus module");
+
     {
         absl::WriterMutexLock locker{&m_stateMutex};
         m_shutdown = true;
     }
 
-    spdlog::info("Shutting down consensus module");
-    if (m_electionThread.joinable())
-    {
-        spdlog::info("Joining election thread...");
-        m_electionThread.request_stop();
-        m_electionThread.join();
-        spdlog::info("Election thread joined!");
-    }
+    cleanupHeartbeatThread();
+    cleanupElectionThread();
 
     spdlog::info("Consensus module stopped gracefully!");
 }
@@ -509,7 +505,7 @@ void consensus_module_t::becomeFollower(uint32_t newTerm)
     m_state = NodeState::FOLLOWER;
     spdlog::debug("Node={} reverted to follower state in term={}", m_config.m_id, m_currentTerm);
 
-    cleanupHeartbeatThreads();
+    cleanupHeartbeatThread();
 
     if (!updatePersistentState(std::nullopt, 0))
     {
@@ -534,90 +530,26 @@ void consensus_module_t::becomeLeader()
     m_state = NodeState::LEADER;
     m_voteCount = 0;
 
-    cleanupHeartbeatThreads();
-
-    m_heartbeatThread = std::jthread(
-        [this](std::stop_token token)
-        {
-            constexpr const auto heartbeatInterval{std::chrono::milliseconds(100)};
-
-            while (!token.stop_requested() && !m_shutdown)
-            {
-                // TODO(lnikon): Make these calls async
-                for (auto &[id, client] : m_replicas)
-                {
-                    spdlog::debug("Node={} is creating a heartbeat thread for the peer={}", m_config.m_id, id);
-                    // sendHeartbeat(client.value());
-                    sendAppendEntriesRPC(client.value(), {});
-                }
-                std::this_thread::sleep_for(heartbeatInterval);
-            }
-        });
+    cleanupHeartbeatThread();
+    m_heartbeatThread = std::jthread([this](std::stop_token token) { runHeartbeatThread(token); });
 
     spdlog::info("Node={} become a leader at term={}", m_config.m_id, m_currentTerm);
 }
 
-auto consensus_module_t::sendHeartbeat(raft_node_grpc_client_t &client) -> bool
+void consensus_module_t::runHeartbeatThread(std::stop_token token)
 {
-    constexpr const int maxRetries{3};
+    constexpr const auto heartbeatInterval{std::chrono::milliseconds(100)};
 
-    spdlog::debug("Node={} is starting a heartbeat thread for client={}", m_config.m_id, client.id());
-
-    int                  consecutiveFailures = 0;
-    AppendEntriesRequest request;
+    while (!token.stop_requested() && !m_shutdown)
     {
-        absl::ReaderMutexLock locker{&m_stateMutex};
-        if (m_state != NodeState::LEADER)
+        // TODO(lnikon): Make these calls async
+        for (auto &[id, client] : m_replicas)
         {
-            spdlog::debug("Node={} is no longer a leader. Stopping the heartbeat thread");
-            return false;
+            spdlog::debug("Node={} is creating a heartbeat thread for the peer={}", m_config.m_id, id);
+            sendAppendEntriesRPC(client.value(), {});
         }
-
-        request.set_term(m_currentTerm);
-        request.set_prevlogterm(getLastLogTerm());
-        request.set_prevlogindex(getLastLogIndex());
-        request.set_leadercommit(m_commitIndex);
-        request.set_senderid(m_config.m_id);
+        std::this_thread::sleep_for(heartbeatInterval);
     }
-
-    {
-        AppendEntriesResponse response;
-        if (!client.appendEntries(request, &response))
-        {
-            consecutiveFailures++;
-
-            spdlog::error(
-                "AppendEntriesRequest failed during heartbeat. Attempt {}/{}", consecutiveFailures, maxRetries);
-            if (consecutiveFailures >= maxRetries)
-            {
-                spdlog::error("Stopping heartbeat thread due to too much failed AppendEntries RPC attempts");
-                return false;
-            }
-        }
-
-        consecutiveFailures = 0;
-
-        auto responseTerm = response.term();
-        auto success = response.success();
-
-        spdlog::debug("Node={} received AppendEntriesResponse in requester thread peerTerm={} success={} "
-                      "responderId={}",
-                      m_config.m_id,
-                      responseTerm,
-                      success,
-                      response.responderid());
-
-        {
-            absl::WriterMutexLock locker(&m_stateMutex);
-            if (responseTerm > m_currentTerm)
-            {
-                becomeFollower(responseTerm);
-                return true;
-            }
-        }
-    }
-
-    return true;
 }
 
 // Note(vbejanyan): Use return code instead of bool
@@ -834,7 +766,7 @@ auto consensus_module_t::getLogTerm(uint32_t index) const -> uint32_t
     return m_log[index - 1].term();
 }
 
-auto consensus_module_t::findMajorityIndexMatch() -> uint32_t
+auto consensus_module_t::findMajorityIndexMatch() const -> uint32_t
 {
     std::vector<int> matchIndexes;
     matchIndexes.resize(m_replicas.size() + 1);
@@ -857,7 +789,7 @@ auto consensus_module_t::findMajorityIndexMatch() -> uint32_t
     return matchIndexes[matchIndexes.size() / 2];
 }
 
-auto consensus_module_t::waitForMajorityReplication(uint32_t logIndex) -> bool
+auto consensus_module_t::waitForMajorityReplication(uint32_t logIndex) const -> bool
 {
     constexpr const auto replicationTimeout{5};
 
@@ -885,7 +817,7 @@ auto consensus_module_t::getLastLogTerm() const -> uint32_t
     return m_log.empty() ? 0 : m_log.back().term();
 }
 
-auto consensus_module_t::getState() -> NodeState
+auto consensus_module_t::getState() const -> NodeState
 {
     return m_state;
 }
@@ -1021,17 +953,26 @@ auto consensus_module_t::restorePersistentState() -> bool
     return true;
 }
 
-void consensus_module_t::cleanupHeartbeatThreads()
+void consensus_module_t::cleanupHeartbeatThread()
 {
-    spdlog::info("Node={} clearing existing heartbeat threads", m_config.m_id);
-
     if (m_heartbeatThread.joinable())
     {
+        spdlog::info("Node={} clearing existing heartbeat threads", m_config.m_id);
         m_heartbeatThread.request_stop();
         m_heartbeatThread.join();
+        spdlog::info("Node={} existing heartbeat threads cleared", m_config.m_id);
     }
+}
 
-    spdlog::info("Node={} existing heartbeat threads cleared", m_config.m_id);
+void consensus_module_t::cleanupElectionThread()
+{
+    if (m_electionThread.joinable())
+    {
+        spdlog::info("Joining election thread...");
+        m_electionThread.request_stop();
+        m_electionThread.join();
+        spdlog::info("Election thread joined!");
+    }
 }
 
 } // namespace raft
