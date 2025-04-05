@@ -417,34 +417,35 @@ auto consensus_module_t::init() -> bool
     return true;
 }
 
-void consensus_module_t::start()
+void consensus_module_t::runElectionThread(std::stop_token token) noexcept
 {
-    absl::WriterMutexLock locker{&m_stateMutex};
-    m_electionThread = std::jthread(
-        [this](std::stop_token token)
+    while (!token.stop_requested() && !m_shutdown)
+    {
         {
-            while (!token.stop_requested() && !m_shutdown)
+            absl::ReleasableMutexLock locker{&m_stateMutex};
             {
-                {
-                    absl::ReleasableMutexLock locker{&m_stateMutex};
-                    {
-                        if (getState() == NodeState::LEADER)
-                        {
-                            continue;
-                        }
-                    }
-                }
-
-                if (waitForHeartbeat(token))
+                if (getState() == NodeState::LEADER)
                 {
                     continue;
                 }
-
-                startElection();
             }
+        }
 
-            spdlog::info("Election thread received stop_request");
-        });
+        if (waitForHeartbeat(token))
+        {
+            continue;
+        }
+
+        startElection();
+    }
+
+    spdlog::info("Election thread received stop_request");
+}
+
+void consensus_module_t::start()
+{
+    absl::WriterMutexLock locker{&m_stateMutex};
+    m_electionThread = std::jthread([this](std::stop_token token) { runElectionThread(token); });
 }
 
 void consensus_module_t::stop()

@@ -139,8 +139,10 @@ class consensus_module_t : public RaftService::Service
     void becomeLeader() ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_stateMutex);
     void sendHeartbeat(raft_node_grpc_client_t &client) ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_stateMutex);
     auto waitForHeartbeat(std::stop_token token) -> bool;
+
+    void runElectionThread(std::stop_token token) noexcept;
     void startElection();
-    void sendRequestVoteRPCs(const RequestVoteRequest& request, std::uint64_t newTerm);
+    void sendRequestVoteRPCs(const RequestVoteRequest &request, std::uint64_t newTerm);
 
     void               sendAppendEntriesRPC(raft_node_grpc_client_t &client, std::vector<LogEntry> logEntries);
     [[nodiscard]] auto waitForMajorityReplication(uint32_t logIndex) -> bool;
