@@ -453,7 +453,6 @@ void consensus_module_t::stop()
     {
         absl::WriterMutexLock locker{&m_stateMutex};
         m_shutdown = true;
-        m_shutdownHeartbeatThreads = true;
     }
 
     spdlog::info("Shutting down consensus module");
@@ -510,6 +509,8 @@ void consensus_module_t::becomeFollower(uint32_t newTerm)
     m_state = NodeState::FOLLOWER;
     spdlog::debug("Node={} reverted to follower state in term={}", m_config.m_id, m_currentTerm);
 
+    cleanupHeartbeatThreads();
+
     if (!updatePersistentState(std::nullopt, 0))
     {
         spdlog::error("Node={} is unable to persist votedFor={}", m_config.m_id, m_votedFor);
@@ -526,7 +527,6 @@ void consensus_module_t::becomeLeader()
 {
     if (m_state == NodeState::LEADER)
     {
-        assert(!m_heartbeatThreads.empty());
         spdlog::warn("Node={} is already a leader", m_config.m_id);
         return;
     }
@@ -536,91 +536,88 @@ void consensus_module_t::becomeLeader()
 
     cleanupHeartbeatThreads();
 
-    for (auto &[id, client] : m_replicas)
-    {
-        spdlog::debug("Node={} is creating a heartbeat thread for the peer={}", m_config.m_id, id);
-        sendHeartbeat(client.value());
-    }
+    m_heartbeatThread = std::jthread(
+        [this](std::stop_token token)
+        {
+            constexpr const auto heartbeatInterval{std::chrono::milliseconds(100)};
+
+            while (!token.stop_requested() && !m_shutdown)
+            {
+                // TODO(lnikon): Make these calls async
+                for (auto &[id, client] : m_replicas)
+                {
+                    spdlog::debug("Node={} is creating a heartbeat thread for the peer={}", m_config.m_id, id);
+                    // sendHeartbeat(client.value());
+                    sendAppendEntriesRPC(client.value(), {});
+                }
+                std::this_thread::sleep_for(heartbeatInterval);
+            }
+        });
 
     spdlog::info("Node={} become a leader at term={}", m_config.m_id, m_currentTerm);
 }
 
-void consensus_module_t::sendHeartbeat(raft_node_grpc_client_t &client)
+auto consensus_module_t::sendHeartbeat(raft_node_grpc_client_t &client) -> bool
 {
-    constexpr const auto heartbeatInterval{std::chrono::milliseconds(100)};
-    constexpr const int  maxRetries{3};
+    constexpr const int maxRetries{3};
 
-    m_heartbeatThreads.emplace_back(
-        [this, maxRetries, &client, heartbeatInterval](std::stop_token token)
+    spdlog::debug("Node={} is starting a heartbeat thread for client={}", m_config.m_id, client.id());
+
+    int                  consecutiveFailures = 0;
+    AppendEntriesRequest request;
+    {
+        absl::ReaderMutexLock locker{&m_stateMutex};
+        if (m_state != NodeState::LEADER)
         {
-            spdlog::debug("Node={} is starting a heartbeat thread for client={}", m_config.m_id, client.id());
+            spdlog::debug("Node={} is no longer a leader. Stopping the heartbeat thread");
+            return false;
+        }
 
-            int consecutiveFailures = 0;
-            while (!token.stop_requested())
+        request.set_term(m_currentTerm);
+        request.set_prevlogterm(getLastLogTerm());
+        request.set_prevlogindex(getLastLogIndex());
+        request.set_leadercommit(m_commitIndex);
+        request.set_senderid(m_config.m_id);
+    }
+
+    {
+        AppendEntriesResponse response;
+        if (!client.appendEntries(request, &response))
+        {
+            consecutiveFailures++;
+
+            spdlog::error(
+                "AppendEntriesRequest failed during heartbeat. Attempt {}/{}", consecutiveFailures, maxRetries);
+            if (consecutiveFailures >= maxRetries)
             {
-                if (m_shutdown || m_shutdownHeartbeatThreads)
-                {
-                    break;
-                }
-
-                AppendEntriesRequest request;
-                {
-                    absl::ReaderMutexLock locker{&m_stateMutex};
-                    if (m_state != NodeState::LEADER)
-                    {
-                        spdlog::debug("Node={} is no longer a leader. Stopping the heartbeat thread");
-                        break;
-                    }
-
-                    request.set_term(m_currentTerm);
-                    request.set_prevlogterm(getLastLogTerm());
-                    request.set_prevlogindex(getLastLogIndex());
-                    request.set_leadercommit(m_commitIndex);
-                    request.set_senderid(m_config.m_id);
-                }
-
-                {
-                    AppendEntriesResponse response;
-                    if (!client.appendEntries(request, &response))
-                    {
-                        consecutiveFailures++;
-
-                        spdlog::error("AppendEntriesRequest failed during heartbeat. Attempt {}/{}",
-                                      consecutiveFailures,
-                                      maxRetries);
-                        if (consecutiveFailures >= maxRetries)
-                        {
-                            spdlog::error(
-                                "Stopping heartbeat thread due to too much failed AppendEntries RPC attempts");
-                            return;
-                        }
-                    }
-
-                    consecutiveFailures = 0;
-
-                    auto responseTerm = response.term();
-                    auto success = response.success();
-
-                    spdlog::debug("Node={} received AppendEntriesResponse in requester thread peerTerm={} success={} "
-                                  "responderId={}",
-                                  m_config.m_id,
-                                  responseTerm,
-                                  success,
-                                  response.responderid());
-
-                    {
-                        absl::WriterMutexLock locker(&m_stateMutex);
-                        if (responseTerm > m_currentTerm)
-                        {
-                            becomeFollower(responseTerm);
-                            break;
-                        }
-                    }
-                }
-
-                std::this_thread::sleep_for(heartbeatInterval);
+                spdlog::error("Stopping heartbeat thread due to too much failed AppendEntries RPC attempts");
+                return false;
             }
-        });
+        }
+
+        consecutiveFailures = 0;
+
+        auto responseTerm = response.term();
+        auto success = response.success();
+
+        spdlog::debug("Node={} received AppendEntriesResponse in requester thread peerTerm={} success={} "
+                      "responderId={}",
+                      m_config.m_id,
+                      responseTerm,
+                      success,
+                      response.responderid());
+
+        {
+            absl::WriterMutexLock locker(&m_stateMutex);
+            if (responseTerm > m_currentTerm)
+            {
+                becomeFollower(responseTerm);
+                return true;
+            }
+        }
+    }
+
+    return true;
 }
 
 // Note(vbejanyan): Use return code instead of bool
@@ -749,85 +746,82 @@ void consensus_module_t::sendRequestVoteRPCs(const RequestVoteRequest &request, 
 
 void consensus_module_t::sendAppendEntriesRPC(raft_node_grpc_client_t &client, std::vector<LogEntry> logEntries)
 {
-    std::thread(
-        [this](raft_node_grpc_client_t &client, std::vector<LogEntry> logEntries)
+    {
+        AppendEntriesRequest request;
         {
-            AppendEntriesRequest request;
-            {
-                absl::MutexLock locker{&m_stateMutex};
+            absl::MutexLock locker{&m_stateMutex};
 
-                request.set_term(m_currentTerm);
+            request.set_term(m_currentTerm);
+            if (!logEntries.empty())
+            {
                 request.set_prevlogterm(logEntries.front().term());
                 request.set_prevlogindex(getLogTerm(logEntries.front().index() - 1));
-                request.set_leadercommit(m_commitIndex);
-                request.set_senderid(m_config.m_id);
-
-                for (const auto &logEntry : logEntries)
-                {
-                    request.add_entries()->CopyFrom(logEntry);
-                }
             }
+            request.set_leadercommit(m_commitIndex);
+            request.set_senderid(m_config.m_id);
 
-            AppendEntriesResponse response;
-            auto                  status = client.appendEntries(request, &response);
-            if (!status)
+            for (const auto &logEntry : logEntries)
             {
-                absl::MutexLock locker{&m_stateMutex};
-                spdlog::error("Node={} failed to send AppendEntries RPC to peer={} at term={}",
-                              m_config.m_id,
-                              client.id(),
-                              m_currentTerm);
+                request.add_entries()->CopyFrom(logEntry);
+            }
+        }
+
+        AppendEntriesResponse response;
+        auto                  status = client.appendEntries(request, &response);
+        if (!status)
+        {
+            absl::MutexLock locker{&m_stateMutex};
+            spdlog::error("Node={} failed to send AppendEntries RPC to peer={} at term={}",
+                          m_config.m_id,
+                          client.id(),
+                          m_currentTerm);
+            return;
+        }
+
+        {
+            absl::MutexLock locker{&m_stateMutex};
+            if (response.term() > m_currentTerm)
+            {
+                becomeFollower(response.term());
                 return;
             }
+        }
 
+        if (response.success())
+        {
+            spdlog::debug("[VAGAG] response.success");
+            absl::WriterMutexLock locker{&m_stateMutex};
+            m_matchIndex[client.id()] = response.match_index();
+            m_nextIndex[client.id()] = response.match_index() + 1;
+
+            uint32_t majorityIndex = findMajorityIndexMatch();
+            if (majorityIndex > m_commitIndex && m_log.size() >= majorityIndex)
             {
-                absl::MutexLock locker{&m_stateMutex};
-                if (response.term() > m_currentTerm)
-                {
-                    becomeFollower(response.term());
-                    return;
-                }
-            }
-
-            if (response.success())
-            {
-                absl::MutexLock locker{&m_stateMutex};
-                m_matchIndex[client.id()] = response.match_index();
-                m_nextIndex[client.id()] = response.match_index() + 1;
-
-                uint32_t majorityIndex = findMajorityIndexMatch();
-                if (majorityIndex > m_commitIndex && m_log[majorityIndex - 1].term() == m_currentTerm)
+                if (m_log[majorityIndex - 1].term() == m_currentTerm)
                 {
                     if (!updatePersistentState(majorityIndex, std::nullopt))
                     {
-                        spdlog::error("Node={} is unable to persist commitIndex={}", m_config.m_id, m_commitIndex);
+                        spdlog::error("Node={} unable to persist commitIndex={}", m_config.m_id, m_commitIndex);
                         return;
                     }
 
-                    // Apply successfull replication to the state machine e.g. in-memory hash-table
                     while (m_lastApplied < m_commitIndex)
                     {
                         ++m_lastApplied;
-                        // TODO(lnikon): Update the state machine
-                        // m_kv[m_log[m_lastApplied - 1].key()] = m_log[m_lastApplied - 1].value();
+                        spdlog::info("TODO(lnikon): Apply to state machine here");
                     }
-
-                    return;
                 }
             }
-
-            if (!response.success())
+        }
+        else
+        {
             {
-                {
-                    absl::MutexLock locker{&m_stateMutex};
-                    m_nextIndex[client.id()] = std::max(1U, m_nextIndex[client.id()] - 1);
-                }
-                sendAppendEntriesRPC(client, {});
+                absl::MutexLock locker{&m_stateMutex};
+                m_nextIndex[client.id()] = std::max(1U, m_nextIndex[client.id()] - 1);
             }
-        },
-        std::ref(client),
-        logEntries)
-        .detach();
+            // sendAppendEntriesRPC(client, {});
+        }
+    }
 }
 
 auto consensus_module_t::getLogTerm(uint32_t index) const -> uint32_t
@@ -844,11 +838,19 @@ auto consensus_module_t::findMajorityIndexMatch() -> uint32_t
 {
     std::vector<int> matchIndexes;
     matchIndexes.resize(m_replicas.size() + 1);
+
+    uint32_t localLastIndex = getLastLogIndex();
+    matchIndexes.emplace_back(localLastIndex);
+
     for (const auto &[peer, matchIdx] : m_matchIndex)
     {
         matchIndexes.emplace_back(matchIdx);
     }
-    matchIndexes.emplace_back(m_log.back().index());
+
+    if (matchIndexes.empty())
+    {
+        return 0;
+    }
 
     std::ranges::sort(matchIndexes);
 
@@ -1022,19 +1024,13 @@ auto consensus_module_t::restorePersistentState() -> bool
 void consensus_module_t::cleanupHeartbeatThreads()
 {
     spdlog::info("Node={} clearing existing heartbeat threads", m_config.m_id);
-    m_shutdownHeartbeatThreads = true;
-    for (auto &heartbeatThread : m_heartbeatThreads)
+
+    if (m_heartbeatThread.joinable())
     {
-        spdlog::info("Joining heartbeat thread...");
-        heartbeatThread.request_stop();
-        if (heartbeatThread.joinable())
-        {
-            heartbeatThread.join();
-            spdlog::info("Heartbeat thread joined!");
-        }
+        m_heartbeatThread.request_stop();
+        m_heartbeatThread.join();
     }
-    m_heartbeatThreads.clear();
-    m_shutdownHeartbeatThreads = false;
+
     spdlog::info("Node={} existing heartbeat threads cleared", m_config.m_id);
 }
 

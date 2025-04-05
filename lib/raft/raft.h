@@ -137,7 +137,7 @@ class consensus_module_t : public RaftService::Service
     // Logic behind Leader election and log replication
     void becomeFollower(uint32_t newTerm) ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_stateMutex);
     void becomeLeader() ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_stateMutex);
-    void sendHeartbeat(raft_node_grpc_client_t &client) ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_stateMutex);
+    bool sendHeartbeat(raft_node_grpc_client_t &client);
     auto waitForHeartbeat(std::stop_token token) -> bool;
 
     void runElectionThread(std::stop_token token) noexcept;
@@ -195,13 +195,10 @@ class consensus_module_t : public RaftService::Service
     std::jthread m_electionThread;
 
     // Stores clusterSize - 1 thread to send heartbeat to replicas
-    std::vector<std::jthread> m_heartbeatThreads ABSL_GUARDED_BY(m_stateMutex);
+    std::jthread m_heartbeatThread               ABSL_GUARDED_BY(m_stateMutex);
 
     // Used to shutdown the entire consensus module
     bool m_shutdown{false};
-
-    // Used to shutdown heartbeat threads
-    bool m_shutdownHeartbeatThreads{false};
 };
 
 } // namespace raft
