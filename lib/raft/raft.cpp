@@ -506,17 +506,21 @@ auto consensus_module_t::waitForHeartbeat(std::stop_token token) -> bool
 
 void consensus_module_t::sendAppendEntriesRPC(raft_node_grpc_client_t &client, std::vector<LogEntry> logEntries)
 {
+    while (true)
     {
         AppendEntriesRequest request;
         {
             absl::MutexLock locker{&m_stateMutex};
 
             request.set_term(m_currentTerm);
+
             if (!logEntries.empty())
             {
-                request.set_prevlogterm(logEntries.front().term());
-                request.set_prevlogindex(getLogTerm(logEntries.front().index() - 1));
+                m_nextIndex[client.id()] = getLastLogIndex() + 1;
+                request.set_prevlogindex(getLastLogIndex());
+                request.set_prevlogterm(getLastLogTerm());
             }
+
             request.set_leadercommit(m_commitIndex);
             request.set_senderid(m_config.m_id);
 
@@ -545,40 +549,56 @@ void consensus_module_t::sendAppendEntriesRPC(raft_node_grpc_client_t &client, s
             }
         }
 
-        if (response.success())
+        // The loop will continue its execution until onSendAppendEntriesRPC
+        // returns true
+        if (onSendAppendEntriesRPC(client, response))
         {
-            spdlog::debug("[VAGAG] response.success");
-            absl::WriterMutexLock locker{&m_stateMutex};
-            m_matchIndex[client.id()] = response.match_index();
-            m_nextIndex[client.id()] = response.match_index() + 1;
+            return;
+        }
+    }
+}
 
-            uint32_t majorityIndex = findMajorityIndexMatch();
-            if (majorityIndex > m_commitIndex && m_log.size() >= majorityIndex)
+auto consensus_module_t::onSendAppendEntriesRPC(raft_node_grpc_client_t &client, const AppendEntriesResponse &response) noexcept
+    -> bool
+{
+    if (response.success())
+    {
+        spdlog::debug("[VAGAG] response.success");
+        absl::WriterMutexLock locker{&m_stateMutex};
+        m_matchIndex[client.id()] = response.match_index();
+        m_nextIndex[client.id()] = response.match_index() + 1;
+
+        uint32_t majorityIndex = findMajorityIndexMatch();
+        if (majorityIndex > m_commitIndex && m_log.size() >= majorityIndex)
+        {
+            if (m_log[majorityIndex - 1].term() == m_currentTerm)
             {
-                if (m_log[majorityIndex - 1].term() == m_currentTerm)
+                if (!updatePersistentState(majorityIndex, std::nullopt))
                 {
-                    if (!updatePersistentState(majorityIndex, std::nullopt))
-                    {
-                        spdlog::error("Node={} unable to persist commitIndex={}", m_config.m_id, m_commitIndex);
-                        return;
-                    }
+                    spdlog::error("Node={} unable to persist commitIndex={}", m_config.m_id, m_commitIndex);
+                    // TODO(lnikon): Returning false here is dangerous, because
+                    // is it non-distinguishable from nextIndex related issues
+                    return false;
+                }
 
-                    while (m_lastApplied < m_commitIndex)
-                    {
-                        ++m_lastApplied;
-                        spdlog::info("TODO(lnikon): Apply to state machine here");
-                    }
+                while (m_lastApplied < m_commitIndex)
+                {
+                    ++m_lastApplied;
+                    spdlog::info("TODO(lnikon): Apply to state machine here");
                 }
             }
         }
-        else
-        {
-            {
-                absl::MutexLock locker{&m_stateMutex};
-                m_nextIndex[client.id()] = std::max(1U, m_nextIndex[client.id()] - 1);
-            }
-        }
     }
+    else
+    {
+        {
+            absl::MutexLock locker{&m_stateMutex};
+            m_nextIndex[client.id()] = std::max(1U, m_nextIndex[client.id()] - 1);
+        }
+        return false;
+    }
+
+    return true;
 }
 
 void consensus_module_t::runElectionThread(std::stop_token token) noexcept

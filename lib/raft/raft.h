@@ -26,6 +26,8 @@
 namespace raft
 {
 
+// NOLINTBEGIN(modernize-use-trailing-return-type)
+
 using ip_t = std::string;
 using id_t = uint32_t;
 using clock_t = std::chrono::high_resolution_clock;
@@ -39,38 +41,6 @@ struct node_config_t
     id_t m_id{gInvalidId};
     ip_t m_ip;
 };
-
-/**
- * Client for communicating with other nodes in the Raft cluster.
- * Handles RPC operations for consensus and key-value operations.
- */
-// class tkvpp_node_grpc_client_t
-// {
-//   public:
-//     /**
-//      * Constructs a client for communicating with a specific node.
-//      * @param nodeId Unique identifier for the target node
-//      * @param nodeIp IP address of the target node
-//      * @throws std::runtime_error if connection cannot be established
-//      */
-//     tkvpp_node_grpc_client_t(node_config_t config, std::unique_ptr<TinyKVPPService::StubInterface> pRaftStub);
-//     virtual ~tkvpp_node_grpc_client_t() noexcept = default;
-//
-//     tkvpp_node_grpc_client_t(const tkvpp_node_grpc_client_t &) = delete;
-//     auto operator=(const tkvpp_node_grpc_client_t &) -> tkvpp_node_grpc_client_t & = delete;
-//
-//     tkvpp_node_grpc_client_t(tkvpp_node_grpc_client_t &&) = default;
-//     auto operator=(tkvpp_node_grpc_client_t &&) -> tkvpp_node_grpc_client_t & = default;
-//
-//     auto put(const PutRequest &request, PutResponse *pResponse) -> bool;
-//
-//     [[nodiscard]] auto id() const -> id_t;
-//     [[nodiscard]] auto ip() const -> ip_t;
-//
-//   private:
-//     node_config_t                                   m_config{};
-//     std::unique_ptr<TinyKVPPService::StubInterface> m_stub{nullptr};
-// };
 
 /**
  * Client for communicating with other nodes in the Raft cluster.
@@ -108,30 +78,35 @@ class raft_node_grpc_client_t
 class consensus_module_t : public RaftService::Service
 {
   public:
-    // @id is the ID of the current node. Order of RaftServices in @replicas is important!
-    consensus_module_t(node_config_t nodeConfig, std::vector<raft_node_grpc_client_t> replicas);
+    consensus_module_t() = delete;
+    consensus_module_t(node_config_t nodeConfig, std::vector<raft_node_grpc_client_t> replicas) noexcept;
 
-    // NOLINTBEGIN(modernize-use-trailing-return-type)
-    grpc::Status AppendEntries(grpc::ServerContext        *pContext,
-                               const AppendEntriesRequest *pRequest,
-                               AppendEntriesResponse      *pResponse) override ABSL_LOCKS_EXCLUDED(m_stateMutex);
+    consensus_module_t(const consensus_module_t &) = delete;
+    consensus_module_t &operator=(const consensus_module_t &) = delete;
 
-    auto RequestVote(grpc::ServerContext *pContext, const RequestVoteRequest *pRequest, RequestVoteResponse *pResponse)
-        -> grpc::Status override ABSL_LOCKS_EXCLUDED(m_stateMutex);
-    // NOLINTEND(modernize-use-trailing-return-type)
+    consensus_module_t(consensus_module_t &&) = delete;
+    consensus_module_t &operator=(consensus_module_t &&) = delete;
+
+    ~consensus_module_t() override = default;
 
     [[nodiscard]] auto init() -> bool;
     void               start();
     void               stop();
 
-    auto replicate(LogEntry logEntry) -> bool;
+    [[nodiscard]] grpc::Status AppendEntries(grpc::ServerContext        *pContext,
+                                             const AppendEntriesRequest *pRequest,
+                                             AppendEntriesResponse      *pResponse) override ABSL_LOCKS_EXCLUDED(m_stateMutex);
 
-    // NOLINTBEGIN(modernize-use-trailing-return-type)
+    [[nodiscard]] grpc::Status RequestVote(grpc::ServerContext      *pContext,
+                                           const RequestVoteRequest *pRequest,
+                                           RequestVoteResponse      *pResponse) override ABSL_LOCKS_EXCLUDED(m_stateMutex);
+
+    [[nodiscard]] auto replicate(LogEntry logEntry) -> bool;
+
     [[nodiscard]] std::uint32_t         currentTerm() const;
     [[nodiscard]] id_t                  votedFor() const;
     [[nodiscard]] std::vector<LogEntry> log() const;
     [[nodiscard]] NodeState             getState() const ABSL_SHARED_LOCKS_REQUIRED(m_stateMutex);
-    // NOLINTEND(modernize-use-trailing-return-type)
 
   private:
     // ---- State transitions ----
@@ -143,6 +118,7 @@ class consensus_module_t : public RaftService::Service
     void runHeartbeatThread(std::stop_token token);
     auto waitForHeartbeat(std::stop_token token) -> bool;
     void sendAppendEntriesRPC(raft_node_grpc_client_t &client, std::vector<LogEntry> logEntries);
+    auto onSendAppendEntriesRPC(raft_node_grpc_client_t &client, const AppendEntriesResponse &response) noexcept -> bool;
     // --------
 
     // ---- Leader election ----
@@ -163,8 +139,7 @@ class consensus_module_t : public RaftService::Service
     // ---- Persistent state management ----
     // TODO(lnikon): Move into separate class
     [[nodiscard]] bool initializePersistentState() ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_stateMutex);
-    [[nodiscard]] bool updatePersistentState(std::optional<std::uint32_t> commitIndex,
-                                             std::optional<std::uint32_t> votedFor)
+    [[nodiscard]] bool updatePersistentState(std::optional<std::uint32_t> commitIndex, std::optional<std::uint32_t> votedFor)
         ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_stateMutex);
 
     [[nodiscard]] bool flushPersistentState() ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_stateMutex);
@@ -209,5 +184,7 @@ class consensus_module_t : public RaftService::Service
     // Used to shutdown the entire consensus module
     bool m_shutdown{false};
 };
+
+// NOLINTEND(modernize-use-trailing-return-type)
 
 } // namespace raft
