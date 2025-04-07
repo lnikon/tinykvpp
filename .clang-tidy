@@ -1,4 +1,5 @@
 Checks: >
+  abseil-*,
   readability-*,
   modernize-*,
   performance-*,
