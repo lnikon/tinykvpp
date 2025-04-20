@@ -14,9 +14,7 @@ namespace concurrency
 template <typename TItem> class thread_safe_queue_t
 {
   public:
-    using queue_t =
-
-        std::deque<TItem>;
+    using queue_t = std::deque<TItem>;
 
     void push(TItem item)
     {
