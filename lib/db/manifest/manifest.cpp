@@ -139,13 +139,13 @@ auto manifest_t::recover() -> bool
                     }
                     default:
                     {
-                        spdlog::error("unhandled record_type_int={}. Skipping record.", record_type_int);
+                        spdlog::error("unhandled record_type_int={}. Skipping record.",
+                                      record_type_int);
                         break;
                     }
                     }
                 }
                 spdlog::info("Manifest recovery finished");
-
 
                 return {};
             })

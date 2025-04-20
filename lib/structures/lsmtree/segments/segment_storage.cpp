@@ -79,8 +79,9 @@ void segment_storage_t::remove(regular_segment::shared_ptr_t pSegment)
     absl::WriterMutexLock lock{&m_mutex};
 
     const auto oldSize = m_segmentsVector.size();
-    m_segmentsVector.erase(std::remove(std::begin(m_segmentsVector), std::end(m_segmentsVector), pSegment),
-                           std::end(m_segmentsVector));
+    m_segmentsVector.erase(
+        std::remove(std::begin(m_segmentsVector), std::end(m_segmentsVector), pSegment),
+        std::end(m_segmentsVector));
     m_segmentsMap.erase(pSegment->get_name());
     const auto newSize = m_segmentsVector.size();
 
@@ -91,7 +92,8 @@ void segment_storage_t::remove(regular_segment::shared_ptr_t pSegment)
                   newSize);
 }
 
-auto segment_storage_t::find(const std::string &name) const noexcept -> regular_segment::shared_ptr_t
+auto segment_storage_t::find(const std::string &name) const noexcept
+    -> regular_segment::shared_ptr_t
 {
     auto it{m_segmentsMap.find(name)};
     return it != m_segmentsMap.end() ? it->second : nullptr;

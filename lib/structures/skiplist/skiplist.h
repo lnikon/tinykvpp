@@ -167,7 +167,8 @@ template <typename record_gt, typename comparator_gt> class skiplist_t
         if (current == nullptr || current->record.m_key != record.m_key)
         {
             // Insert new node
-            node_shared_ptr_t newNode = std::make_shared<node_t>(std::forward<record_gt>(record), m_level);
+            node_shared_ptr_t newNode =
+                std::make_shared<node_t>(std::forward<record_gt>(record), m_level);
             for (std::int64_t i{0}; i <= newLevel; i++)
             {
                 newNode->forward[i] = to_be_updated[i]->forward[i];

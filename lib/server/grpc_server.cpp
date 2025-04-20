@@ -20,14 +20,16 @@ tinykvpp_service_impl_t::tinykvpp_service_impl_t(db::shared_ptr_t db)
 {
 }
 
-auto tinykvpp_service_impl_t::Put(grpc::ServerContext *pContext, const PutRequest *pRequest, PutResponse *pResponse)
-    -> grpc::Status
+auto tinykvpp_service_impl_t::Put(grpc::ServerContext *pContext,
+                                  const PutRequest    *pRequest,
+                                  PutResponse         *pResponse) -> grpc::Status
 {
     (void)pContext;
 
     try
     {
-        m_database->put(structures::lsmtree::key_t{pRequest->key()}, structures::lsmtree::value_t{pRequest->value()});
+        m_database->put(structures::lsmtree::key_t{pRequest->key()},
+                        structures::lsmtree::value_t{pRequest->value()});
         pResponse->set_status(std::string("OK"));
         return grpc::Status::OK;
     }
@@ -39,8 +41,9 @@ auto tinykvpp_service_impl_t::Put(grpc::ServerContext *pContext, const PutReques
     }
 }
 
-auto tinykvpp_service_impl_t::Get(grpc::ServerContext *pContext, const GetRequest *pRequest, GetResponse *pResponse)
-    -> grpc::Status
+auto tinykvpp_service_impl_t::Get(grpc::ServerContext *pContext,
+                                  const GetRequest    *pRequest,
+                                  GetResponse         *pResponse) -> grpc::Status
 {
     (void)pContext;
     try
@@ -88,8 +91,8 @@ void grpc_communication_t::start(db::shared_ptr_t database) noexcept
 
     spdlog::info("Starting gRPC communication...");
 
-    const auto serverAddress{
-        fmt::format("{}:{}", database->config()->ServerConfig.host, database->config()->ServerConfig.port)};
+    const auto serverAddress{fmt::format(
+        "{}:{}", database->config()->ServerConfig.host, database->config()->ServerConfig.port)};
 
     try
     {

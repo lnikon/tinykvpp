@@ -30,7 +30,9 @@ auto main(int argc, char *argv[]) -> int
 
     cxxopts::Options options("raft");
     options.add_options()("id", "id of the node", cxxopts::value<id_t>())(
-        "nodes", "ip addresses of replicas in a correct order", cxxopts::value<std::vector<raft::ip_t>>());
+        "nodes",
+        "ip addresses of replicas in a correct order",
+        cxxopts::value<std::vector<raft::ip_t>>());
 
     auto parsedOptions = options.parse(argc, argv);
     if ((parsedOptions.count("help") != 0U) || (parsedOptions.count("id") == 0U) ||
@@ -59,16 +61,18 @@ auto main(int argc, char *argv[]) -> int
     {
         if (replicaId != nodeId)
         {
-            std::unique_ptr<RaftService::Stub> stub{
-                RaftService::NewStub(grpc::CreateChannel(replicaIp, grpc::InsecureChannelCredentials()))};
+            std::unique_ptr<RaftService::Stub> stub{RaftService::NewStub(
+                grpc::CreateChannel(replicaIp, grpc::InsecureChannelCredentials()))};
 
-            replicas.emplace_back(raft::node_config_t{.m_id = replicaId, .m_ip = replicaIp}, std::move(stub));
+            replicas.emplace_back(raft::node_config_t{.m_id = replicaId, .m_ip = replicaIp},
+                                  std::move(stub));
         }
 
         ++replicaId;
     }
 
-    raft::consensus_module_t consensusModule({.m_id = nodeId, .m_ip = nodeIps[nodeId - 1]}, std::move(replicas));
+    raft::consensus_module_t consensusModule({.m_id = nodeId, .m_ip = nodeIps[nodeId - 1]},
+                                             std::move(replicas));
     if (!consensusModule.init())
     {
         spdlog::error("Failed to initialize the state machine");

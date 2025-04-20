@@ -33,7 +33,8 @@ auto segment_name() -> types::name_t
     return types::name_t{fmt::format("segment_{}", uuid())};
 }
 
-auto segment_path(const std::filesystem::path &datadir, const types::name_t &name) -> std::filesystem::path
+auto segment_path(const std::filesystem::path &datadir, const types::name_t &name)
+    -> std::filesystem::path
 {
     return datadir / name;
 }

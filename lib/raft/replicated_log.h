@@ -14,9 +14,8 @@ class replicated_log_t
   public:
     replicated_log_t() = delete;
 
-    replicated_log_t(
-        wal::log::log_variant_t                   log,
-        std::shared_ptr<raft::consensus_module_t> pConsensusModule) noexcept
+    replicated_log_t(wal::log::log_variant_t                   log,
+                     std::shared_ptr<raft::consensus_module_t> pConsensusModule) noexcept
         : m_log{std::move(log)},
           m_pConsensusModule{std::move(pConsensusModule)}
     {
@@ -54,9 +53,8 @@ class replicated_log_t
         return std::visit([&](auto &log) { return log.append(entry); }, m_log);
     }
 
-    [[nodiscard]] auto append(std::string command,
-                              std::string key,
-                              std::string value) noexcept -> bool
+    [[nodiscard]] auto append(std::string command, std::string key, std::string value) noexcept
+        -> bool
     {
         if (!append(fmt::format("{} {} {}", command, key, value)))
         {
@@ -94,15 +92,13 @@ class replicated_log_t
     std::shared_ptr<raft::consensus_module_t> m_pConsensusModule{nullptr};
 };
 
-static_assert(TLogStorageConcept<replicated_log_t>,
-              "replicated_log_t must satisfy TLogConcept");
+static_assert(TLogStorageConcept<replicated_log_t>, "replicated_log_t must satisfy TLogConcept");
 
 class replicated_log_builder_t final
 {
   public:
-    [[nodiscard]] auto
-    build(wal::log::log_variant_t                   log,
-          std::shared_ptr<raft::consensus_module_t> pConsensusModule) noexcept
+    [[nodiscard]] auto build(wal::log::log_variant_t                   log,
+                             std::shared_ptr<raft::consensus_module_t> pConsensusModule) noexcept
         -> replicated_log_t
     {
         return replicated_log_t{std::move(log), std::move(pConsensusModule)};

@@ -26,8 +26,7 @@ class in_memory_log_storage_t
     {
     }
 
-    auto operator=(in_memory_log_storage_t &&other) noexcept
-        -> in_memory_log_storage_t &
+    auto operator=(in_memory_log_storage_t &&other) noexcept -> in_memory_log_storage_t &
     {
         if (this == &other)
         {
@@ -40,8 +39,7 @@ class in_memory_log_storage_t
     }
 
     in_memory_log_storage_t(const in_memory_log_storage_t &other) = delete;
-    auto operator=(in_memory_log_storage_t &)
-        -> in_memory_log_storage_t & = delete;
+    auto operator=(in_memory_log_storage_t &) -> in_memory_log_storage_t & = delete;
 
     ~in_memory_log_storage_t() noexcept = default;
 
@@ -51,8 +49,7 @@ class in_memory_log_storage_t
         return true;
     }
 
-    [[nodiscard]] auto
-    append(std::string command, std::string key, std::string value) -> bool
+    [[nodiscard]] auto append(std::string command, std::string key, std::string value) -> bool
     {
         m_log.emplace_back(fmt::format("{} {} {}", command, key, value));
         return true;

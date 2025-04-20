@@ -21,7 +21,8 @@ namespace types = lsmtree::segments::types;
  */
 struct last_write_time_comparator_t
 {
-    auto operator()(const regular_segment::shared_ptr_t &lhs, const regular_segment::shared_ptr_t &rhs) -> bool
+    auto operator()(const regular_segment::shared_ptr_t &lhs,
+                    const regular_segment::shared_ptr_t &rhs) -> bool
     {
         return lhs->last_write_time() <= rhs->last_write_time();
     }
@@ -34,7 +35,8 @@ struct last_write_time_comparator_t
  */
 struct key_range_comparator_t
 {
-    auto operator()(const regular_segment::shared_ptr_t &lhs, const regular_segment::shared_ptr_t &rhs) -> bool
+    auto operator()(const regular_segment::shared_ptr_t &lhs,
+                    const regular_segment::shared_ptr_t &rhs) -> bool
     {
         return lhs->max() < rhs->min();
     }
@@ -50,8 +52,10 @@ class segment_storage_t : public std::enable_shared_from_this<segment_storage_t>
   public:
     using name_t = types::name_t;
     using segment_map_t = std::unordered_map<name_t, regular_segment::shared_ptr_t>;
-    using segment_comp_t = std::function<bool(regular_segment::shared_ptr_t, regular_segment::shared_ptr_t)>;
-    using storage_t = structures::sorted_vector::sorted_vector_t<regular_segment::shared_ptr_t, segment_comp_t>;
+    using segment_comp_t =
+        std::function<bool(regular_segment::shared_ptr_t, regular_segment::shared_ptr_t)>;
+    using storage_t =
+        structures::sorted_vector::sorted_vector_t<regular_segment::shared_ptr_t, segment_comp_t>;
     using iterator = storage_t::iterator;
     using const_iterator = storage_t::const_iterator;
     using reverse_iterator = storage_t::reverse_iterator;

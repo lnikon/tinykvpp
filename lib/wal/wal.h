@@ -131,9 +131,8 @@ template <TLogConcept TLog> class wal_t
     TLog m_log;
 };
 
-using wal_variant_t = std::variant<
-    wal_t<log_t<in_memory_log_storage_t>>,
-    wal_t<log_t<persistent_log_storage_t<file_storage_backend_t>>>>;
+using wal_variant_t = std::variant<wal_t<log_t<in_memory_log_storage_t>>,
+                                   wal_t<log_t<persistent_log_storage_t<file_storage_backend_t>>>>;
 
 class wal_wrapper_t
 {
@@ -163,8 +162,7 @@ class wal_wrapper_t
     wal_variant_t m_wal;
 };
 
-template <TLogConcept<std::string> TLog>
-using shared_ptr_t = std::shared_ptr<wal_t<TLog>>;
+template <TLogConcept<std::string> TLog> using shared_ptr_t = std::shared_ptr<wal_t<TLog>>;
 
 template <typename TLog, typename... Args> auto make_shared(Args &&...args)
 {
@@ -189,8 +187,7 @@ wal_t<TLog>::wal_t(wal_t &&other) noexcept
 {
 }
 
-template <TLogConcept TLog>
-auto wal_t<TLog>::operator=(const wal_t &other) -> wal_t &
+template <TLogConcept TLog> auto wal_t<TLog>::operator=(const wal_t &other) -> wal_t &
 {
     if (this == &other)
     {
@@ -200,8 +197,7 @@ auto wal_t<TLog>::operator=(const wal_t &other) -> wal_t &
     return *this;
 }
 
-template <TLogConcept TLog>
-auto wal_t<TLog>::operator=(wal_t &&other) noexcept -> wal_t &
+template <TLogConcept TLog> auto wal_t<TLog>::operator=(wal_t &&other) noexcept -> wal_t &
 {
     if (this == &other)
     {
@@ -211,8 +207,7 @@ auto wal_t<TLog>::operator=(wal_t &&other) noexcept -> wal_t &
     return *this;
 }
 
-template <TLogConcept<std::string> TLog>
-void wal_t<TLog>::add(const record_t &rec) noexcept
+template <TLogConcept<std::string> TLog> void wal_t<TLog>::add(const record_t &rec) noexcept
 {
     auto op_view{magic_enum::enum_name(rec.op)};
     ASSERT(m_log.append(std::string{op_view.data(), op_view.size()},
@@ -223,8 +218,7 @@ void wal_t<TLog>::add(const record_t &rec) noexcept
     spdlog::debug("Added new WAL entry {}", "FILL_ME");
 }
 
-template <TLogConcept<std::string> TLog>
-auto wal_t<TLog>::reset() noexcept -> bool
+template <TLogConcept<std::string> TLog> auto wal_t<TLog>::reset() noexcept -> bool
 {
     return m_log.reset();
 }
@@ -326,12 +320,10 @@ template <typename TStorageTag> class wal_builder_t
             auto wrapper = wal_wrapper_t(std::move(wal));
             return wrapper;
         }
-        else if constexpr (std::is_same_v<TStorageTag,
-                                          storage_tags::file_backend_tag>)
+        else if constexpr (std::is_same_v<TStorageTag, storage_tags::file_backend_tag>)
         {
-            auto log = log_builder_t<storage_tags::file_backend_tag>{}
-                           .set_file_path(m_file_path)
-                           .build();
+            auto log =
+                log_builder_t<storage_tags::file_backend_tag>{}.set_file_path(m_file_path).build();
             if (!log.has_value())
             {
                 return std::unexpected(wal_builder_error_t::kLogBuildFailed);
@@ -342,8 +334,7 @@ template <typename TStorageTag> class wal_builder_t
         }
         else
         {
-            static_assert(always_false_v<TStorageTag>,
-                          "Unsupported storage tag type");
+            static_assert(always_false_v<TStorageTag>, "Unsupported storage tag type");
             return std::unexpected(wal_builder_error_t::kInvalidConfiguration);
         }
     }

@@ -13,7 +13,8 @@
 static void BM_BenchmarkFstreamWrite(benchmark::State &state)
 {
     const std::string filename("test_stream.txt");
-    std::fstream      fs(filename, std::fstream::in | std::fstream::out | std::fstream::app | std::fstream::ate);
+    std::fstream      fs(filename,
+                    std::fstream::in | std::fstream::out | std::fstream::app | std::fstream::ate);
     if (!fs.is_open())
     {
         std::cerr << "unable to open" << filename << '\n';
@@ -33,7 +34,8 @@ BENCHMARK(BM_BenchmarkFstreamWrite);
 static void BM_BenchmarkFstreamWriteWithFlush(benchmark::State &state)
 {
     const std::string filename("test_stream.txt");
-    std::fstream      fs(filename, std::fstream::in | std::fstream::out | std::fstream::app | std::fstream::ate);
+    std::fstream      fs(filename,
+                    std::fstream::in | std::fstream::out | std::fstream::app | std::fstream::ate);
     if (!fs.is_open())
     {
         std::cerr << "unable to open" << filename << '\n';
@@ -54,7 +56,8 @@ BENCHMARK(BM_BenchmarkFstreamWriteWithFlush);
 static void BM_BenchmarkFstreamWriteWithSync(benchmark::State &state)
 {
     const std::string filename("test_stream.txt");
-    std::fstream      fs(filename, std::fstream::in | std::fstream::out | std::fstream::app | std::fstream::ate);
+    std::fstream      fs(filename,
+                    std::fstream::in | std::fstream::out | std::fstream::app | std::fstream::ate);
     if (!fs.is_open())
     {
         std::cerr << "unable to open" << filename << '\n';

@@ -16,14 +16,17 @@ namespace structures::lsmtree::segments::regular_segment
 
 const auto footerSize{128}; // bytes
 
-regular_segment_t::regular_segment_t(fs::path_t path, types::name_t name, memtable::memtable_t memtable)
+regular_segment_t::regular_segment_t(fs::path_t           path,
+                                     types::name_t        name,
+                                     memtable::memtable_t memtable)
     : m_path{std::move(path)},
       m_name{std::move(name)},
       m_memtable{std::make_optional<memtable_t>(std::move(memtable))}
 {
 }
 
-[[nodiscard]] auto regular_segment_t::record(const lsmtree::key_t &key) -> std::vector<std::optional<record_t>>
+[[nodiscard]] auto regular_segment_t::record(const lsmtree::key_t &key)
+    -> std::vector<std::optional<record_t>>
 {
     if (m_hashIndex.empty())
     {
@@ -48,7 +51,8 @@ regular_segment_t::regular_segment_t(fs::path_t path, types::name_t name, memtab
     return result;
 }
 
-auto regular_segment_t::record(const hashindex::hashindex_t::offset_t &offset) -> std::optional<record_t>
+auto regular_segment_t::record(const hashindex::hashindex_t::offset_t &offset)
+    -> std::optional<record_t>
 {
     std::fstream ss{get_path(), std::ios::in};
     ss.seekg(offset);

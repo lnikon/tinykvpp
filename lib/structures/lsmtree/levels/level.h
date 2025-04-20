@@ -40,7 +40,8 @@ class level_t
      * @param pMemtable
      * @return owning pointer to the newly created segment
      */
-    [[maybe_unused]] auto segment(memtable::memtable_t pMemtable) -> segments::regular_segment::shared_ptr_t;
+    [[maybe_unused]] auto segment(memtable::memtable_t pMemtable)
+        -> segments::regular_segment::shared_ptr_t;
 
     /**
      * @brief Creates a new segment from the given memtable and stores it.
@@ -53,14 +54,16 @@ class level_t
      * @param name The name to be used for the segment.
      * @return A shared pointer to the newly created segment.
      */
-    auto segment(memtable::memtable_t memtable, const std::string &name) -> segments::regular_segment::shared_ptr_t;
+    auto segment(memtable::memtable_t memtable, const std::string &name)
+        -> segments::regular_segment::shared_ptr_t;
 
     /**
      * @brief
      *
      * @param key
      */
-    [[nodiscard]] auto record(const key_t &key) const noexcept -> std::optional<memtable::memtable_t::record_t>;
+    [[nodiscard]] auto record(const key_t &key) const noexcept
+        -> std::optional<memtable::memtable_t::record_t>;
 
     /**
      * @brief Compact level0 into a single segment in 'ReadyToFlush' state

@@ -8,9 +8,9 @@
 namespace wal::log
 {
 
-using log_storage_variant_t = std::variant<
-    wal::log::in_memory_log_storage_t,
-    wal::log::persistent_log_storage_t<wal::log::file_storage_backend_t>>;
+using log_storage_variant_t =
+    std::variant<wal::log::in_memory_log_storage_t,
+                 wal::log::persistent_log_storage_t<wal::log::file_storage_backend_t>>;
 
 class log_storage_builder_t final
 {

@@ -22,22 +22,21 @@ fs::append_only_file_t::append_only_file_t(random_access_file_t &&fd) noexcept
 fs::append_only_file_t::append_only_file_t(append_only_file_t &&other) noexcept
     : m_fd{std::move(other.m_fd)}
 {
-  if (this == &other)
-  {
-    return;
-  }
+    if (this == &other)
+    {
+        return;
+    }
 }
 
-auto fs::append_only_file_t::operator=(append_only_file_t &&other) noexcept
-    -> append_only_file_t &
+auto fs::append_only_file_t::operator=(append_only_file_t &&other) noexcept -> append_only_file_t &
 {
-  if (this == &other)
-  {
-    return *this;
-  }
+    if (this == &other)
+    {
+        return *this;
+    }
 
-  m_fd = std::move(other.m_fd);
-  return *this;
+    m_fd = std::move(other.m_fd);
+    return *this;
 }
 
 fs::append_only_file_t::~append_only_file_t() noexcept
@@ -47,39 +46,33 @@ fs::append_only_file_t::~append_only_file_t() noexcept
 auto fs::append_only_file_t::append(std::string_view data) noexcept
     -> std::expected<ssize_t, file_error_t>
 {
-  return m_fd.write(data, 0);
+    return m_fd.write(data, 0);
 }
 
-auto fs::append_only_file_t::read(size_t offset,
-                                  char  *buffer,
-                                  size_t size) noexcept
+auto fs::append_only_file_t::read(size_t offset, char *buffer, size_t size) noexcept
     -> std::expected<ssize_t, file_error_t>
 {
-  return m_fd.read(offset, buffer, size);
+    return m_fd.read(offset, buffer, size);
 }
 
-auto fs::append_only_file_t::size() const noexcept
-    -> std::expected<std::size_t, file_error_t>
+auto fs::append_only_file_t::size() const noexcept -> std::expected<std::size_t, file_error_t>
 {
-  return m_fd.size();
+    return m_fd.size();
 }
 
-auto fs::append_only_file_t::flush() noexcept
-    -> std::expected<void, file_error_t>
+auto fs::append_only_file_t::flush() noexcept -> std::expected<void, file_error_t>
 {
-  return m_fd.flush();
+    return m_fd.flush();
 }
 
-auto fs::append_only_file_t::reset() noexcept
-    -> std::expected<void, file_error_t>
+auto fs::append_only_file_t::reset() noexcept -> std::expected<void, file_error_t>
 {
-  return m_fd.reset();
+    return m_fd.reset();
 }
 
-auto fs::append_only_file_t::stream() noexcept
-    -> std::expected<std::stringstream, file_error_t>
+auto fs::append_only_file_t::stream() noexcept -> std::expected<std::stringstream, file_error_t>
 {
-  return m_fd.stream();
+    return m_fd.stream();
 }
 
 /**
@@ -105,20 +98,19 @@ auto fs::append_only_file_t::stream() noexcept
 auto append_only_file_builder_t::build(std::string path, bool direct_io)
     -> std::expected<append_only_file_t, file_error_t>
 {
-  auto flags{pw::open_flag_k::kReadWrite | pw::open_flag_k::kCreate |
-             pw::open_flag_k::kAppend};
-  if (direct_io)
-  {
-    flags |= pw::open_flag_k::kDirect;
-  }
+    auto flags{pw::open_flag_k::kReadWrite | pw::open_flag_k::kCreate | pw::open_flag_k::kAppend};
+    if (direct_io)
+    {
+        flags |= pw::open_flag_k::kDirect;
+    }
 
-  auto file{random_access_file_builder_t{}.build(std::move(path), flags)};
-  if (!file.has_value())
-  {
-    return std::unexpected(file.error());
-  }
+    auto file{random_access_file_builder_t{}.build(std::move(path), flags)};
+    if (!file.has_value())
+    {
+        return std::unexpected(file.error());
+    }
 
-  return append_only_file_t{std::move(file.value())};
+    return append_only_file_t{std::move(file.value())};
 }
 
 } // namespace fs

@@ -14,7 +14,8 @@
 void fstream_test()
 {
     const std::string filename("test_stream_3.txt");
-    std::fstream      fs(filename, std::fstream::in | std::fstream::out | std::fstream::app | std::fstream::ate);
+    std::fstream      fs(filename,
+                    std::fstream::in | std::fstream::out | std::fstream::app | std::fstream::ate);
     if (!fs.is_open())
     {
         std::cerr << "unable to open" << filename << '\n';

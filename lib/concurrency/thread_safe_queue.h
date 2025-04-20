@@ -27,7 +27,9 @@ template <typename TItem> class thread_safe_queue_t
     {
         absl::WriterMutexLock lock(&m_mutex);
         if (!m_mutex.AwaitWithTimeout(
-                absl::Condition(+[](queue_t *queue) { return !queue->empty(); }, &m_queue), absl::Seconds(1)))
+                absl::Condition(
+                    +[](queue_t *queue) { return !queue->empty(); }, &m_queue),
+                absl::Seconds(1)))
         {
             return std::nullopt;
         }

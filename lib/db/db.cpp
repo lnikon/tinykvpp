@@ -40,7 +40,8 @@ auto db_t::open() -> bool
     // Restore lsmtree based on manifest and WAL
     if (!m_lsmTree.recover())
     {
-        spdlog::error("Unable to restore the database at {}", m_config->DatabaseConfig.DatabasePath.c_str());
+        spdlog::error("Unable to restore the database at {}",
+                      m_config->DatabaseConfig.DatabasePath.c_str());
         return false;
     }
 
@@ -54,7 +55,8 @@ void db_t::put(const structures::lsmtree::key_t &key, const structures::lsmtree:
     m_lsmTree.put(key, value);
 }
 
-auto db_t::get(const structures::lsmtree::key_t &key) -> std::optional<structures::memtable::memtable_t::record_t>
+auto db_t::get(const structures::lsmtree::key_t &key)
+    -> std::optional<structures::memtable::memtable_t::record_t>
 {
     return m_lsmTree.get(key);
 }
@@ -69,10 +71,12 @@ auto db_t::prepare_directory_structure() -> bool
     // Create database directory
     if (!std::filesystem::exists(m_config->DatabaseConfig.DatabasePath))
     {
-        spdlog::info("Creating database directory at {}", m_config->DatabaseConfig.DatabasePath.c_str());
+        spdlog::info("Creating database directory at {}",
+                     m_config->DatabaseConfig.DatabasePath.c_str());
         if (!std::filesystem::create_directory(m_config->DatabaseConfig.DatabasePath))
         {
-            spdlog::error("Failed to create database directory at {}", m_config->DatabaseConfig.DatabasePath.c_str());
+            spdlog::error("Failed to create database directory at {}",
+                          m_config->DatabaseConfig.DatabasePath.c_str());
             return false;
         }
     }

@@ -45,7 +45,8 @@ BENCHMARK_DEFINE_F(DatabaseFixture, PutTest)(benchmark::State &st)
         records.reserve(recordNum);
         for (std::size_t i = 0; i < recordNum; i++)
         {
-            records.emplace_back(bench::generateRandomString(st.range(0)), bench::generateRandomString(st.range(0)));
+            records.emplace_back(bench::generateRandomString(st.range(0)),
+                                 bench::generateRandomString(st.range(0)));
         }
         st.ResumeTiming();
 
@@ -55,6 +56,12 @@ BENCHMARK_DEFINE_F(DatabaseFixture, PutTest)(benchmark::State &st)
         }
     }
 }
-BENCHMARK_REGISTER_F(DatabaseFixture, PutTest)->Arg(8)->Arg(64)->Arg(512)->Arg(4 << 10)->Arg(8 << 10)->Arg(16 << 10);
+BENCHMARK_REGISTER_F(DatabaseFixture, PutTest)
+    ->Arg(8)
+    ->Arg(64)
+    ->Arg(512)
+    ->Arg(4 << 10)
+    ->Arg(8 << 10)
+    ->Arg(16 << 10);
 
 BENCHMARK_MAIN();

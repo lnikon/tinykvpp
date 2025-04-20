@@ -8,8 +8,8 @@ namespace wal
 
 struct config_t
 {
-    bool                    enable{false};
-    fs::path_t              path;
+    bool               enable{false};
+    fs::path_t         path;
     log_storage_type_k storageType{log_storage_type_k::in_memory_k};
 };
 

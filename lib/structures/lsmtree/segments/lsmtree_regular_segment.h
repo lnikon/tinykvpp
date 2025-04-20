@@ -32,15 +32,16 @@ class regular_segment_t final
      *
      * @param key
      */
-    [[nodiscard]] auto record(const lsmtree::key_t &key) -> std::vector<std::optional<memtable::memtable_t::record_t>>;
+    [[nodiscard]] auto record(const lsmtree::key_t &key)
+        -> std::vector<std::optional<memtable::memtable_t::record_t>>;
 
     /**
      * @brief
      *
      * @param offset
      */
-    [[nodiscard]] auto
-    record(const hashindex::hashindex_t::offset_t &offset) -> std::optional<memtable::memtable_t::record_t>;
+    [[nodiscard]] auto record(const hashindex::hashindex_t::offset_t &offset)
+        -> std::optional<memtable::memtable_t::record_t>;
 
     /**
      * @brief

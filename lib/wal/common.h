@@ -21,10 +21,8 @@ enum class log_storage_type_k : int8_t
     file_based_persistent_k
 };
 
-[[nodiscard]] auto to_string(log_storage_type_k type) noexcept
-    -> std::string_view;
-[[nodiscard]] auto from_string(std::string_view type) noexcept
-    -> log_storage_type_k;
+[[nodiscard]] auto to_string(log_storage_type_k type) noexcept -> std::string_view;
+[[nodiscard]] auto from_string(std::string_view type) noexcept -> log_storage_type_k;
 
 struct record_t
 {

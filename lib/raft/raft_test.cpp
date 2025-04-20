@@ -35,8 +35,10 @@ TEST(NodeClient, AppendEntries)
     AppendEntriesResponse response;
     EXPECT_CALL(*mockStub, AppendEntries)
         .Times(testing::AtLeast(2))
-        .WillOnce(testing::DoAll(testing::SetArgPointee<2>(response), testing::Return(grpc::Status::OK)))
-        .WillOnce(testing::DoAll(testing::SetArgPointee<2>(response), testing::Return(grpc::Status::CANCELLED)));
+        .WillOnce(
+            testing::DoAll(testing::SetArgPointee<2>(response), testing::Return(grpc::Status::OK)))
+        .WillOnce(testing::DoAll(testing::SetArgPointee<2>(response),
+                                 testing::Return(grpc::Status::CANCELLED)));
 
     raft::raft_node_grpc_client_t nodeClient{nodeConfig, std::move(mockStub)};
 
@@ -52,7 +54,8 @@ class ConsensusModuleTest : public testing::Test
     {
         for (id_t id{1}; id <= clusterSize; id++)
         {
-            m_configs[id] = raft::node_config_t{.m_id = id, .m_ip = fmt::format("0.0.0.0:909{}", id)};
+            m_configs[id] =
+                raft::node_config_t{.m_id = id, .m_ip = fmt::format("0.0.0.0:909{}", id)};
         }
     }
 
@@ -64,7 +67,8 @@ class ConsensusModuleTest : public testing::Test
 
             m_raftClients.emplace(
                 id,
-                raft::raft_node_grpc_client_t(m_configs[id], std::unique_ptr<MockRaftServiceStub>(m_raftStubs[id])));
+                raft::raft_node_grpc_client_t(
+                    m_configs[id], std::unique_ptr<MockRaftServiceStub>(m_raftStubs[id])));
         }
     }
 
@@ -82,13 +86,14 @@ class ConsensusModuleTest : public testing::Test
 
     auto raftClients()
     {
-        return m_raftClients | std::views::transform([](auto &&pair) { return std::move(pair.second); }) |
+        return m_raftClients |
+               std::views::transform([](auto &&pair) { return std::move(pair.second); }) |
                std::ranges::to<std::vector<raft::raft_node_grpc_client_t>>();
     }
 };
 
-// Node1 will become a leader during first term if majority of peers grant a vote to it
-// Node1:
+// Node1 will become a leader during first term if majority of peers grant a
+// vote to it Node1:
 // * Wait for heartbeat
 // * Timeout
 // * Increment current term
@@ -110,14 +115,16 @@ TEST_F(ConsensusModuleTest, Initialization1)
         response.set_term(1);
         EXPECT_CALL(*m_raftStubs[id], RequestVote)
             .Times(testing::Exactly(1))
-            .WillOnce(testing::DoAll(testing::SetArgPointee<2>(response), testing::Return(grpc::Status::OK)));
+            .WillOnce(testing::DoAll(testing::SetArgPointee<2>(response),
+                                     testing::Return(grpc::Status::OK)));
 
         AppendEntriesResponse &aeResponse = aeResponses.emplace_back();
         aeResponse.set_responderid(id);
         aeResponse.set_success(true);
         EXPECT_CALL(*m_raftStubs[id], AppendEntries)
             .Times(testing::AtLeast(1))
-            .WillRepeatedly(testing::DoAll(testing::SetArgPointee<2>(aeResponse), testing::Return(grpc::Status::OK)));
+            .WillRepeatedly(testing::DoAll(testing::SetArgPointee<2>(aeResponse),
+                                           testing::Return(grpc::Status::OK)));
     }
 
     raft::consensus_module_t consensusModule{m_configs[1], raftClients()};
@@ -126,8 +133,8 @@ TEST_F(ConsensusModuleTest, Initialization1)
     consensusModule.stop();
 }
 
-// Difference between this test and Initialization1 is that in this scenario Node1 fails to achieve quorum on first
-// try Node1:
+// Difference between this test and Initialization1 is that in this scenario
+// Node1 fails to achieve quorum on first try Node1:
 // * Wait for heartbeat
 // * Timeout
 // * Increment current term
@@ -158,15 +165,18 @@ TEST_F(ConsensusModuleTest, Initialization2)
         response.set_term(2);
         EXPECT_CALL(*m_raftStubs[id], RequestVote)
             .Times(testing::Exactly(2))
-            .WillOnce(testing::DoAll(testing::SetArgPointee<2>(failedResponse), testing::Return(grpc::Status::OK)))
-            .WillOnce(testing::DoAll(testing::SetArgPointee<2>(response), testing::Return(grpc::Status::OK)));
+            .WillOnce(testing::DoAll(testing::SetArgPointee<2>(failedResponse),
+                                     testing::Return(grpc::Status::OK)))
+            .WillOnce(testing::DoAll(testing::SetArgPointee<2>(response),
+                                     testing::Return(grpc::Status::OK)));
 
         AppendEntriesResponse &aeResponse = aeResponses.emplace_back();
         aeResponse.set_responderid(id);
         aeResponse.set_success(true);
         EXPECT_CALL(*m_raftStubs[id], AppendEntries)
             .Times(testing::AtLeast(1))
-            .WillRepeatedly(testing::DoAll(testing::SetArgPointee<2>(aeResponse), testing::Return(grpc::Status::OK)));
+            .WillRepeatedly(testing::DoAll(testing::SetArgPointee<2>(aeResponse),
+                                           testing::Return(grpc::Status::OK)));
     }
 
     raft::consensus_module_t consensusModule{m_configs[1], raftClients()};

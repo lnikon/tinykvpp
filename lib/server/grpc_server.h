@@ -17,11 +17,11 @@ class tinykvpp_service_impl_t final : public TinyKVPPService::Service
   public:
     explicit tinykvpp_service_impl_t(db::shared_ptr_t db);
 
-    auto
-    Put(grpc::ServerContext *pContext, const PutRequest *pRequest, PutResponse *pResponse) -> grpc::Status override;
+    auto Put(grpc::ServerContext *pContext, const PutRequest *pRequest, PutResponse *pResponse)
+        -> grpc::Status override;
 
-    auto
-    Get(grpc::ServerContext *pContext, const GetRequest *pRequest, GetResponse *pResponse) -> grpc::Status override;
+    auto Get(grpc::ServerContext *pContext, const GetRequest *pRequest, GetResponse *pResponse)
+        -> grpc::Status override;
 
   private:
     db::shared_ptr_t m_database;

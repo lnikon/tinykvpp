@@ -29,7 +29,8 @@ auto main() -> int
         records.reserve(recordsNumber);
         for (std::size_t idx{0}; idx < recordsNumber; idx++)
         {
-            records.emplace_back(bench::generateRandomString(1024), bench::generateRandomString(1024));
+            records.emplace_back(bench::generateRandomString(1024),
+                                 bench::generateRandomString(1024));
         }
 
         auto start = high_resolution_clock::now();

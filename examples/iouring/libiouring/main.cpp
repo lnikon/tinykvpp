@@ -92,7 +92,8 @@ auto submit_read_request(char *file_path, struct io_uring *ring) -> int
     off_t             offset = 0;
     int               current_block = 0;
     int               blocks = (int)file_sz / BLOCK_SZ;
-    struct file_info *fi = (struct file_info *)malloc(sizeof(struct file_info) + (sizeof(struct iovec) * blocks));
+    struct file_info *fi =
+        (struct file_info *)malloc(sizeof(struct file_info) + (sizeof(struct iovec) * blocks));
     if (file_sz % BLOCK_SZ)
     {
         blocks++;

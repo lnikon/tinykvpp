@@ -22,8 +22,7 @@ enum class db_mode_t : uint8_t
 };
 
 [[nodiscard]] auto to_string(const db_mode_t mode) noexcept -> std::string_view;
-[[nodiscard]] auto from_string(const std::string_view mode) noexcept
-    -> db_mode_t;
+[[nodiscard]] auto from_string(const std::string_view mode) noexcept -> db_mode_t;
 
 struct db_config_t
 {

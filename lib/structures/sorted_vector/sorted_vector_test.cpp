@@ -28,7 +28,8 @@ struct record_comparator_by_key_t
     }
 };
 
-using test_sorted_vector_t = structures::sorted_vector::sorted_vector_t<test_record_t, record_comparator_by_key_t>;
+using test_sorted_vector_t =
+    structures::sorted_vector::sorted_vector_t<test_record_t, record_comparator_by_key_t>;
 
 TEST_CASE("Emplace and Find", "[SortedVector]")
 {

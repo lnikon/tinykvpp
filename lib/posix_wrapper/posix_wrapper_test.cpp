@@ -18,14 +18,14 @@ namespace pw = posix_wrapper;
 
 TEST(PosixWrapperTest, OpenFlagToNative)
 {
-  EXPECT_EQ(pw::to_native(pw::open_flag_k::kReadOnly), O_RDONLY);
-  EXPECT_EQ(pw::to_native(pw::open_flag_k::kWriteOnly), O_WRONLY);
-  EXPECT_EQ(pw::to_native(pw::open_flag_k::kReadWrite), O_RDWR);
-  EXPECT_EQ(pw::to_native(pw::open_flag_k::kAppend), O_APPEND);
-  EXPECT_EQ(pw::to_native(pw::open_flag_k::kCreate), O_CREAT);
-  EXPECT_EQ(pw::to_native(pw::open_flag_k::kTruncate), O_TRUNC);
-  EXPECT_EQ(pw::to_native(pw::open_flag_k::kExclusive), O_EXCL);
-  EXPECT_EQ(pw::to_native(pw::open_flag_k::kNonBlock), O_NONBLOCK);
-  EXPECT_EQ(pw::to_native(pw::open_flag_k::kSync), O_SYNC);
-  EXPECT_EQ(pw::to_native(pw::open_flag_k::kDirect), O_DIRECT);
+    EXPECT_EQ(pw::to_native(pw::open_flag_k::kReadOnly), O_RDONLY);
+    EXPECT_EQ(pw::to_native(pw::open_flag_k::kWriteOnly), O_WRONLY);
+    EXPECT_EQ(pw::to_native(pw::open_flag_k::kReadWrite), O_RDWR);
+    EXPECT_EQ(pw::to_native(pw::open_flag_k::kAppend), O_APPEND);
+    EXPECT_EQ(pw::to_native(pw::open_flag_k::kCreate), O_CREAT);
+    EXPECT_EQ(pw::to_native(pw::open_flag_k::kTruncate), O_TRUNC);
+    EXPECT_EQ(pw::to_native(pw::open_flag_k::kExclusive), O_EXCL);
+    EXPECT_EQ(pw::to_native(pw::open_flag_k::kNonBlock), O_NONBLOCK);
+    EXPECT_EQ(pw::to_native(pw::open_flag_k::kSync), O_SYNC);
+    EXPECT_EQ(pw::to_native(pw::open_flag_k::kDirect), O_DIRECT);
 }

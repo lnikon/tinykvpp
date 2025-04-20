@@ -106,7 +106,12 @@ auto app_setup_uring(struct submitter *s) -> int
         cring_sz = sring_sz;
     }
 
-    sq_ptr = mmap(0, sring_sz, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_POPULATE, s->ring_fd, IORING_OFF_SQ_RING);
+    sq_ptr = mmap(0,
+                  sring_sz,
+                  PROT_READ | PROT_WRITE,
+                  MAP_SHARED | MAP_POPULATE,
+                  s->ring_fd,
+                  IORING_OFF_SQ_RING);
     if (sq_ptr == MAP_FAILED)
     {
         perror("mmap");
@@ -119,7 +124,12 @@ auto app_setup_uring(struct submitter *s) -> int
     }
     else
     {
-        cq_ptr = mmap(0, cring_sz, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_POPULATE, s->ring_fd, IORING_OFF_CQ_RING);
+        cq_ptr = mmap(0,
+                      cring_sz,
+                      PROT_READ | PROT_WRITE,
+                      MAP_SHARED | MAP_POPULATE,
+                      s->ring_fd,
+                      IORING_OFF_CQ_RING);
         if (cq_ptr == MAP_FAILED)
         {
             perror("mmap");
@@ -145,8 +155,6 @@ auto app_setup_uring(struct submitter *s) -> int
         perror("mmap");
         return 1;
     }
-
-
 
     cring->head = (unsigned char *)cq_ptr + p.cq_off.head;
     cring->tail = (unsigned char *)cq_ptr + p.cq_off.tail;

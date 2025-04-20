@@ -73,7 +73,8 @@ template <class ElementType, std::ptrdiff_t Extent> using span = gsl::span<Eleme
 
 namespace detail
 {
-template <typename TChar> [[nodiscard]] constexpr inline unsigned char hex2char(TChar const ch) noexcept
+template <typename TChar>
+[[nodiscard]] constexpr inline unsigned char hex2char(TChar const ch) noexcept
 {
     if (ch >= static_cast<TChar>('0') && ch <= static_cast<TChar>('9'))
         return static_cast<unsigned char>(ch - static_cast<TChar>('0'));
@@ -301,9 +302,11 @@ class sha1
     size_t     m_byteCount;
 };
 
-template <typename CharT> inline constexpr CharT empty_guid[37] = "00000000-0000-0000-0000-000000000000";
+template <typename CharT>
+inline constexpr CharT empty_guid[37] = "00000000-0000-0000-0000-000000000000";
 
-template <> inline constexpr wchar_t empty_guid<wchar_t>[37] = L"00000000-0000-0000-0000-000000000000";
+template <>
+inline constexpr wchar_t empty_guid<wchar_t>[37] = L"00000000-0000-0000-0000-000000000000";
 
 template <typename CharT> inline constexpr CharT guid_encoder[17] = "0123456789abcdef";
 
@@ -386,7 +389,9 @@ enum class uuid_version
 // Forward declare uuid & to_string so that we can declare to_string as a friend
 // later.
 class uuid;
-template <class CharT = char, class Traits = std::char_traits<CharT>, class Allocator = std::allocator<CharT>>
+template <class CharT = char,
+          class Traits = std::char_traits<CharT>,
+          class Allocator = std::allocator<CharT>>
 std::basic_string<CharT, Traits, Allocator> to_string(uuid const &id);
 
 // --------------------------------------------------------------------------------------------------------------------------
@@ -466,7 +471,8 @@ class uuid
         return span<std::byte const, 16>(reinterpret_cast<std::byte const *>(data.data()), 16);
     }
 
-    template <typename StringType> [[nodiscard]] constexpr static bool is_valid_uuid(StringType const &in_str) noexcept
+    template <typename StringType>
+    [[nodiscard]] constexpr static bool is_valid_uuid(StringType const &in_str) noexcept
     {
         auto   str = detail::to_string_view(in_str);
         bool   firstDigit = true;
@@ -511,7 +517,8 @@ class uuid
     }
 
     template <typename StringType>
-    [[nodiscard]] constexpr static std::optional<uuid> from_string(StringType const &in_str) noexcept
+    [[nodiscard]] constexpr static std::optional<uuid>
+    from_string(StringType const &in_str) noexcept
     {
         auto   str = detail::to_string_view(in_str);
         bool   firstDigit = true;
@@ -566,7 +573,8 @@ class uuid
     friend bool operator<(uuid const &lhs, uuid const &rhs) noexcept;
 
     template <class Elem, class Traits>
-    friend std::basic_ostream<Elem, Traits> &operator<<(std::basic_ostream<Elem, Traits> &s, uuid const &id);
+    friend std::basic_ostream<Elem, Traits> &operator<<(std::basic_ostream<Elem, Traits> &s,
+                                                        uuid const                       &id);
 
     template <class CharT, class Traits, class Allocator>
     friend std::basic_string<CharT, Traits, Allocator> to_string(uuid const &id);
@@ -629,23 +637,79 @@ inline void swap(uuids::uuid &lhs, uuids::uuid &rhs) noexcept
 // --------------------------------------------------------------------------------------------------------------------------
 
 // Name string is a fully-qualified domain name
-static uuid uuid_namespace_dns{
-    {0x6b, 0xa7, 0xb8, 0x10, 0x9d, 0xad, 0x11, 0xd1, 0x80, 0xb4, 0x00, 0xc0, 0x4f, 0xd4, 0x30, 0xc8}};
+static uuid uuid_namespace_dns{{0x6b,
+                                0xa7,
+                                0xb8,
+                                0x10,
+                                0x9d,
+                                0xad,
+                                0x11,
+                                0xd1,
+                                0x80,
+                                0xb4,
+                                0x00,
+                                0xc0,
+                                0x4f,
+                                0xd4,
+                                0x30,
+                                0xc8}};
 
 // Name string is a URL
-static uuid uuid_namespace_url{
-    {0x6b, 0xa7, 0xb8, 0x11, 0x9d, 0xad, 0x11, 0xd1, 0x80, 0xb4, 0x00, 0xc0, 0x4f, 0xd4, 0x30, 0xc8}};
+static uuid uuid_namespace_url{{0x6b,
+                                0xa7,
+                                0xb8,
+                                0x11,
+                                0x9d,
+                                0xad,
+                                0x11,
+                                0xd1,
+                                0x80,
+                                0xb4,
+                                0x00,
+                                0xc0,
+                                0x4f,
+                                0xd4,
+                                0x30,
+                                0xc8}};
 
 // Name string is an ISO OID (See https://oidref.com/,
 // https://en.wikipedia.org/wiki/Object_identifier)
-static uuid uuid_namespace_oid{
-    {0x6b, 0xa7, 0xb8, 0x12, 0x9d, 0xad, 0x11, 0xd1, 0x80, 0xb4, 0x00, 0xc0, 0x4f, 0xd4, 0x30, 0xc8}};
+static uuid uuid_namespace_oid{{0x6b,
+                                0xa7,
+                                0xb8,
+                                0x12,
+                                0x9d,
+                                0xad,
+                                0x11,
+                                0xd1,
+                                0x80,
+                                0xb4,
+                                0x00,
+                                0xc0,
+                                0x4f,
+                                0xd4,
+                                0x30,
+                                0xc8}};
 
 // Name string is an X.500 DN, in DER or a text output format (See
 // https://en.wikipedia.org/wiki/X.500,
 // https://en.wikipedia.org/wiki/Abstract_Syntax_Notation_One)
-static uuid uuid_namespace_x500{
-    {0x6b, 0xa7, 0xb8, 0x14, 0x9d, 0xad, 0x11, 0xd1, 0x80, 0xb4, 0x00, 0xc0, 0x4f, 0xd4, 0x30, 0xc8}};
+static uuid uuid_namespace_x500{{0x6b,
+                                 0xa7,
+                                 0xb8,
+                                 0x14,
+                                 0x9d,
+                                 0xad,
+                                 0x11,
+                                 0xd1,
+                                 0x80,
+                                 0xb4,
+                                 0x00,
+                                 0xc0,
+                                 0x4f,
+                                 0xd4,
+                                 0x30,
+                                 0xc8}};
 
 // --------------------------------------------------------------------------------------------------------------------------
 // uuid generators
@@ -807,7 +871,8 @@ class uuid_name_generator
         hasher.process_bytes(bytes, 16);
     }
 
-    template <typename CharT, typename Traits> void process_characters(std::basic_string_view<CharT, Traits> const str)
+    template <typename CharT, typename Traits>
+    void process_characters(std::basic_string_view<CharT, Traits> const str)
     {
         for (uint32_t c : str)
         {
@@ -943,14 +1008,18 @@ template <> struct hash<uuids::uuid>
         std::hash<std::string> hasher;
         return static_cast<result_type>(hasher(uuids::to_string(uuid)));
 #else
-        uint64_t l = static_cast<uint64_t>(uuid.data[0]) << 56 | static_cast<uint64_t>(uuid.data[1]) << 48 |
-                     static_cast<uint64_t>(uuid.data[2]) << 40 | static_cast<uint64_t>(uuid.data[3]) << 32 |
-                     static_cast<uint64_t>(uuid.data[4]) << 24 | static_cast<uint64_t>(uuid.data[5]) << 16 |
-                     static_cast<uint64_t>(uuid.data[6]) << 8 | static_cast<uint64_t>(uuid.data[7]);
-        uint64_t h = static_cast<uint64_t>(uuid.data[8]) << 56 | static_cast<uint64_t>(uuid.data[9]) << 48 |
-                     static_cast<uint64_t>(uuid.data[10]) << 40 | static_cast<uint64_t>(uuid.data[11]) << 32 |
-                     static_cast<uint64_t>(uuid.data[12]) << 24 | static_cast<uint64_t>(uuid.data[13]) << 16 |
-                     static_cast<uint64_t>(uuid.data[14]) << 8 | static_cast<uint64_t>(uuid.data[15]);
+        uint64_t l =
+            static_cast<uint64_t>(uuid.data[0]) << 56 | static_cast<uint64_t>(uuid.data[1]) << 48 |
+            static_cast<uint64_t>(uuid.data[2]) << 40 | static_cast<uint64_t>(uuid.data[3]) << 32 |
+            static_cast<uint64_t>(uuid.data[4]) << 24 | static_cast<uint64_t>(uuid.data[5]) << 16 |
+            static_cast<uint64_t>(uuid.data[6]) << 8 | static_cast<uint64_t>(uuid.data[7]);
+        uint64_t h =
+            static_cast<uint64_t>(uuid.data[8]) << 56 | static_cast<uint64_t>(uuid.data[9]) << 48 |
+            static_cast<uint64_t>(uuid.data[10]) << 40 |
+            static_cast<uint64_t>(uuid.data[11]) << 32 |
+            static_cast<uint64_t>(uuid.data[12]) << 24 |
+            static_cast<uint64_t>(uuid.data[13]) << 16 | static_cast<uint64_t>(uuid.data[14]) << 8 |
+            static_cast<uint64_t>(uuid.data[15]);
 
         if constexpr (sizeof(result_type) > 4)
         {

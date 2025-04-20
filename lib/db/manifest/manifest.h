@@ -66,15 +66,15 @@ struct manifest_t
 
         template <typename stream_gt> void write(stream_gt &outStream) const
         {
-            outStream << static_cast<std::int32_t>(type) << ' ' << static_cast<std::int32_t>(op) << ' ' << name << ' '
-                      << level << std::endl;
+            outStream << static_cast<std::int32_t>(type) << ' ' << static_cast<std::int32_t>(op)
+                      << ' ' << name << ' ' << level << std::endl;
         }
 
         /**
          * @brief Serialize manifest segment record into stream.
          *        Format:
          * <operation-type><whitespace><segment-name><whitespace><level-index>
-         *                |int        |char         |string     |char        |int
+         *                |int        |char         |string     |char |int
          *
          * @tparam stream_gt
          * @param os
@@ -146,7 +146,8 @@ struct manifest_t
          */
         template <typename stream_gt> void write(stream_gt &outStream) const
         {
-            outStream << static_cast<std::int32_t>(type) << ' ' << static_cast<std::int32_t>(op) << ' ' << level;
+            outStream << static_cast<std::int32_t>(type) << ' ' << static_cast<std::int32_t>(op)
+                      << ' ' << level;
         }
 
         template <typename stream_gt> void read(stream_gt &outStream)

@@ -19,8 +19,8 @@ auto uuid() -> std::string;
 
 [[nodiscard]] auto segment_name() -> types::name_t;
 
-[[nodiscard]] auto segment_path(const std::filesystem::path &datadir,
-                                const types::name_t         &name) -> std::filesystem::path;
+[[nodiscard]] auto segment_path(const std::filesystem::path &datadir, const types::name_t &name)
+    -> std::filesystem::path;
 
 } // namespace structures::lsmtree::segments::helpers
 

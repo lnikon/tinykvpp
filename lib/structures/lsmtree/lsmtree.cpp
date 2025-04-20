@@ -98,7 +98,8 @@ lsmtree_t::~lsmtree_t() noexcept
     m_flushing_thread.join();
 }
 
-void lsmtree_t::put(const structures::lsmtree::key_t &key, const structures::lsmtree::value_t &value) noexcept
+void lsmtree_t::put(const structures::lsmtree::key_t   &key,
+                    const structures::lsmtree::value_t &value) noexcept
 {
     assert(m_pConfig);
 
@@ -214,20 +215,26 @@ auto lsmtree_t::restore_from_manifest() noexcept -> bool
                         m_levels.level(record.level)
                             ->emplace(segments::factories::lsmtree_segment_factory(
                                 record.name,
-                                segments::helpers::segment_path(m_pConfig->datadir_path(), record.name),
+                                segments::helpers::segment_path(m_pConfig->datadir_path(),
+                                                                record.name),
                                 memtable_t{}));
-                        spdlog::debug("Segment {} added into level {} during recovery", record.name, record.level);
+                        spdlog::debug("Segment {} added into level {} during recovery",
+                                      record.name,
+                                      record.level);
                         break;
                     }
                     case segment_operation_k::remove_segment_k:
                     {
                         m_levels.level(record.level)->purge(record.name);
-                        spdlog::debug("Segment {} removed from level {} during recovery", record.name, record.level);
+                        spdlog::debug("Segment {} removed from level {} during recovery",
+                                      record.name,
+                                      record.level);
                         break;
                     }
                     default:
                     {
-                        spdlog::error("Unknown segment operation={}", static_cast<std::int32_t>(record.op));
+                        spdlog::error("Unknown segment operation={}",
+                                      static_cast<std::int32_t>(record.op));
                         break;
                     }
                     }
@@ -244,21 +251,22 @@ auto lsmtree_t::restore_from_manifest() noexcept -> bool
                     }
                     case level_operation_k::compact_level_k:
                     {
-                        spdlog::debug(
-                            "Ignoring {} during recovery",
-                            db::manifest::manifest_t::level_record_t::ToString(level_operation_k::compact_level_k));
+                        spdlog::debug("Ignoring {} during recovery",
+                                      db::manifest::manifest_t::level_record_t::ToString(
+                                          level_operation_k::compact_level_k));
                         break;
                     }
                     case level_operation_k::purge_level_k:
                     {
-                        spdlog::debug(
-                            "Ignoring {} during recovery",
-                            db::manifest::manifest_t::level_record_t::ToString(level_operation_k::purge_level_k));
+                        spdlog::debug("Ignoring {} during recovery",
+                                      db::manifest::manifest_t::level_record_t::ToString(
+                                          level_operation_k::purge_level_k));
                         break;
                     }
                     default:
                     {
-                        spdlog::error("Unknown level operation={}", static_cast<std::int32_t>(record.op));
+                        spdlog::error("Unknown level operation={}",
+                                      static_cast<std::int32_t>(record.op));
                         break;
                     }
                     }

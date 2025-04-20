@@ -31,7 +31,8 @@ levels_t::levels_t(config::shared_ptr_t pConfig, db::manifest::shared_ptr_t pMan
                       return;
                   }
 
-                  if (m_level0_segment_flushed_notification.WaitForNotificationWithTimeout(absl::Seconds(1)))
+                  if (m_level0_segment_flushed_notification.WaitForNotificationWithTimeout(
+                          absl::Seconds(1)))
                   {
                       compact();
                   }
@@ -89,13 +90,14 @@ auto levels_t::compact() -> segments::regular_segment::shared_ptr_t
         }
 
         // Update manifest with compacted level
-        m_pManifest->add(db::manifest::manifest_t::level_record_t{.op = level_operation_k::compact_level_k,
-                                                                  .level = currentLevel->index()});
+        m_pManifest->add(db::manifest::manifest_t::level_record_t{
+            .op = level_operation_k::compact_level_k, .level = currentLevel->index()});
 
         // Update manifest with new segment
-        m_pManifest->add(db::manifest::manifest_t::segment_record_t{.op = segment_operation_k::add_segment_k,
-                                                                    .name = compactedCurrentLevelSegment->get_name(),
-                                                                    .level = currentLevel->index()});
+        m_pManifest->add(db::manifest::manifest_t::segment_record_t{
+            .op = segment_operation_k::add_segment_k,
+            .name = compactedCurrentLevelSegment->get_name(),
+            .level = currentLevel->index()});
 
         // If computation succeeded, then flush the compacted segment into disk
         compactedCurrentLevelSegment->flush();
@@ -111,15 +113,16 @@ auto levels_t::compact() -> segments::regular_segment::shared_ptr_t
 
         // Purge the segment representing the compacted level and update the
         // manifest
-        m_pManifest->add(db::manifest::manifest_t::segment_record_t{.op = segment_operation_k::remove_segment_k,
-                                                                    .name = compactedCurrentLevelSegment->get_name(),
-                                                                    .level = currentLevel->index()});
+        m_pManifest->add(db::manifest::manifest_t::segment_record_t{
+            .op = segment_operation_k::remove_segment_k,
+            .name = compactedCurrentLevelSegment->get_name(),
+            .level = currentLevel->index()});
         compactedCurrentLevelSegment->remove_from_disk();
 
         // After merging current level into the next level purge the current
         // level and update the manifest
-        m_pManifest->add(db::manifest::manifest_t::level_record_t{.op = level_operation_k::purge_level_k,
-                                                                  .level = currentLevel->index()});
+        m_pManifest->add(db::manifest::manifest_t::level_record_t{
+            .op = level_operation_k::purge_level_k, .level = currentLevel->index()});
         currentLevel->purge();
     }
 
@@ -172,8 +175,8 @@ auto levels_t::size() const noexcept -> levels_t::levels_storage_t::size_type
 
     // Generate name for the segment and add it to the manifest
     auto name{fmt::format("{}_{}", segments::helpers::segment_name(), 0)};
-    m_pManifest->add(
-        db::manifest::manifest_t::segment_record_t{.op = segment_operation_k::add_segment_k, .name = name, .level = 0});
+    m_pManifest->add(db::manifest::manifest_t::segment_record_t{
+        .op = segment_operation_k::add_segment_k, .name = name, .level = 0});
 
     auto pSegment{m_levels[0]->segment(std::move(memtable), name)};
     if (pSegment)

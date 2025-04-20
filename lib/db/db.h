@@ -41,7 +41,8 @@ class db_t
      * @param key
      * @return std::optional<structures::memtable::memtable_t::record_t>
      */
-    auto get(const structures::lsmtree::key_t &key) -> std::optional<structures::memtable::memtable_t::record_t>;
+    auto get(const structures::lsmtree::key_t &key)
+        -> std::optional<structures::memtable::memtable_t::record_t>;
 
     /**
      *
@@ -87,7 +88,9 @@ class db_builder_t
         else if (pConfig->WALConfig.storageType == wal::log_storage_type_k::file_based_persistent_k)
         {
             std::expected<wal::wal_wrapper_t, wal::wal_builder_error_t> &&wal =
-                wal::wal_builder_t<wal::log::storage_tags::file_backend_tag>{}.set_file_path(pConfig->WALConfig.path).build();
+                wal::wal_builder_t<wal::log::storage_tags::file_backend_tag>{}
+                    .set_file_path(pConfig->WALConfig.path)
+                    .build();
             if (!wal.has_value())
             {
                 return std::nullopt;
