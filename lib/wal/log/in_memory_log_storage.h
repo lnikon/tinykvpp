@@ -2,6 +2,7 @@
 
 #include "concepts.h"
 
+#include <fmt/format.h>
 #include <optional>
 #include <vector>
 
@@ -25,7 +26,8 @@ class in_memory_log_storage_t
     {
     }
 
-    auto operator=(in_memory_log_storage_t other) noexcept -> in_memory_log_storage_t &
+    auto operator=(in_memory_log_storage_t &&other) noexcept
+        -> in_memory_log_storage_t &
     {
         if (this == &other)
         {
@@ -37,14 +39,23 @@ class in_memory_log_storage_t
         return *this;
     }
 
-    auto operator=(in_memory_log_storage_t &&) -> in_memory_log_storage_t & = delete;
     in_memory_log_storage_t(const in_memory_log_storage_t &other) = delete;
+    auto operator=(in_memory_log_storage_t &)
+        -> in_memory_log_storage_t & = delete;
 
     ~in_memory_log_storage_t() noexcept = default;
 
-    void append(std::string entry)
+    [[nodiscard]] auto append(std::string entry) -> bool
     {
         m_log.emplace_back(std::move(entry));
+        return true;
+    }
+
+    [[nodiscard]] auto
+    append(std::string command, std::string key, std::string value) -> bool
+    {
+        m_log.emplace_back(fmt::format("{} {} {}", command, key, value));
+        return true;
     }
 
     [[nodiscard]] auto read(size_t index) const -> std::optional<std::string>

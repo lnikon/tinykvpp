@@ -44,6 +44,8 @@ find_package(protobuf CONFIG REQUIRED)
 find_package(gRPC CONFIG REQUIRED)
 find_package(GTest CONFIG REQUIRED)
 find_package(prometheus-cpp REQUIRED)
+find_package(libassert REQUIRED)
+find_package(magic_enum REQUIRED)
 
 include_directories(lib)
 

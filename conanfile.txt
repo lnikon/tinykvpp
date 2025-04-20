@@ -13,6 +13,8 @@ protobuf/5.27.0
 grpc/1.67.1
 gtest/1.15.0
 prometheus-cpp/1.3.0
+libassert/2.1.4
+magic_enum/0.9.7
 
 [tool_requires]
 protobuf/5.27.0

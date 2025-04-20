@@ -2,6 +2,10 @@
 
 #include <spdlog/spdlog.h>
 
+#include <magic_enum/magic_enum.hpp>
+
+#include <libassert/assert.hpp>
+
 #include <utility>
 #include <vector>
 
@@ -14,29 +18,35 @@ namespace wal
 
 using namespace log;
 
-// TStorage represents the actual storage of logs - it can be simple disk-based log, or a log replicated by Raft
+// TStorage represents the actual storage of logs - it can be simple disk-based
+// log, or a log replicated by Raft
 template <TLogConcept TLog> class wal_t
 /**
- * @brief A Write-Ahead Log (WAL) manager for recording and recovering log entries.
+ * @brief A Write-Ahead Log (WAL) manager for recording and recovering log
+ * entries.
  *
  * The wal_t class encapsulates operations for managing a write-ahead log file,
- * including constructing the WAL with a given log interface, adding new records,
- * resetting (i.e., closing, removing, and reopening) the log file, and recovering
- * previously recorded log entries.
+ * including constructing the WAL with a given log interface, adding new
+ * records, resetting (i.e., closing, removing, and reopening) the log file, and
+ * recovering previously recorded log entries.
  *
  * Constructors:
  *   - wal_t(TLog log) noexcept:
  *       Constructs a wal_t instance using the specified TLog log interface.
  *   - wal_t(const wal_t &other):
- *       Copy constructor. Creates a new instance as a copy of an existing wal_t object.
+ *       Copy constructor. Creates a new instance as a copy of an existing wal_t
+ * object.
  *   - wal_t(wal_t &&other) noexcept:
- *       Move constructor. Creates a new instance by acquiring the resources of an existing wal_t object.
+ *       Move constructor. Creates a new instance by acquiring the resources of
+ * an existing wal_t object.
  *
  * Assignment Operators:
  *   - operator=(const wal_t &other):
- *       Copy assignment operator. Assigns the content of one wal_t object to another.
+ *       Copy assignment operator. Assigns the content of one wal_t object to
+ * another.
  *   - operator=(wal_t &&other) noexcept:
- *       Move assignment operator. Transfers the content from one wal_t object to another.
+ *       Move assignment operator. Transfers the content from one wal_t object
+ * to another.
  *
  * Destructor:
  *   - ~wal_t() = default:
@@ -44,22 +54,24 @@ template <TLogConcept TLog> class wal_t
  *
  * Member Functions:
  *   - void add(const record_t &rec) noexcept:
- *       Appends a new record to the internal records and writes it to the file system.
- *       A debug message is logged detailing the content of the record.
+ *       Appends a new record to the internal records and writes it to the file
+ * system. A debug message is logged detailing the content of the record.
  *
  *   - void reset() noexcept:
- *       Resets the WAL by closing the current log file and removing it from the file system.
- *       Attempts to reopen the log file and throws a std::runtime_error if reopening fails.
- *       Logs an informational message upon successful reset.
+ *       Resets the WAL by closing the current log file and removing it from the
+ * file system. Attempts to reopen the log file and throws a std::runtime_error
+ * if reopening fails. Logs an informational message upon successful reset.
  *
  *   - [[nodiscard]] auto records() const -> std::vector<record_t>:
- *       Recovers WAL records by reading, parsing, and processing the log file entries.
- *       Reads each log entry into a string stream, processes them line by line, and trims empty lines.
- *       For each valid log entry, a record_t instance is constructed and a debug message is logged.
- *       Returns a vector containing all successfully recovered WAL records.
+ *       Recovers WAL records by reading, parsing, and processing the log file
+ * entries. Reads each log entry into a string stream, processes them line by
+ * line, and trims empty lines. For each valid log entry, a record_t instance is
+ * constructed and a debug message is logged. Returns a vector containing all
+ * successfully recovered WAL records.
  *
  * Logging:
- *   - Uses spdlog for logging informational and debug messages during operations.
+ *   - Uses spdlog for logging informational and debug messages during
+ * operations.
  */
 {
   public:
@@ -78,9 +90,9 @@ template <TLogConcept TLog> class wal_t
     /**
      * @brief Adds a new record to the Write-Ahead Log (WAL).
      *
-     * This function appends a new record to the internal list of records and writes
-     * the serialized record to the log file. It also logs a debug message with the
-     * contents of the new record.
+     * This function appends a new record to the internal list of records and
+     * writes the serialized record to the log file. It also logs a debug
+     * message with the contents of the new record.
      *
      * @param rec The record to be added to the WAL.
      */
@@ -89,10 +101,10 @@ template <TLogConcept TLog> class wal_t
     /**
      * @brief Resets the Write-Ahead Log (WAL).
      *
-     * This function closes the current log file, removes it from the filesystem,
-     * and then attempts to reopen it. If reopening the log file fails, a
-     * std::runtime_error is thrown. Upon successful reset, an informational
-     * message is logged.
+     * This function closes the current log file, removes it from the
+     * filesystem, and then attempts to reopen it. If reopening the log file
+     * fails, a std::runtime_error is thrown. Upon successful reset, an
+     * informational message is logged.
      *
      * @throws std::runtime_error if the log file cannot be reopened.
      */
@@ -101,14 +113,17 @@ template <TLogConcept TLog> class wal_t
     /**
      * @brief Parses and recovers write-ahead log (WAL) records.
      *
-     * This method iterates over the underlying log storage to extract and reconstruct WAL records.
-     * It reads each log entry into a string stream, processes them line by line, and trims empty lines.
-     * For each non-empty line, it constructs a record_t instance by reading from a corresponding
+     * This method iterates over the underlying log storage to extract and
+     * reconstruct WAL records. It reads each log entry into a string stream,
+     * processes them line by line, and trims empty lines. For each non-empty
+     * line, it constructs a record_t instance by reading from a corresponding
      * string stream and logs debug messages with the recovered record content.
      *
-     * @return std::vector<record_t> A vector containing all successfully recovered WAL records.
+     * @return std::vector<record_t> A vector containing all successfully
+     * recovered WAL records.
      *
-     * @note The function logs both informational and debug outputs to trace the recovery process.
+     * @note The function logs both informational and debug outputs to trace the
+     * recovery process.
      */
     [[nodiscard]] auto records() const -> std::vector<record_t>;
 
@@ -116,8 +131,9 @@ template <TLogConcept TLog> class wal_t
     TLog m_log;
 };
 
-using wal_variant_t =
-    std::variant<wal_t<log_t<in_memory_log_storage_t>>, wal_t<log_t<persistent_log_storage_t<file_storage_backend_t>>>>;
+using wal_variant_t = std::variant<
+    wal_t<log_t<in_memory_log_storage_t>>,
+    wal_t<log_t<persistent_log_storage_t<file_storage_backend_t>>>>;
 
 class wal_wrapper_t
 {
@@ -147,7 +163,8 @@ class wal_wrapper_t
     wal_variant_t m_wal;
 };
 
-template <TLogConcept<std::string> TLog> using shared_ptr_t = std::shared_ptr<wal_t<TLog>>;
+template <TLogConcept<std::string> TLog>
+using shared_ptr_t = std::shared_ptr<wal_t<TLog>>;
 
 template <typename TLog, typename... Args> auto make_shared(Args &&...args)
 {
@@ -172,7 +189,8 @@ wal_t<TLog>::wal_t(wal_t &&other) noexcept
 {
 }
 
-template <TLogConcept TLog> auto wal_t<TLog>::operator=(const wal_t &other) -> wal_t &
+template <TLogConcept TLog>
+auto wal_t<TLog>::operator=(const wal_t &other) -> wal_t &
 {
     if (this == &other)
     {
@@ -182,7 +200,8 @@ template <TLogConcept TLog> auto wal_t<TLog>::operator=(const wal_t &other) -> w
     return *this;
 }
 
-template <TLogConcept TLog> auto wal_t<TLog>::operator=(wal_t &&other) noexcept -> wal_t &
+template <TLogConcept TLog>
+auto wal_t<TLog>::operator=(wal_t &&other) noexcept -> wal_t &
 {
     if (this == &other)
     {
@@ -192,22 +211,26 @@ template <TLogConcept TLog> auto wal_t<TLog>::operator=(wal_t &&other) noexcept 
     return *this;
 }
 
-template <TLogConcept<std::string> TLog> void wal_t<TLog>::add(const record_t &rec) noexcept
+template <TLogConcept<std::string> TLog>
+void wal_t<TLog>::add(const record_t &rec) noexcept
 {
-    std::stringstream stream;
-    rec.write(stream);
-    stream << '\n';
-    m_log.append(stream.str());
+    auto op_view{magic_enum::enum_name(rec.op)};
+    ASSERT(m_log.append(std::string{op_view.data(), op_view.size()},
+                        rec.kv.m_key.m_key,
+                        rec.kv.m_value.m_value),
+           "failed to append to WAL");
 
-    spdlog::debug("Added new WAL entry {}", stream.str());
+    spdlog::debug("Added new WAL entry {}", "FILL_ME");
 }
 
-template <TLogConcept<std::string> TLog> auto wal_t<TLog>::reset() noexcept -> bool
+template <TLogConcept<std::string> TLog>
+auto wal_t<TLog>::reset() noexcept -> bool
 {
     return m_log.reset();
 }
 
-template <TLogConcept<std::string> TLog> [[nodiscard]] auto wal_t<TLog>::records() const -> std::vector<record_t>
+template <TLogConcept<std::string> TLog>
+[[nodiscard]] auto wal_t<TLog>::records() const -> std::vector<record_t>
 {
     auto recordToString = [](const record_t &rec)
     {
@@ -303,9 +326,12 @@ template <typename TStorageTag> class wal_builder_t
             auto wrapper = wal_wrapper_t(std::move(wal));
             return wrapper;
         }
-        else if constexpr (std::is_same_v<TStorageTag, storage_tags::file_backend_tag>)
+        else if constexpr (std::is_same_v<TStorageTag,
+                                          storage_tags::file_backend_tag>)
         {
-            auto log = log_builder_t<storage_tags::file_backend_tag>{}.set_file_path(m_file_path).build();
+            auto log = log_builder_t<storage_tags::file_backend_tag>{}
+                           .set_file_path(m_file_path)
+                           .build();
             if (!log.has_value())
             {
                 return std::unexpected(wal_builder_error_t::kLogBuildFailed);
@@ -316,7 +342,8 @@ template <typename TStorageTag> class wal_builder_t
         }
         else
         {
-            static_assert(always_false_v<TStorageTag>, "Unsupported storage tag type");
+            static_assert(always_false_v<TStorageTag>,
+                          "Unsupported storage tag type");
             return std::unexpected(wal_builder_error_t::kInvalidConfiguration);
         }
     }

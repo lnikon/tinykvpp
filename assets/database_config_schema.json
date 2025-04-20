@@ -11,9 +11,7 @@
           "$ref": "#/$defs/loggingLevel"
         }
       },
-      "required": [
-        "loggingLevel"
-      ]
+      "required": ["loggingLevel"]
     },
     "database": {
       "type": "object",
@@ -26,12 +24,13 @@
         "manifestFilenamePrefix": {
           "type": "string",
           "description": "Prefix for manifest files"
+        },
+        "mode": {
+          "$ref": "#/$defs/mode",
+          "description": "Specifies whether the database will be embedded, run in server-client mode, or replicated"
         }
       },
-      "required": [
-        "path",
-        "manifestFilenamePrefix"
-      ]
+      "required": ["path", "manifestFilenamePrefix", "mode"]
     },
     "wal": {
       "type": "object",
@@ -49,11 +48,7 @@
           "description": "Write-Ahead Log filename"
         }
       },
-      "required": [
-        "enable",
-        "storageType",
-        "filename"
-      ]
+      "required": ["enable", "storageType", "filename"]
     },
     "lsm": {
       "type": "object",
@@ -107,51 +102,30 @@
           }
         }
       },
-      "required": [
-        "transport",
-        "host",
-        "port",
-        "id",
-        "peers"
-      ]
+      "required": ["transport", "host", "port", "id", "peers"]
     }
   },
-  "required": [
-    "database",
-    "wal",
-    "lsm",
-    "server"
-  ],
+  "required": ["database", "wal", "lsm", "server"],
   "$defs": {
+    "mode": {
+      "type": "string",
+      "enum": ["embedded", "standalone", "replicated"]
+    },
     "serverTransport": {
       "type": "string",
-      "enum": [
-        "grpc",
-        "tcp"
-      ]
+      "enum": ["grpc", "tcp"]
     },
     "loggingLevel": {
       "type": "string",
-      "enum": [
-        "info",
-        "debug",
-        "trace",
-        "off"
-      ]
+      "enum": ["info", "debug", "trace", "off"]
     },
     "compactionStrategy": {
       "type": "string",
-      "enum": [
-        "levelled",
-        "tiered"
-      ]
+      "enum": ["levelled", "tiered"]
     },
     "walStorageType": {
       "type": "string",
-      "enum": [
-        "inMemory",
-        "persistent"
-      ]
+      "enum": ["inMemory", "persistent"]
     },
     "compaction": {
       "type": "object",
@@ -165,10 +139,7 @@
           "minimum": 1
         }
       },
-      "required": [
-        "compactionStrategy",
-        "compactionThreshold"
-      ]
+      "required": ["compactionStrategy", "compactionThreshold"]
     }
   }
 }

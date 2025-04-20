@@ -1,7 +1,11 @@
 #include "config.h"
 #include "db.h"
+#include "db_config.h"
+#include "log/common.h"
+#include "log/in_memory_log_storage.h"
 #include "memtable.h"
 #include "raft/raft.h"
+#include "raft/replicated_log.h"
 #include "server/grpc_server.h"
 
 #include <cstdint>
@@ -30,11 +34,11 @@ using nlohmann::json;
 using nlohmann::json_schema::json_validator;
 
 // JSON schema for the configuration file
-static json database_config_schema = R"(
+static const json database_config_schema = R"(
 {
   "$id": "https://json-schema.hyperjump.io/schema",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$title": "Schema for tinykvpp's JSON config",
+  "$title": "Schema for frankie's JSON config",
   "type": "object",
   "properties": {
     "logging": {
@@ -44,9 +48,7 @@ static json database_config_schema = R"(
           "$ref": "#/$defs/loggingLevel"
         }
       },
-      "required": [
-        "loggingLevel"
-      ]
+      "required": ["loggingLevel"]
     },
     "database": {
       "type": "object",
@@ -59,12 +61,13 @@ static json database_config_schema = R"(
         "manifestFilenamePrefix": {
           "type": "string",
           "description": "Prefix for manifest files"
+        },
+        "mode": {
+          "$ref": "#/$defs/mode",
+          "description": "Specifies wheter the database will be embedded, run in server-client mode, or replicated"
         }
       },
-      "required": [
-        "path",
-        "manifestFilenamePrefix"
-      ]
+      "required": ["path", "manifestFilenamePrefix", "mode"]
     },
     "wal": {
       "type": "object",
@@ -82,11 +85,7 @@ static json database_config_schema = R"(
           "description": "Write-Ahead Log filename"
         }
       },
-      "required": [
-        "enable",
-        "storageType",
-        "filename"
-      ]
+      "required": ["enable", "storageType", "filename"]
     },
     "lsm": {
       "type": "object",
@@ -140,51 +139,30 @@ static json database_config_schema = R"(
           }
         }
       },
-      "required": [
-        "transport",
-        "host",
-        "port",
-        "id",
-        "peers"
-      ]
+      "required": ["transport", "host", "port", "id", "peers"]
     }
   },
-  "required": [
-    "database",
-    "wal",
-    "lsm",
-    "server"
-  ],
+  "required": ["database", "wal", "lsm", "server"],
   "$defs": {
+    "mode": {
+      "type": "string",
+      "enum": ["embedded", "standalone", "replicated"]
+    },
     "serverTransport": {
       "type": "string",
-      "enum": [
-        "grpc",
-        "tcp"
-      ]
+      "enum": ["grpc", "tcp"]
     },
     "loggingLevel": {
       "type": "string",
-      "enum": [
-        "info",
-        "debug",
-        "trace",
-        "off"
-      ]
+      "enum": ["info", "debug", "trace", "off"]
     },
     "compactionStrategy": {
       "type": "string",
-      "enum": [
-        "levelled",
-        "tiered"
-      ]
+      "enum": ["levelled", "tiered"]
     },
     "walStorageType": {
       "type": "string",
-      "enum": [
-        "inMemory",
-        "persistent"
-      ]
+      "enum": ["inMemory", "persistent"]
     },
     "compaction": {
       "type": "object",
@@ -198,14 +176,10 @@ static json database_config_schema = R"(
           "minimum": 1
         }
       },
-      "required": [
-        "compactionStrategy",
-        "compactionThreshold"
-      ]
+      "required": ["compactionStrategy", "compactionThreshold"]
     }
   }
-}
-)"_json;
+})"_json;
 
 std::atomic<bool> gShutdown{false};
 
@@ -224,7 +198,8 @@ auto loadConfigJson(const std::string &configPath) -> json
     std::fstream configStream(configPath, std::fstream::in);
     if (!configStream.is_open())
     {
-        throw std::runtime_error(fmt::format("Unable to open config file: %s", configPath));
+        throw std::runtime_error(
+            fmt::format("Unable to open config file: %s", configPath));
     }
     return json::parse(configStream);
 }
@@ -237,7 +212,8 @@ void validateConfigJson(const json &configJson, json_validator &validator)
     }
     catch (const std::exception &e)
     {
-        throw std::runtime_error(fmt::format("Config validation failed: {}", e.what()));
+        throw std::runtime_error(
+            fmt::format("Config validation failed: {}", e.what()));
     }
 }
 
@@ -262,7 +238,8 @@ void configureLogging(const std::string &loggingLevel)
     }
     else
     {
-        throw std::runtime_error(fmt::format("Unknown logging level: %s", loggingLevel));
+        throw std::runtime_error(
+            fmt::format("Unknown logging level: %s", loggingLevel));
     }
 }
 
@@ -272,18 +249,26 @@ auto loadDatabaseConfig(const json &configJson) -> config::shared_ptr_t
 
     if (configJson["database"].contains("path"))
     {
-        dbConfig->DatabaseConfig.DatabasePath = configJson["database"]["path"].get<std::string>();
+        dbConfig->DatabaseConfig.DatabasePath =
+            configJson["database"]["path"].get<std::string>();
     }
 
     if (configJson["database"].contains("walFilename"))
     {
-        dbConfig->DatabaseConfig.WalFilename = configJson["database"]["walFilename"].get<std::string>();
+        dbConfig->DatabaseConfig.WalFilename =
+            configJson["database"]["walFilename"].get<std::string>();
     }
 
     if (configJson["database"].contains("manifestFilenamePrefix"))
     {
         dbConfig->DatabaseConfig.ManifestFilenamePrefix =
             configJson["database"]["manifestFilenamePrefix"].get<std::string>();
+    }
+
+    if (configJson["database"].contains("mode"))
+    {
+        dbConfig->DatabaseConfig.mode =
+            db::from_string(configJson["database"][",pde"].get<std::string>());
     }
 
     return dbConfig;
@@ -302,11 +287,13 @@ void loadWALConfig(const json &walConfig, config::shared_ptr_t dbConfig)
 
     if (walConfig.contains("storageType"))
     {
-        dbConfig->WALConfig.storageType = wal::from_string(walConfig["storageType"].get<std::string>());
+        dbConfig->WALConfig.storageType =
+            wal::from_string(walConfig["storageType"].get<std::string>());
     }
     else
     {
-        throw std::runtime_error("\"wal.storageType\" is not specified in config");
+        throw std::runtime_error(
+            "\"wal.storageType\" is not specified in config");
     }
 
     if (walConfig.contains("filename"))
@@ -319,15 +306,19 @@ void loadWALConfig(const json &walConfig, config::shared_ptr_t dbConfig)
     }
 }
 
-void loadLSMTreeConfig(const json &lsmtreeConfig, config::shared_ptr_t dbConfig, const std::string &configPath)
+void loadLSMTreeConfig(const json          &lsmtreeConfig,
+                       config::shared_ptr_t dbConfig,
+                       const std::string   &configPath)
 {
     if (lsmtreeConfig.contains("flushThreshold"))
     {
-        dbConfig->LSMTreeConfig.DiskFlushThresholdSize = lsmtreeConfig["flushThreshold"].get<uint64_t>();
+        dbConfig->LSMTreeConfig.DiskFlushThresholdSize =
+            lsmtreeConfig["flushThreshold"].get<uint64_t>();
     }
     else
     {
-        throw std::runtime_error("\"flushThreshold\" is not specified in config: " + configPath);
+        throw std::runtime_error(
+            "\"flushThreshold\" is not specified in config: " + configPath);
     }
 
     if (lsmtreeConfig.contains("levelZeroCompaction"))
@@ -340,9 +331,10 @@ void loadLSMTreeConfig(const json &lsmtreeConfig, config::shared_ptr_t dbConfig,
         }
         else
         {
-            throw std::runtime_error("\"levelZeroCompaction.compactionStrategy\" is not specified "
-                                     "in config: " +
-                                     configPath);
+            throw std::runtime_error(
+                "\"levelZeroCompaction.compactionStrategy\" is not specified "
+                "in config: " +
+                configPath);
         }
 
         if (levelZeroCompaction.contains("compactionThreshold"))
@@ -352,19 +344,23 @@ void loadLSMTreeConfig(const json &lsmtreeConfig, config::shared_ptr_t dbConfig,
         }
         else
         {
-            throw std::runtime_error("\"levelZeroCompaction.compactionThreshold\" is not specified "
-                                     "in config: " +
-                                     configPath);
+            throw std::runtime_error(
+                "\"levelZeroCompaction.compactionThreshold\" is not specified "
+                "in config: " +
+                configPath);
         }
     }
     else
     {
-        throw std::runtime_error("\"levelZeroCompaction\" is not specified in config: " + configPath);
+        throw std::runtime_error(
+            "\"levelZeroCompaction\" is not specified in config: " +
+            configPath);
     }
 
     if (lsmtreeConfig.contains("levelNonZeroCompaction"))
     {
-        const auto &levelNonZeroCompaction = lsmtreeConfig["levelNonZeroCompaction"];
+        const auto &levelNonZeroCompaction =
+            lsmtreeConfig["levelNonZeroCompaction"];
         if (levelNonZeroCompaction.contains("compactionStrategy"))
         {
             dbConfig->LSMTreeConfig.LevelNonZeroCompactionStrategy =
@@ -372,26 +368,31 @@ void loadLSMTreeConfig(const json &lsmtreeConfig, config::shared_ptr_t dbConfig,
         }
         else
         {
-            throw std::runtime_error("\"levelNonZeroCompaction.compactionStrategy\" is not "
-                                     "specified in config: " +
-                                     configPath);
+            throw std::runtime_error(
+                "\"levelNonZeroCompaction.compactionStrategy\" is not "
+                "specified in config: " +
+                configPath);
         }
 
         if (levelNonZeroCompaction.contains("compactionThreshold"))
         {
             dbConfig->LSMTreeConfig.LevelNonZeroCompactionThreshold =
-                levelNonZeroCompaction["compactionThreshold"].get<std::uint64_t>();
+                levelNonZeroCompaction["compactionThreshold"]
+                    .get<std::uint64_t>();
         }
         else
         {
-            throw std::runtime_error("\"levelNonZeroCompaction.compactionThreshold\" is not "
-                                     "specified in config: " +
-                                     configPath);
+            throw std::runtime_error(
+                "\"levelNonZeroCompaction.compactionThreshold\" is not "
+                "specified in config: " +
+                configPath);
         }
     }
     else
     {
-        throw std::runtime_error("\"levelNonZeroCompaction\" is not specified in config: " + configPath);
+        throw std::runtime_error(
+            "\"levelNonZeroCompaction\" is not specified in config: " +
+            configPath);
     }
 }
 
@@ -417,11 +418,13 @@ auto loadServerConfig(const json &configJson, config::shared_ptr_t dbConfig)
 
     if (configJson.contains("transport"))
     {
-        dbConfig->ServerConfig.transport = configJson["transport"].get<std::string>();
+        dbConfig->ServerConfig.transport =
+            configJson["transport"].get<std::string>();
     }
     else
     {
-        throw std::runtime_error("\"transport\" is not specified in the config");
+        throw std::runtime_error(
+            "\"transport\" is not specified in the config");
     }
 
     if (configJson.contains("id"))
@@ -435,7 +438,8 @@ auto loadServerConfig(const json &configJson, config::shared_ptr_t dbConfig)
 
     if (configJson.contains("peers"))
     {
-        dbConfig->ServerConfig.peers = configJson["peers"].get<std::vector<std::string>>();
+        dbConfig->ServerConfig.peers =
+            configJson["peers"].get<std::vector<std::string>>();
     }
     else
     {
@@ -443,7 +447,9 @@ auto loadServerConfig(const json &configJson, config::shared_ptr_t dbConfig)
     }
 }
 
-auto initializeDatabaseConfig(const json &configJson, const std::string &configPath) -> config::shared_ptr_t
+auto initializeDatabaseConfig(const json        &configJson,
+                              const std::string &configPath)
+    -> config::shared_ptr_t
 {
     auto dbConfig = loadDatabaseConfig(configJson);
 
@@ -453,7 +459,8 @@ auto initializeDatabaseConfig(const json &configJson, const std::string &configP
     }
     else
     {
-        throw std::runtime_error("\"lsm\" is not specified in config: " + configPath);
+        throw std::runtime_error("\"lsm\" is not specified in config: " +
+                                 configPath);
     }
 
     if (configJson.contains("wal"))
@@ -462,7 +469,8 @@ auto initializeDatabaseConfig(const json &configJson, const std::string &configP
     }
     else
     {
-        throw std::runtime_error("\"wal\" is not specified in config: " + configPath);
+        throw std::runtime_error("\"wal\" is not specified in config: " +
+                                 configPath);
     }
 
     if (configJson.contains("server"))
@@ -471,7 +479,8 @@ auto initializeDatabaseConfig(const json &configJson, const std::string &configP
     }
     else
     {
-        throw std::runtime_error("\"server\" is not specified in config: " + configPath);
+        throw std::runtime_error("\"server\" is not specified in config: " +
+                                 configPath);
     }
 
     return dbConfig;
@@ -493,12 +502,16 @@ auto main(int argc, char *argv[]) -> int
             return EXIT_FAILURE;
         }
 
-        cxxopts::Options options("tinykvpp", "A tiny database, powering big ideas");
-        options.add_options()("c,config", "Path to JSON configuration of database", cxxopts::value<std::string>())(
-            "help", "Print help");
+        cxxopts::Options options("tinykvpp",
+                                 "A tiny database, powering big ideas");
+        options.add_options()("c,config",
+                              "Path to JSON configuration of database",
+                              cxxopts::value<std::string>())("help",
+                                                             "Print help");
 
         auto parsedOptions = options.parse(argc, argv);
-        if ((parsedOptions.count("help") != 0U) || (parsedOptions.count("config") == 0U))
+        if ((parsedOptions.count("help") != 0U) ||
+            (parsedOptions.count("config") == 0U))
         {
             spdlog::info("{}", options.help());
             return EXIT_SUCCESS;
@@ -511,41 +524,102 @@ auto main(int argc, char *argv[]) -> int
         validator.set_root_schema(database_config_schema);
         validateConfigJson(configJson, validator);
 
-        configureLogging(configJson["logging"]["loggingLevel"].get<std::string>());
+        configureLogging(
+            configJson["logging"]["loggingLevel"].get<std::string>());
 
         auto pDbConfig = initializeDatabaseConfig(configJson, configPath);
-        if (pDbConfig->WALConfig.storageType == wal::log_storage_type_k::undefined_k)
+        if (pDbConfig->WALConfig.storageType ==
+            wal::log_storage_type_k::undefined_k)
         {
             spdlog::error("Undefined WAL storage type");
             return EXIT_FAILURE;
         }
 
-        std::optional<wal::wal_wrapper_t>                           wal = std::nullopt;
-        std::expected<wal::wal_wrapper_t, wal::wal_builder_error_t> expected =
-            std::unexpected(wal::wal_builder_error_t::kUndefined);
-
-        if (pDbConfig->WALConfig.storageType == wal::log_storage_type_k::in_memory_k)
+        // Build log storage
+        wal::log::log_storage_variant_t logStorage;
+        if (pDbConfig->WALConfig.storageType ==
+            wal::log_storage_type_k::in_memory_k)
         {
-            expected = wal::wal_builder_t<wal::log::storage_tags::in_memory_tag>{}.build();
+            logStorage = wal::log::in_memory_log_storage_t();
         }
-        else if (pDbConfig->WALConfig.storageType == wal::log_storage_type_k::file_based_persistent_k)
+        else if (pDbConfig->WALConfig.storageType ==
+                 wal::log_storage_type_k::file_based_persistent_k)
         {
-            const auto walPath{pDbConfig->DatabaseConfig.DatabasePath / pDbConfig->WALConfig.path};
-            if (pDbConfig->WALConfig.storageType == wal::log_storage_type_k::file_based_persistent_k)
+            const auto walPath{pDbConfig->DatabaseConfig.DatabasePath /
+                               pDbConfig->WALConfig.path};
+            if (pDbConfig->WALConfig.storageType ==
+                wal::log_storage_type_k::file_based_persistent_k)
             {
                 if (!exists(walPath))
                 {
-                    spdlog::error("WAL path does not exist: {}", pDbConfig->WALConfig.path.c_str());
+                    spdlog::error("WAL path does not exist: {}",
+                                  pDbConfig->WALConfig.path.c_str());
                     return EXIT_FAILURE;
                 }
             }
 
-            expected = wal::wal_builder_t<wal::log::storage_tags::file_backend_tag>{}.set_file_path(walPath).build();
+            auto persistentStorage{wal::persistent_log_storage_builder_t<
+                                       wal::file_storage_backend_t>{
+                {.file_path = walPath}}.build()};
+            if (!persistentStorage.has_value())
+            {
+                return EXIT_FAILURE;
+            }
+
+            logStorage = std::move(persistentStorage.value());
+        }
+
+        // Build log
+        std::optional<wal::log::log_variant_t>    simpleLog;
+        std::optional<wal::log::replicated_log_t> replicatedLog;
+        std::visit([&](auto &storage) {}, logStorage);
+
+        if (pDbConfig->DatabaseConfig.mode == db::db_mode_t::kEmbedded ||
+            pDbConfig->DatabaseConfig.mode == db::db_mode_t::kStandalone)
+        {
+        }
+        else if (pDbConfig->DatabaseConfig.mode == db::db_mode_t::kReplicated)
+        {
+        }
+
+        // Build WAL
+        std::optional<wal::wal_wrapper_t> wal = std::nullopt;
+        std::expected<wal::wal_wrapper_t, wal::wal_builder_error_t> expected =
+            std::unexpected(wal::wal_builder_error_t::kUndefined);
+
+        if (pDbConfig->WALConfig.storageType ==
+            wal::log_storage_type_k::in_memory_k)
+        {
+            expected =
+                wal::wal_builder_t<wal::log::storage_tags::in_memory_tag>{}
+                    .build();
+        }
+        else if (pDbConfig->WALConfig.storageType ==
+                 wal::log_storage_type_k::file_based_persistent_k)
+        {
+            const auto walPath{pDbConfig->DatabaseConfig.DatabasePath /
+                               pDbConfig->WALConfig.path};
+            if (pDbConfig->WALConfig.storageType ==
+                wal::log_storage_type_k::file_based_persistent_k)
+            {
+                if (!exists(walPath))
+                {
+                    spdlog::error("WAL path does not exist: {}",
+                                  pDbConfig->WALConfig.path.c_str());
+                    return EXIT_FAILURE;
+                }
+            }
+
+            expected =
+                wal::wal_builder_t<wal::log::storage_tags::file_backend_tag>{}
+                    .set_file_path(walPath)
+                    .build();
         }
 
         if (!expected.has_value())
         {
-            spdlog::error("Unable to build WAL. Error={}", wal::to_string(expected.error()));
+            spdlog::error("Unable to build WAL. Error={}",
+                          wal::to_string(expected.error()));
             return EXIT_FAILURE;
         }
 
@@ -577,14 +651,18 @@ auto main(int argc, char *argv[]) -> int
 
         // Prepare config for replicas
         std::vector<raft::raft_node_grpc_client_t> replicas;
-        for (raft::id_t replicaId{1}; const auto &replicaIp : pDbConfig->ServerConfig.peers)
+        for (raft::id_t  replicaId{1};
+             const auto &replicaIp : pDbConfig->ServerConfig.peers)
         {
             if (replicaId != pDbConfig->ServerConfig.id)
             {
                 std::unique_ptr<RaftService::Stub> stub{
-                    RaftService::NewStub(grpc::CreateChannel(replicaIp, grpc::InsecureChannelCredentials()))};
+                    RaftService::NewStub(grpc::CreateChannel(
+                        replicaIp, grpc::InsecureChannelCredentials()))};
 
-                replicas.emplace_back(raft::node_config_t{.m_id = replicaId, .m_ip = replicaIp}, std::move(stub));
+                replicas.emplace_back(
+                    raft::node_config_t{.m_id = replicaId, .m_ip = replicaIp},
+                    std::move(stub));
                 spdlog::info("replicaId={} replicaIp={}", replicaId, replicaIp);
             }
 
@@ -594,28 +672,34 @@ auto main(int argc, char *argv[]) -> int
         // Create current nodes config
         raft::node_config_t nodeConfig{
             .m_id = pDbConfig->ServerConfig.id,
-            .m_ip =
-                fmt::format("{}:{}", pDatabase->config()->ServerConfig.host, pDatabase->config()->ServerConfig.port)};
+            .m_ip = fmt::format("{}:{}",
+                                pDatabase->config()->ServerConfig.host,
+                                pDatabase->config()->ServerConfig.port)};
 
         // Start building gRPC server. Listen on current nodes host:port
         grpc::ServerBuilder grpcBuilder;
-        grpcBuilder.AddListeningPort(nodeConfig.m_ip, grpc::InsecureServerCredentials());
+        grpcBuilder.AddListeningPort(nodeConfig.m_ip,
+                                     grpc::InsecureServerCredentials());
 
         // Create consensus module and add it into gRPC server
-        auto pConsensusModule = std::make_unique<raft::consensus_module_t>(nodeConfig, std::move(replicas));
+        auto pConsensusModule = std::make_unique<raft::consensus_module_t>(
+            nodeConfig, std::move(replicas));
         if (!pConsensusModule->init())
         {
             spdlog::error("Failed to initialize the state machine");
             return EXIT_FAILURE;
         }
-        grpcBuilder.RegisterService(dynamic_cast<RaftService::Service *>(pConsensusModule.get()));
+        grpcBuilder.RegisterService(
+            dynamic_cast<RaftService::Service *>(pConsensusModule.get()));
 
         // Create KV service and add it into gRPC server
-        auto kvService = std::make_unique<server::grpc_communication::tinykvpp_service_impl_t>(pDatabase);
+        auto kvService = std::make_unique<
+            server::grpc_communication::tinykvpp_service_impl_t>(pDatabase);
         grpcBuilder.RegisterService(kvService.get());
 
         // Create gRPC server
-        std::unique_ptr<grpc::Server> pServer{std::unique_ptr<grpc::Server>(grpcBuilder.BuildAndStart())};
+        std::unique_ptr<grpc::Server> pServer{
+            std::unique_ptr<grpc::Server>(grpcBuilder.BuildAndStart())};
 
         // Start consensus module and gRPC server
         auto serverThread = std::jthread([&pServer] { pServer->Wait(); });

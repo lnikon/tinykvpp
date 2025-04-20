@@ -5,7 +5,8 @@
   "database": {
     "path": "./var/tkvpp",
     "walFilename": "wal",
-    "manifestFilenamePrefix": "manifest_"
+    "manifestFilenamePrefix": "manifest_",
+    "mode": "replicated"
   },
   "wal": {
     "enable": true,

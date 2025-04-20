@@ -20,6 +20,7 @@ target_link_libraries(
          fmt::fmt
          nlohmann_json::nlohmann_json
          nlohmann_json_schema_validator
+         magic_enum::magic_enum
          Config
          FS)
 

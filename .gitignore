@@ -39,7 +39,6 @@
 *.user
 *.vim
 *.Vim
-*.txt
 .idea
 .fleet
 .cache

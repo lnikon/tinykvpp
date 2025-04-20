@@ -5,7 +5,8 @@
   "database": {
     "path": "./var/tkvpp",
     "walFilename": "wal",
-    "manifestFilenamePrefix": "manifest_"
+    "manifestFilenamePrefix": "manifest_",
+    "mode": "replicated"
   },
   "wal": {
     "enable": true,
@@ -29,6 +30,10 @@
     "host": "0.0.0.0",
     "port": 8082,
     "id": 2,
-    "peers": ["0.0.0.0:8081", "0.0.0.0:8082", "0.0.0.0:8083"]
+    "peers": [
+      "0.0.0.0:8081",
+      "0.0.0.0:8082",
+      "0.0.0.0:8083"
+    ]
   }
 }
