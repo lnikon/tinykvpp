@@ -11,6 +11,10 @@
 namespace concurrency
 {
 
+
+
+
+
 template <typename TItem> class thread_safe_queue_t
 {
   public:
