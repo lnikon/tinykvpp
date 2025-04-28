@@ -6,11 +6,11 @@
 namespace db
 {
 
-db_t::db_t(config::shared_ptr_t config, wal::wal_wrapper_t wal)
+db_t::db_t(config::shared_ptr_t config, wal::shared_ptr_t wal)
     : m_config{config},
-      m_manifest{manifest::make_shared(config)},
-      m_wal{std::move(wal)},
-      m_lsmTree{config, m_manifest, m_wal}
+      m_pManifest{manifest::make_shared(config)},
+      m_pWal{std::move(wal)},
+      m_lsmTree{config, m_pManifest, m_pWal}
 {
 }
 
@@ -23,17 +23,17 @@ auto db_t::open() -> bool
     }
 
     // Open the manifest file
-    if (!m_manifest->open())
+    if (!m_pManifest->open())
     {
-        spdlog::error("Unable to open manifest file at {}", m_manifest->path().c_str());
+        spdlog::error("Unable to open manifest file at {}", m_pManifest->path().c_str());
         return false;
     }
 
     // Read on-disk components of lsmtree
-    if (!m_manifest->recover())
+    if (!m_pManifest->recover())
     {
         // TODO(lnikon): Maybe use error codes?
-        spdlog::error("unable to recover manifest file. path={}", m_manifest->path().string());
+        spdlog::error("unable to recover manifest file. path={}", m_pManifest->path().string());
         return false;
     }
 
@@ -98,6 +98,16 @@ auto db_t::prepare_directory_structure() -> bool
     }
 
     return true;
+}
+
+void db_t::swap(db_t &other) noexcept
+{
+    using std::swap;
+
+    swap(m_config, other.m_config);
+    swap(m_pManifest, other.m_pManifest);
+    swap(m_pWal, other.m_pWal);
+    swap(m_lsmTree, other.m_lsmTree);
 }
 
 } // namespace db

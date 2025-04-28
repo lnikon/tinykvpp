@@ -1,14 +1,6 @@
-//
-// Created by nikon on 1/21/22.
-//
-
-#ifndef MEMTABLE_H
-#define MEMTABLE_H
+#pragma once
 
 #include <cassert>
-#include <structures/sorted_vector/sorted_vector.h>
-#include <structures/skiplist/skiplist.h>
-
 #include <optional>
 #include <string>
 #include <sys/types.h>
@@ -16,12 +8,12 @@
 #include <iostream>
 #include <csignal>
 
+#include <structures/sorted_vector/sorted_vector.h>
+#include <structures/skiplist/skiplist.h>
+
 namespace structures::memtable
 {
 
-template <class> inline constexpr bool always_false_v = false;
-
-// class memtable_t
 class memtable_t
 {
   public:
@@ -289,5 +281,3 @@ template <> struct std::hash<structures::memtable::memtable_t::record_t::key_t>
         return std::hash<std::string>{}(key.m_key);
     }
 };
-
-#endif // MEMTABLE_H

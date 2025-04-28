@@ -1,9 +1,4 @@
-//
-// Created by nikon on 2/6/22.
-//
-
-#ifndef ZKV_LSMTREETYPES_H
-#define ZKV_LSMTREETYPES_H
+#pragma once
 
 #include <structures/memtable/memtable.h>
 
@@ -24,5 +19,3 @@ enum class lsmtree_segment_type_t
 };
 
 } // namespace structures::lsmtree
-
-#endif // ZKV_LSMTREETYPES_H

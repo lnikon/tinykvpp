@@ -20,9 +20,19 @@ class level_t
      *
      * @param pConfig
      */
-    explicit level_t(level_index_type_t         levelIndex,
-                     config::shared_ptr_t       pConfig,
-                     db::manifest::shared_ptr_t manifest) noexcept;
+    level_t() = delete;
+
+    level_t(level_index_type_t         levelIndex,
+            config::shared_ptr_t       pConfig,
+            db::manifest::shared_ptr_t manifest) noexcept;
+
+    level_t(const level_t &) = delete;
+    auto operator=(const level_t &) -> level_t & = delete;
+
+    level_t(level_t &&) = delete;
+    auto operator=(level_t &&) -> level_t & = delete;
+
+    ~level_t() noexcept = default;
 
     /**
      * @brief

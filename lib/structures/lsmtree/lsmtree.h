@@ -1,10 +1,10 @@
-#ifndef STRUCTURES_LSMTREE_LSMTREE_T_H
-#define STRUCTURES_LSMTREE_LSMTREE_T_H
+#pragma once
 
 #include <optional>
 #include <atomic>
 
 #include <db/manifest/manifest.h>
+#include <utility>
 #include <wal/wal.h>
 #include <structures/lsmtree/levels/levels.h>
 #include <structures/lsmtree/lsmtree_types.h>
@@ -25,7 +25,7 @@ class lsmtree_t
      */
     explicit lsmtree_t(const config::shared_ptr_t &pConfig,
                        db::manifest::shared_ptr_t  pManifest,
-                       wal::wal_wrapper_t         &wal) noexcept;
+                       wal::shared_ptr_t           wal) noexcept;
 
     /**
      * @brief Deleted default constructor for the lsmtree_t class.
@@ -64,7 +64,19 @@ class lsmtree_t
      * lsmtree_t. This ensures that the internal state of the LSM tree is not
      * inadvertently altered or corrupted by move operations.
      */
-    lsmtree_t(lsmtree_t &&) = delete;
+    lsmtree_t(lsmtree_t &&other) noexcept
+        : m_pConfig(other.m_pConfig),
+          m_table(std::move(other.m_table)),
+          m_pManifest(std::move(other.m_pManifest)),
+          m_pWal(other.m_pWal),
+          m_levels(std::move(other.m_levels)),
+          m_recovered(other.m_recovered.load()),
+          m_flushing_thread(std::move(other.m_flushing_thread)),
+          m_flushing_queue(std::move(other.m_flushing_queue))
+    {
+        // m_mutex does not support move; mutexes aren't moveable
+        // other.m_mutex state is left default-constructed
+    }
 
     /**
      * @brief Destructor for the lsmtree_t class.
@@ -86,7 +98,16 @@ class lsmtree_t
      *
      * @return This function does not return anything as it is deleted.
      */
-    auto operator=(lsmtree_t &&) -> lsmtree_t & = delete;
+    auto operator=(lsmtree_t &&other) noexcept -> lsmtree_t &
+    {
+        if (this != &other)
+        {
+            concurrency::absl_dual_mutex_lock_guard lock{m_mutex, other.m_mutex};
+            lsmtree_t                               temp{std::move(other)};
+            swap(other);
+        }
+        return *this;
+    }
 
     /**
      * @brief Inserts a key-value pair into the LSM tree.
@@ -154,23 +175,22 @@ class lsmtree_t
      */
     auto restore_from_wal() noexcept -> bool;
 
-    // Configuration shared throughout the database
-    const config::shared_ptr_t m_pConfig;
+    void swap(lsmtree_t &other) noexcept;
 
-    // Data storage. Protected by @m_mutex.
+    // Configuration shared throughout the database
+    config::shared_ptr_t m_pConfig;
+
+    // Data storage. Protected by @m_mutex
     absl::Mutex                         m_mutex;
     std::optional<memtable::memtable_t> m_table;
     db::manifest::shared_ptr_t          m_pManifest;
-    wal::wal_wrapper_t                 &m_wal;
+    wal::shared_ptr_t                   m_pWal;
     levels::levels_t                    m_levels;
 
-    // Communication channels. Thread-safe queues for inter-thread
-    // communication.
+    // Thread-safe queues for inter-thread communication
     std::atomic_bool                                       m_recovered;
     std::jthread                                           m_flushing_thread;
     concurrency::thread_safe_queue_t<memtable::memtable_t> m_flushing_queue;
 };
 
 } // namespace structures::lsmtree
-
-#endif // STRUCTURES_LSMTREE_LSMTREE_T_H

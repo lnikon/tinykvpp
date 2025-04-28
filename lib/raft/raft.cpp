@@ -596,7 +596,6 @@ auto consensus_module_t::onSendAppendEntriesRPC(raft_node_grpc_client_t     &cli
 {
     if (response.success())
     {
-        spdlog::debug("[VAGAG] response.success");
         absl::WriterMutexLock locker{&m_stateMutex};
         m_matchIndex[client.id()] = response.match_index();
         m_nextIndex[client.id()] = response.match_index() + 1;

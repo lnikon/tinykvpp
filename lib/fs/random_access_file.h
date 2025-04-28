@@ -24,10 +24,10 @@ class random_access_file_t
 
     ~random_access_file_t() noexcept;
 
-    [[nodiscard]] auto write(std::string_view data, size_t offset) noexcept
+    [[nodiscard]] auto write(std::string_view data, ssize_t offset) noexcept
         -> std::expected<ssize_t, file_error_t>;
 
-    [[nodiscard]] auto read(size_t offset, char *buffer, size_t size) noexcept
+    [[nodiscard]] auto read(ssize_t offset, char *buffer, size_t size) noexcept
         -> std::expected<ssize_t, file_error_t>;
 
     [[nodiscard]] auto size() const noexcept -> std::expected<std::size_t, file_error_t>;

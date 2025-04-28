@@ -1,13 +1,8 @@
-//
-// Created by nikon on 2/6/22.
-//
-
-#ifndef ZKV_LSMTREECONFIG_H
-#define ZKV_LSMTREECONFIG_H
-
-#include <structures/lsmtree/lsmtree_types.h>
+#pragma once
 
 #include <cstdint>
+
+#include <structures/lsmtree/lsmtree_types.h>
 
 namespace structures::lsmtree
 {
@@ -46,5 +41,3 @@ struct lsmtree_config_t
 };
 
 } // namespace structures::lsmtree
-
-#endif // ZKV_LSMTREECONFIG_H

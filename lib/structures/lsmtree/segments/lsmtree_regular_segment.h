@@ -1,9 +1,4 @@
-//
-// Created by nikon on 2/6/22.
-//
-
-#ifndef ZKV_LSMTREEREGULARSEGMENT_H
-#define ZKV_LSMTREEREGULARSEGMENT_H
+#pragma once
 
 #include "fs/types.h"
 #include "structures/memtable/memtable.h"
@@ -25,7 +20,7 @@ class regular_segment_t final
      * @param name
      * @param memtable
      */
-    regular_segment_t(fs::path_t path, types::name_t name, memtable::memtable_t memtable);
+    regular_segment_t(fs::path_t path, types::name_t name, memtable::memtable_t memtable) noexcept;
 
     /**
      * @brief
@@ -116,5 +111,3 @@ template <typename... Args> auto make_shared(Args... args)
 }
 
 } // namespace structures::lsmtree::segments::regular_segment
-
-#endif // ZKV_LSMTREEREGULARSEGMENT_H

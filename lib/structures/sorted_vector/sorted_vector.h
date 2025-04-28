@@ -1,5 +1,4 @@
-#ifndef SORTED_VECTOR_H
-#define SORTED_VECTOR_H
+#pragma once
 
 #include <algorithm>
 #include <optional>
@@ -159,5 +158,3 @@ auto sorted_vector_t<Data, Comparator>::erase(iterator begin, iterator end) ->
 }
 
 } // namespace structures::sorted_vector
-
-#endif // SORTED_VECTOR_H

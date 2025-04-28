@@ -63,7 +63,7 @@ random_access_file_t::~random_access_file_t() noexcept
     close(m_fd);
 }
 
-auto random_access_file_t::write(std::string_view data, size_t offset) noexcept
+auto random_access_file_t::write(std::string_view data, ssize_t offset) noexcept
     -> std::expected<ssize_t, file_error_t>
 {
     io_uring_sqe *sqe = io_uring_get_sqe(&m_ring);
@@ -97,7 +97,7 @@ auto random_access_file_t::write(std::string_view data, size_t offset) noexcept
     return res;
 }
 
-auto random_access_file_t::read(size_t offset, char *buffer, size_t size) noexcept
+auto random_access_file_t::read(ssize_t offset, char *buffer, size_t size) noexcept
     -> std::expected<ssize_t, file_error_t>
 {
     // return pread(m_fd, buffer, size, offset);

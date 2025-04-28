@@ -28,11 +28,11 @@ using segment_operation_k = db::manifest::manifest_t::segment_record_t::operatio
 
 lsmtree_t::lsmtree_t(const config::shared_ptr_t &pConfig,
                      db::manifest::shared_ptr_t  pManifest,
-                     wal::wal_wrapper_t         &wal) noexcept
+                     wal::shared_ptr_t           wal) noexcept
     : m_pConfig{pConfig},
       m_table{std::make_optional<memtable::memtable_t>()},
       m_pManifest{std::move(pManifest)},
-      m_wal{wal},
+      m_pWal{std::move(wal)},
       m_levels{pConfig, m_pManifest},
       m_recovered(false),
       m_flushing_thread(
@@ -108,7 +108,7 @@ void lsmtree_t::put(const structures::lsmtree::key_t   &key,
 
     // Record addition of the new key into the WAL and add record into memtable
     auto record{record_t{key, value}};
-    m_wal.add({.op = wal::operation_k::add_k, .kv = record});
+    m_pWal->add({.op = wal::operation_k::add_k, .kv = record});
     m_table->emplace(std::move(record));
 
     // TODO: Most probably this if block will causes periodic latencies during
@@ -122,7 +122,7 @@ void lsmtree_t::put(const structures::lsmtree::key_t   &key,
         m_table = std::make_optional<memtable::memtable_t>();
 
         // Reset the Write-Ahead Log (WAL) to start logging anew
-        m_wal.reset();
+        m_pWal->reset();
     }
 }
 
@@ -296,7 +296,7 @@ auto lsmtree_t::restore_from_wal() noexcept -> bool
         return strStream.str();
     };
 
-    for (const auto &records{m_wal.records()}; const auto &record : records)
+    for (const auto &records{m_pWal->records()}; const auto &record : records)
     {
         switch (record.op)
         {
@@ -323,4 +323,19 @@ auto lsmtree_t::restore_from_wal() noexcept -> bool
     return true;
 }
 
+void lsmtree_t::swap(lsmtree_t &other) noexcept
+{
+    using std::swap;
+
+    swap(m_pConfig, other.m_pConfig);
+    swap(m_table, other.m_table);
+    swap(m_pManifest, other.m_pManifest);
+    swap(m_pWal, other.m_pWal);
+    swap(m_levels, other.m_levels);
+
+    m_recovered.store(other.m_recovered.exchange(m_recovered.load()));
+
+    swap(m_flushing_thread, other.m_flushing_thread);
+    swap(m_flushing_queue, other.m_flushing_queue);
+}
 } // namespace structures::lsmtree

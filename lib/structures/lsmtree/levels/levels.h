@@ -1,34 +1,50 @@
 #pragma once
 
-#include "db/manifest/manifest.h"
-#include <structures/lsmtree/levels/level.h>
-#include <config/config.h>
-
 #include <optional>
 #include <vector>
 
 #include <absl/synchronization/mutex.h>
 #include <absl/synchronization/notification.h>
 
+#include "db/manifest/manifest.h"
+#include "structures/lsmtree/levels/level.h"
+#include "config/config.h"
+#include "concurrency/helpers.h"
+
 namespace structures::lsmtree::levels
 {
 
-/**
- * @class levels_t
- * @brief
- *
- */
 class levels_t
 {
   public:
     using levels_storage_t = std::vector<structures::lsmtree::level::shared_ptr_t>;
 
-    /**
-     * @brief
-     *
-     * @param pConfig
-     */
     explicit levels_t(config::shared_ptr_t pConfig, db::manifest::shared_ptr_t pManifest) noexcept;
+
+    levels_t(const levels_t &) = delete;
+    auto operator=(const levels_t &) -> levels_t & = delete;
+
+    levels_t(levels_t &&other) noexcept
+        : m_pConfig(std::move(other.m_pConfig)),
+          m_pManifest(std::move(other.m_pManifest)),
+          m_levels(std::move(other.m_levels)),
+          m_compaction_thread(std::move(other.m_compaction_thread))
+    {
+        // Mutex and Notification are not movable; construct default instances.
+        // other.m_mutex and other.m_level0_segment_flushed_notification are left in valid default
+        // states.
+    }
+
+    auto operator=(levels_t &&other) noexcept -> levels_t &
+    {
+        if (this != &other)
+        {
+            concurrency::absl_dual_mutex_lock_guard lock{m_mutex, other.m_mutex};
+            levels_t                                temp{std::move(other)};
+            swap(temp);
+        }
+        return *this;
+    }
 
     ~levels_t() noexcept;
 
@@ -105,6 +121,19 @@ class levels_t
     auto restore() noexcept -> void;
 
   private:
+    void swap(levels_t &other) noexcept
+    {
+        using std::swap;
+
+        swap(m_pConfig, other.m_pConfig);
+        swap(m_pManifest, other.m_pManifest);
+        swap(m_levels, other.m_levels);
+        swap(m_compaction_thread, other.m_compaction_thread);
+
+        // Note: m_mutex and m_level0_segment_flushed_notification are per-object
+        // and not logically swapped.
+    }
+
     config::shared_ptr_t m_pConfig;
 
     mutable absl::Mutex        m_mutex;
@@ -114,5 +143,4 @@ class levels_t
     mutable absl::Notification m_level0_segment_flushed_notification;
     std::jthread               m_compaction_thread;
 };
-
 } // namespace structures::lsmtree::levels

@@ -1,19 +1,19 @@
 #pragma once
 
-#include "concepts.h"
-
-#include <fmt/format.h>
 #include <optional>
 #include <vector>
 
-namespace wal::log
+#include <fmt/format.h>
+
+#include "../concepts.h"
+
+namespace wal::log::storage
 {
 
 // TODO(lnikon): Maybe resize() m_log in ctor to some default_log_size_mb?
 class in_memory_log_storage_t
 {
   public:
-    // Used to construct an empty storage
     in_memory_log_storage_t() = default;
 
     explicit in_memory_log_storage_t(std::vector<std::string> m_log)
@@ -39,7 +39,7 @@ class in_memory_log_storage_t
     }
 
     in_memory_log_storage_t(const in_memory_log_storage_t &other) = delete;
-    auto operator=(in_memory_log_storage_t &) -> in_memory_log_storage_t & = delete;
+    auto operator=(const in_memory_log_storage_t &) -> in_memory_log_storage_t & = delete;
 
     ~in_memory_log_storage_t() noexcept = default;
 
@@ -82,9 +82,6 @@ class in_memory_log_storage_t
 static_assert(TLogStorageConcept<in_memory_log_storage_t, std::string>,
               "in_memory_storage_t must satisfy TLogStorageConcept");
 
-// --------------------------------------------------------
-// Builder for in_memory_storage_builder_t (instance-based).
-// --------------------------------------------------------
 class in_memory_storage_builder_t
 {
   public:

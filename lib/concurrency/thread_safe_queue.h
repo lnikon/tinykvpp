@@ -1,12 +1,14 @@
 #pragma once
 
-#include <absl/time/time.h>
 #include <algorithm>
 #include <deque>
 #include <optional>
 
 #include <absl/synchronization/mutex.h>
+#include <absl/time/time.h>
 #include <spdlog/spdlog.h>
+
+#include "helpers.h"
 
 namespace concurrency
 {
@@ -15,6 +17,29 @@ template <typename TItem> class thread_safe_queue_t
 {
   public:
     using queue_t = std::deque<TItem>;
+
+    thread_safe_queue_t() = default;
+
+    thread_safe_queue_t(const thread_safe_queue_t &) = delete;
+    auto operator=(const thread_safe_queue_t &) -> thread_safe_queue_t & = delete;
+
+    thread_safe_queue_t(thread_safe_queue_t &&other) noexcept
+        : m_queue{move_under_optional_lock(other.m_queue, other.m_mutex)}
+    {
+    }
+
+    auto operator=(thread_safe_queue_t &&other) noexcept -> thread_safe_queue_t &
+    {
+        if (this != &other)
+        {
+            absl_dual_mutex_lock_guard guard{m_mutex, other.m_mutex};
+            thread_safe_queue_t        temp{std::move(other)};
+            swap(other);
+        }
+        return *this;
+    }
+
+    ~thread_safe_queue_t() noexcept = default;
 
     void push(TItem item)
     {
@@ -43,12 +68,7 @@ template <typename TItem> class thread_safe_queue_t
     auto pop_all() -> queue_t
     {
         absl::WriterMutexLock lock(&m_mutex);
-        if (m_queue.empty())
-        {
-            return {};
-        }
-
-        return std::move(m_queue);
+        return m_queue.empty() ? queue_t{} : std::move(m_queue);
     }
 
     auto size() -> std::size_t
@@ -75,6 +95,14 @@ template <typename TItem> class thread_safe_queue_t
     }
 
   private:
+    void swap(thread_safe_queue_t &other) noexcept
+    {
+        using std::swap;
+
+        // Mutex is not movable.
+        swap(m_queue, other.m_queue);
+    }
+
     mutable absl::Mutex m_mutex;
     queue_t             m_queue;
 };

@@ -1,31 +1,28 @@
-#include "config.h"
-#include "db.h"
-#include "db_config.h"
-#include "log/common.h"
-#include "log/in_memory_log_storage.h"
-#include "memtable.h"
-#include "raft/raft.h"
-#include "raft/replicated_log.h"
-#include "server/grpc_server.h"
-
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <exception>
 #include <fstream>
+#include <memory>
 #include <string>
 #include <csignal>
 #include <thread>
 
+#include <spdlog/common.h>
+#include <spdlog/spdlog.h>
+#include <fmt/format.h>
+#include <cxxopts.hpp>
 #include <nlohmann/json.hpp>
 #include <nlohmann/json-schema.hpp>
 
-#include <cxxopts.hpp>
-
-#include <fmt/format.h>
-
-#include <spdlog/common.h>
-#include <spdlog/spdlog.h>
+#include "config.h"
+#include "db.h"
+#include "db_config.h"
+#include "wal/common.h"
+#include "memtable.h"
+#include "raft/raft.h"
+#include "raft/replicated_log.h"
+#include "server/grpc_server.h"
 
 using tk_key_t = structures::memtable::memtable_t::record_t::key_t;
 using tk_value_t = structures::memtable::memtable_t::record_t::value_t;
@@ -509,147 +506,111 @@ auto main(int argc, char *argv[]) -> int
             return EXIT_FAILURE;
         }
 
-        // Build log storage
-        wal::log::log_storage_variant_t logStorage;
-        if (pDbConfig->WALConfig.storageType == wal::log_storage_type_k::in_memory_k)
-        {
-            logStorage = wal::log::in_memory_log_storage_t();
-        }
-        else if (pDbConfig->WALConfig.storageType ==
-                 wal::log_storage_type_k::file_based_persistent_k)
-        {
-            const auto walPath{pDbConfig->DatabaseConfig.DatabasePath / pDbConfig->WALConfig.path};
-            if (pDbConfig->WALConfig.storageType ==
-                wal::log_storage_type_k::file_based_persistent_k)
-            {
-                if (!exists(walPath))
-                {
-                    spdlog::error("WAL path does not exist: {}", pDbConfig->WALConfig.path.c_str());
-                    return EXIT_FAILURE;
-                }
-            }
-
-            auto persistentStorage{
-                wal::persistent_log_storage_builder_t<wal::file_storage_backend_t>{
-                    {.file_path = walPath}}
-                    .build()};
-            if (!persistentStorage.has_value())
-            {
-                return EXIT_FAILURE;
-            }
-
-            logStorage = std::move(persistentStorage.value());
-        }
-
-        // Build log
-        std::optional<wal::log::log_variant_t>    simpleLog;
-        std::optional<wal::log::replicated_log_t> replicatedLog;
-        std::visit([&](auto &storage) {}, logStorage);
-
-        if (pDbConfig->DatabaseConfig.mode == db::db_mode_t::kEmbedded ||
-            pDbConfig->DatabaseConfig.mode == db::db_mode_t::kStandalone)
-        {
-        }
-        else if (pDbConfig->DatabaseConfig.mode == db::db_mode_t::kReplicated)
-        {
-        }
-
-        // Build WAL
-        std::optional<wal::wal_wrapper_t>                           wal = std::nullopt;
-        std::expected<wal::wal_wrapper_t, wal::wal_builder_error_t> expected =
-            std::unexpected(wal::wal_builder_error_t::kUndefined);
-
-        if (pDbConfig->WALConfig.storageType == wal::log_storage_type_k::in_memory_k)
-        {
-            expected = wal::wal_builder_t<wal::log::storage_tags::in_memory_tag>{}.build();
-        }
-        else if (pDbConfig->WALConfig.storageType ==
-                 wal::log_storage_type_k::file_based_persistent_k)
-        {
-            const auto walPath{pDbConfig->DatabaseConfig.DatabasePath / pDbConfig->WALConfig.path};
-            if (pDbConfig->WALConfig.storageType ==
-                wal::log_storage_type_k::file_based_persistent_k)
-            {
-                if (!exists(walPath))
-                {
-                    spdlog::error("WAL path does not exist: {}", pDbConfig->WALConfig.path.c_str());
-                    return EXIT_FAILURE;
-                }
-            }
-
-            expected = wal::wal_builder_t<wal::log::storage_tags::file_backend_tag>{}
-                           .set_file_path(walPath)
-                           .build();
-        }
-
-        if (!expected.has_value())
-        {
-            spdlog::error("Unable to build WAL. Error={}", wal::to_string(expected.error()));
-            return EXIT_FAILURE;
-        }
-
-        wal = std::make_optional(std::move(expected.value()));
-        if (!wal.has_value())
-        {
-            spdlog::error("Unable to build WAL. Undefined error");
-            return EXIT_FAILURE;
-        }
-
-        auto pDatabase = db::make_shared(pDbConfig, std::move(wal.value()));
-        if (!pDatabase->open())
-        {
-            spdlog::error("Unable to open the database");
-            return EXIT_FAILURE;
-        }
-
-        if (pDbConfig->ServerConfig.id == 0)
-        {
-            spdlog::error("ID of the node should be positve integer");
-            return EXIT_FAILURE;
-        }
-
-        if (pDbConfig->ServerConfig.peers.empty())
-        {
-            spdlog::error("List of node IPs can't be empty");
-            return EXIT_FAILURE;
-        }
-
-        // Prepare config for replicas
-        std::vector<raft::raft_node_grpc_client_t> replicas;
-        for (raft::id_t replicaId{1}; const auto &replicaIp : pDbConfig->ServerConfig.peers)
-        {
-            if (replicaId != pDbConfig->ServerConfig.id)
-            {
-                std::unique_ptr<RaftService::Stub> stub{RaftService::NewStub(
-                    grpc::CreateChannel(replicaIp, grpc::InsecureChannelCredentials()))};
-
-                replicas.emplace_back(raft::node_config_t{.m_id = replicaId, .m_ip = replicaIp},
-                                      std::move(stub));
-                spdlog::info("replicaId={} replicaIp={}", replicaId, replicaIp);
-            }
-
-            ++replicaId;
-        }
-
         // Create current nodes config
-        raft::node_config_t nodeConfig{.m_id = pDbConfig->ServerConfig.id,
-                                       .m_ip = fmt::format("{}:{}",
-                                                           pDatabase->config()->ServerConfig.host,
-                                                           pDatabase->config()->ServerConfig.port)};
+        raft::node_config_t nodeConfig{
+            .m_id = pDbConfig->ServerConfig.id,
+            .m_ip =
+                fmt::format("{}:{}", pDbConfig->ServerConfig.host, pDbConfig->ServerConfig.port)};
 
         // Start building gRPC server. Listen on current nodes host:port
         grpc::ServerBuilder grpcBuilder;
         grpcBuilder.AddListeningPort(nodeConfig.m_ip, grpc::InsecureServerCredentials());
 
-        // Create consensus module and add it into gRPC server
-        auto pConsensusModule =
-            std::make_unique<raft::consensus_module_t>(nodeConfig, std::move(replicas));
-        if (!pConsensusModule->init())
+        // Build log and its storage
+        const auto walPath{pDbConfig->DatabaseConfig.DatabasePath / pDbConfig->WALConfig.path};
+        auto logStorage{wal::log::storage::log_storage_builder_t{}.set_file_path(walPath).build(
+            pDbConfig->WALConfig.storageType)};
+        if (!logStorage.has_value())
         {
-            spdlog::error("Failed to initialize the state machine");
+            spdlog::error("Unable to build a log stroage. path={}", walPath.c_str());
             return EXIT_FAILURE;
         }
-        grpcBuilder.RegisterService(dynamic_cast<RaftService::Service *>(pConsensusModule.get()));
+
+        // Build WAL
+        std::optional<wal::log::log_t> simpleLog;
+
+        std::shared_ptr<raft::consensus_module_t> pConsensusModule;
+        std::optional<wal::log::replicated_log_t> replicatedLog;
+
+        wal::shared_ptr_t                                   wal = nullptr;
+        std::expected<wal::wal_t, wal::wal_builder_error_t> expectedWal =
+            std::unexpected(wal::wal_builder_error_t::kUndefined);
+
+        simpleLog = wal::log::log_builder_t{}.build(std::move(logStorage.value()));
+        if (pDbConfig->DatabaseConfig.mode == db::db_mode_t::kEmbedded ||
+            pDbConfig->DatabaseConfig.mode == db::db_mode_t::kStandalone)
+        {
+            expectedWal = wal::wal_builder_t{}.build(std::move(simpleLog.value()));
+        }
+        else if (pDbConfig->DatabaseConfig.mode == db::db_mode_t::kReplicated)
+        {
+            if (pDbConfig->ServerConfig.id == 0)
+            {
+                spdlog::error("ID of the node should be positve integer");
+                return EXIT_FAILURE;
+            }
+
+            if (pDbConfig->ServerConfig.peers.empty())
+            {
+                spdlog::error("List of node IPs can't be empty");
+                return EXIT_FAILURE;
+            }
+
+            // Prepare config for replicas
+            std::vector<raft::raft_node_grpc_client_t> replicas;
+            for (raft::id_t replicaId{1}; const auto &replicaIp : pDbConfig->ServerConfig.peers)
+            {
+                if (replicaId != pDbConfig->ServerConfig.id)
+                {
+                    std::unique_ptr<RaftService::Stub> stub{RaftService::NewStub(
+                        grpc::CreateChannel(replicaIp, grpc::InsecureChannelCredentials()))};
+
+                    replicas.emplace_back(raft::node_config_t{.m_id = replicaId, .m_ip = replicaIp},
+                                          std::move(stub));
+                    spdlog::info("replicaId={} replicaIp={}", replicaId, replicaIp);
+                }
+
+                ++replicaId;
+            }
+
+            // Create consensus module
+            pConsensusModule =
+                std::make_shared<raft::consensus_module_t>(nodeConfig, std::move(replicas));
+            if (!pConsensusModule->init())
+            {
+                spdlog::error("Failed to initialize the state machine");
+                return EXIT_FAILURE;
+            }
+
+            // Add consensus module into gRPC server
+            grpcBuilder.RegisterService(
+                dynamic_cast<RaftService::Service *>(pConsensusModule.get()));
+
+            replicatedLog = wal::log::replicated_log_builder_t{}.build(std::move(simpleLog.value()),
+                                                                       pConsensusModule);
+            expectedWal = wal::wal_builder_t{}.build(std::move(simpleLog.value()));
+        }
+
+        if (!expectedWal.has_value())
+        {
+            spdlog::error("Unable to build WAL. Error={}",
+                          magic_enum::enum_name(expectedWal.error()));
+            return EXIT_FAILURE;
+        }
+
+        wal = wal::make_shared(std::move(expectedWal.value()));
+        if (!wal)
+        {
+            spdlog::error("Unable to build WAL. Undefined error");
+            return EXIT_FAILURE;
+        }
+
+        auto pDatabase = db::make_shared(pDbConfig, std::move(wal));
+        if (!pDatabase->open())
+        {
+            spdlog::error("Unable to open the database");
+            return EXIT_FAILURE;
+        }
 
         // Create KV service and add it into gRPC server
         auto kvService =
@@ -662,7 +623,11 @@ auto main(int argc, char *argv[]) -> int
 
         // Start consensus module and gRPC server
         auto serverThread = std::jthread([&pServer] { pServer->Wait(); });
-        pConsensusModule->start();
+
+        if (pDbConfig->DatabaseConfig.mode == db::db_mode_t::kReplicated && pConsensusModule)
+        {
+            pConsensusModule->start();
+        }
 
         while (!gShutdown)
         {

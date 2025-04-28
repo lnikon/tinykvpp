@@ -1,19 +1,5 @@
 #pragma once
 
-#include <grpc/grpc.h>
-#include <grpcpp/channel.h>
-#include <grpcpp/client_context.h>
-#include <grpcpp/create_channel.h>
-#include <grpcpp/security/credentials.h>
-#include <grpcpp/security/server_credentials.h>
-#include <grpcpp/server_builder.h>
-#include <grpcpp/support/status.h>
-
-#include "Raft.grpc.pb.h"
-#include "Raft.pb.h"
-
-#include <absl/base/thread_annotations.h>
-
 #include <chrono>        // for 'std::chrono::high_resolution_clock'
 #include <cstdint>       // for 'uint32_t'
 #include <string>        // for 'std::string'
@@ -22,6 +8,19 @@
 #include <optional>      // for 'std::optional'
 #include <unordered_map> // for 'std::unordered_map'
 #include <vector>        // for 'std::vector'
+
+#include <grpc/grpc.h>
+#include <grpcpp/channel.h>
+#include <grpcpp/client_context.h>
+#include <grpcpp/create_channel.h>
+#include <grpcpp/security/credentials.h>
+#include <grpcpp/security/server_credentials.h>
+#include <grpcpp/server_builder.h>
+#include <grpcpp/support/status.h>
+#include <absl/base/thread_annotations.h>
+
+#include "Raft.grpc.pb.h"
+#include "Raft.pb.h"
 
 namespace raft
 {

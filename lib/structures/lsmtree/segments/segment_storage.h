@@ -1,13 +1,13 @@
 #pragma once
 
-#include "structures/lsmtree/segments/lsmtree_regular_segment.h"
+#include <memory>
+#include <unordered_map>
 #include <functional>
-#include <structures/sorted_vector/sorted_vector.h>
 
 #include <absl/synchronization/mutex.h>
 
-#include <memory>
-#include <unordered_map>
+#include "structures/lsmtree/segments/lsmtree_regular_segment.h"
+#include "structures/sorted_vector/sorted_vector.h"
 
 namespace structures::lsmtree::segments::storage
 {
@@ -17,7 +17,6 @@ namespace types = lsmtree::segments::types;
 /**
  * @class last_write_time_comparator_t
  * @brief Use to insert a segment into level0
- *
  */
 struct last_write_time_comparator_t
 {
@@ -28,11 +27,6 @@ struct last_write_time_comparator_t
     }
 };
 
-/**
- * @class key_range_comparator_t
- * @brief
- *
- */
 struct key_range_comparator_t
 {
     auto operator()(const regular_segment::shared_ptr_t &lhs,
@@ -42,11 +36,6 @@ struct key_range_comparator_t
     }
 };
 
-/**
- * @class segment_storage_t
- * @brief
- *
- */
 class segment_storage_t : public std::enable_shared_from_this<segment_storage_t>
 {
   public:

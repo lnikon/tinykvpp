@@ -46,10 +46,13 @@ fs::append_only_file_t::~append_only_file_t() noexcept
 auto fs::append_only_file_t::append(std::string_view data) noexcept
     -> std::expected<ssize_t, file_error_t>
 {
-    return m_fd.write(data, 0);
+    // Accordinig to https://man7.org/linux/man-pages/man3/io_uring_prep_writev.3.html
+    // "On files that support seeking, if the offset is set to -1, the write operation commences at
+    // the file offset, and the file offset is incremented by the number of bytes written."
+    return m_fd.write(data, -1);
 }
 
-auto fs::append_only_file_t::read(size_t offset, char *buffer, size_t size) noexcept
+auto fs::append_only_file_t::read(ssize_t offset, char *buffer, size_t size) noexcept
     -> std::expected<ssize_t, file_error_t>
 {
     return m_fd.read(offset, buffer, size);

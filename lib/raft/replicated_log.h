@@ -14,7 +14,7 @@ class replicated_log_t
   public:
     replicated_log_t() = delete;
 
-    replicated_log_t(wal::log::log_variant_t                   log,
+    replicated_log_t(wal::log::log_t                           log,
                      std::shared_ptr<raft::consensus_module_t> pConsensusModule) noexcept
         : m_log{std::move(log)},
           m_pConsensusModule{std::move(pConsensusModule)}
@@ -50,7 +50,7 @@ class replicated_log_t
 
     [[nodiscard]] auto append(std::string entry) noexcept -> bool
     {
-        return std::visit([&](auto &log) { return log.append(entry); }, m_log);
+        return m_log.append(entry);
     }
 
     [[nodiscard]] auto append(std::string command, std::string key, std::string value) noexcept
@@ -74,30 +74,30 @@ class replicated_log_t
 
     [[nodiscard]] auto read(size_t index) const -> std::optional<std::string>
     {
-        return std::visit([&](auto &log) { return log.read(index); }, m_log);
+        return m_log.read(index);
     }
 
     [[nodiscard]] auto reset() -> bool
     {
-        return std::visit([&](auto &log) { return log.reset(); }, m_log);
+        return m_log.reset();
     }
 
     [[nodiscard]] auto size() const -> std::size_t
     {
-        return std::visit([&](auto &log) { return log.size(); }, m_log);
+        return m_log.size();
     }
 
   private:
-    wal::log::log_variant_t                   m_log;
+    wal::log::log_t                           m_log;
     std::shared_ptr<raft::consensus_module_t> m_pConsensusModule{nullptr};
 };
 
-static_assert(TLogStorageConcept<replicated_log_t>, "replicated_log_t must satisfy TLogConcept");
+static_assert(TLogConcept<replicated_log_t>, "replicated_log_t must satisfy TLogConcept");
 
 class replicated_log_builder_t final
 {
   public:
-    [[nodiscard]] auto build(wal::log::log_variant_t                   log,
+    [[nodiscard]] auto build(wal::log::log_t                           log,
                              std::shared_ptr<raft::consensus_module_t> pConsensusModule) noexcept
         -> replicated_log_t
     {

@@ -1,9 +1,4 @@
-//
-// Created by nikon on 3/8/24.
-//
-
-#ifndef ZKV_HELPERS_H
-#define ZKV_HELPERS_H
+#pragma once
 
 #include <config/config.h>
 #include <structures/lsmtree/segments/types.h>
@@ -23,5 +18,3 @@ auto uuid() -> std::string;
     -> std::filesystem::path;
 
 } // namespace structures::lsmtree::segments::helpers
-
-#endif // ZKV_HELPERS_H

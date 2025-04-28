@@ -1,15 +1,7 @@
 cmake_minimum_required(VERSION 3.25)
 project(frankie)
 
-add_library(
-  WAL
-  wal.h
-  common.h
-  common.cpp
-  log/concepts.h
-  log/in_memory_log_storage.h
-  log/log.h
-  log/persistent_log_storage.h)
+add_library(WAL wal.cpp common.cpp)
 
 set_target_properties(WAL PROPERTIES CXX_STANDARD 23)
 target_include_directories(WAL INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
