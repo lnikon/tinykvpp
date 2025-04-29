@@ -40,15 +40,24 @@ class segment_storage_t : public std::enable_shared_from_this<segment_storage_t>
 {
   public:
     using name_t = types::name_t;
+    using regular_segment_ptr_t = regular_segment::shared_ptr_t;
     using segment_map_t = std::unordered_map<name_t, regular_segment::shared_ptr_t>;
-    using segment_comp_t =
-        std::function<bool(regular_segment::shared_ptr_t, regular_segment::shared_ptr_t)>;
-    using storage_t =
-        structures::sorted_vector::sorted_vector_t<regular_segment::shared_ptr_t, segment_comp_t>;
+    using segment_comp_t = std::function<bool(regular_segment_ptr_t, regular_segment_ptr_t)>;
+    using storage_t = sorted_vector::sorted_vector_t<regular_segment::shared_ptr_t, segment_comp_t>;
     using iterator = storage_t::iterator;
     using const_iterator = storage_t::const_iterator;
     using reverse_iterator = storage_t::reverse_iterator;
     using size_type = storage_t::size_type;
+
+    segment_storage_t() noexcept = default;
+
+    segment_storage_t(const segment_storage_t &) = delete;
+    auto operator=(const segment_storage_t &) -> segment_storage_t & = delete;
+
+    segment_storage_t(segment_storage_t &&) = delete;
+    auto operator=(segment_storage_t &&) -> segment_storage_t & = delete;
+
+    ~segment_storage_t() noexcept = default;
 
     [[nodiscard]] auto size() const noexcept -> size_type;
 

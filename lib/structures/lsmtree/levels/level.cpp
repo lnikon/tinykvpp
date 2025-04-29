@@ -59,8 +59,8 @@ void level_t::emplace(const lsmtree::segments::regular_segment::shared_ptr_t &pS
         m_storage.emplace(pSegment, segments::storage::key_range_comparator_t{});
     }
 
-    m_manifest->add(db::manifest::manifest_t::segment_record_t{
-        .op = segment_operation_k::add_segment_k, .name = pSegment->get_name(), .level = index()});
+    ASSERT(m_manifest->add(db::manifest::manifest_t::segment_record_t{
+        .op = segment_operation_k::add_segment_k, .name = pSegment->get_name(), .level = index()}));
 }
 
 auto level_t::segment(memtable::memtable_t memtable) -> segments::regular_segment::shared_ptr_t
@@ -263,10 +263,10 @@ void level_t::purge() noexcept
     {
         pSegment->remove_from_disk();
 
-        m_manifest->add(
+        ASSERT(m_manifest->add(
             db::manifest::manifest_t::segment_record_t{.op = segment_operation_k::remove_segment_k,
                                                        .name = pSegment->get_name(),
-                                                       .level = idx});
+                                                       .level = idx}));
     }
     m_storage.clear();
 }
@@ -291,10 +291,10 @@ void level_t::purge(const segments::regular_segment::shared_ptr_t &pSegment) noe
 
     spdlog::debug("Removing segment {} from level {}", pSegment->get_name(), index());
 
-    m_manifest->add(
+    ASSERT(m_manifest->add(
         db::manifest::manifest_t::segment_record_t{.op = segment_operation_k::remove_segment_k,
                                                    .name = pSegment->get_name(),
-                                                   .level = index()});
+                                                   .level = index()}));
 
     pSegment->remove_from_disk();
     m_storage.remove(pSegment);

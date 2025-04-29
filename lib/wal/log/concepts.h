@@ -8,7 +8,7 @@ namespace wal::log
 
 template <typename T>
 concept TStorageBackendConcept =
-    requires(T backend, const char *data, std::size_t offset, std::size_t size) {
+    requires(T backend, const char *data, ssize_t offset, std::size_t size) {
         { backend.write(data, offset, size) } -> std::same_as<bool>;
         { backend.read(offset, size) } -> std::same_as<std::string>;
         { backend.size() } -> std::same_as<std::size_t>;

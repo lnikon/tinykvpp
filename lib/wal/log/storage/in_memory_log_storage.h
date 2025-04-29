@@ -93,4 +93,4 @@ class in_memory_storage_builder_t
     }
 };
 
-} // namespace wal::log
+} // namespace wal::log::storage

@@ -104,7 +104,7 @@ auto append_only_file_builder_t::build(std::string path, bool direct_io)
     auto flags{pw::open_flag_k::kReadWrite | pw::open_flag_k::kCreate | pw::open_flag_k::kAppend};
     if (direct_io)
     {
-        flags |= pw::open_flag_k::kDirect;
+        flags = flags | pw::open_flag_k::kDirect;
     }
 
     auto file{random_access_file_builder_t{}.build(std::move(path), flags)};

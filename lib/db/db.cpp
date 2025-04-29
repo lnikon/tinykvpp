@@ -48,11 +48,10 @@ auto db_t::open() -> bool
     return true;
 }
 
-// TODO(lnikon): Indicate on insertion failure
-void db_t::put(const structures::lsmtree::key_t &key, const structures::lsmtree::value_t &value)
+auto db_t::put(const structures::lsmtree::key_t   &key,
+               const structures::lsmtree::value_t &value) noexcept -> bool
 {
-    auto record{structures::memtable::memtable_t::record_t{key, value}};
-    m_lsmTree.put(key, value);
+    return m_lsmTree.put(key, value);
 }
 
 auto db_t::get(const structures::lsmtree::key_t &key)

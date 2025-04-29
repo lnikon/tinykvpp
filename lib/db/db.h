@@ -52,7 +52,8 @@ class db_t
      * @param key
      * @param value
      */
-    void put(const structures::lsmtree::key_t &key, const structures::lsmtree::value_t &value);
+    [[nodiscard]] auto put(const structures::lsmtree::key_t   &key,
+                           const structures::lsmtree::value_t &value) noexcept -> bool;
 
     /**
      * @brief Get key-value pair from database

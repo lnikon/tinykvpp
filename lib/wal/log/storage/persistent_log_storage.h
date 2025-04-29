@@ -8,7 +8,7 @@
 
 #include "../concepts.h"
 #include "backend/backend.h"
-#include "backend/file_storage_backend.h"
+#include "backend/append_only_file_storage_backend.h"
 
 namespace wal::log
 {
@@ -17,7 +17,8 @@ template <TStorageBackendConcept TStorageBackend>
 auto create_storage_backend_builder(storage::backend::storage_backend_config_t config)
     -> std::unique_ptr<storage::backend::storage_backend_builder_t<TStorageBackend>>
 {
-    if constexpr (std::is_same_v<TStorageBackend, storage::backend::file_storage_backend_t>)
+    if constexpr (std::is_same_v<TStorageBackend,
+                                 storage::backend::append_only_file_storage_backend_t>)
     {
         return std::make_unique<storage::backend::file_storage_backend_builder_t>(
             std::move(config));
@@ -117,9 +118,9 @@ template <TStorageBackendConcept TBackendStorage> class persistent_log_storage_t
     std::vector<std::string> m_inMemoryLog;
 };
 
-static_assert(
-    TLogStorageConcept<persistent_log_storage_t<storage::backend::file_storage_backend_t>>,
-    "persistent_log_storage_t must satisfy TLogStorageConcept");
+static_assert(TLogStorageConcept<
+                  persistent_log_storage_t<storage::backend::append_only_file_storage_backend_t>>,
+              "persistent_log_storage_t must satisfy TLogStorageConcept");
 
 enum class persistent_log_storage_builder_error_t : std::uint8_t
 {

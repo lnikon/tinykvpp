@@ -27,7 +27,7 @@ class absl_dual_mutex_lock_guard final
         }
 
         m_first_mutex->Lock();
-        m_first_mutex->Unlock();
+        m_second_mutex->Lock();
     }
 
     absl_dual_mutex_lock_guard(const absl_dual_mutex_lock_guard &) = delete;
@@ -52,7 +52,7 @@ template <typename T> auto move_under_optional_lock(T &obj, absl::Mutex &mutex)
 {
     (void)mutex;
 #ifdef THREAD_SAFE_QUEUE_DEFENSIVE_MOVE
-    absl::WriterMutexLock lock(&mu);
+    absl::WriterMutexLock lock(&mutex);
 #endif
     return std::move(obj);
 }

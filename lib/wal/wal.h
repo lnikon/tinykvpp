@@ -95,7 +95,7 @@ class wal_t
      *
      * @param rec The record to be added to the WAL.
      */
-    void add(const record_t &rec) noexcept;
+    [[nodiscard]] auto add(const record_t &rec) noexcept -> bool;
 
     /**
      * @brief Resets the Write-Ahead Log (WAL).

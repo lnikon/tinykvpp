@@ -28,9 +28,18 @@ auto tinykvpp_service_impl_t::Put(grpc::ServerContext *pContext,
 
     try
     {
-        m_database->put(structures::lsmtree::key_t{pRequest->key()},
-                        structures::lsmtree::value_t{pRequest->value()});
-        pResponse->set_status(std::string("OK"));
+        std::string status;
+        if (!m_database->put(structures::lsmtree::key_t{pRequest->key()},
+                             structures::lsmtree::value_t{pRequest->value()}))
+        {
+            status = std::string("Request failed");
+        }
+        else
+        {
+            status = std::string("OK");
+        }
+
+        pResponse->set_status(status);
         return grpc::Status::OK;
     }
     catch (std::exception &e)

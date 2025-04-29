@@ -120,7 +120,7 @@ class lsmtree_t
      * @param key The key to be inserted.
      * @param value The value associated with the key.
      */
-    void put(const key_t &key, const value_t &value) noexcept;
+    [[nodiscard]] auto put(const key_t &key, const value_t &value) noexcept -> bool;
 
     /**
      * @brief Retrieves the record associated with the given key.

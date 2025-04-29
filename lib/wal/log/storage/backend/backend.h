@@ -34,12 +34,12 @@ template <typename Derived> class storage_backend_base_t
   public:
     friend Derived;
 
-    [[nodiscard]] auto write(const char *data, std::size_t offset, std::size_t size) -> bool
+    [[nodiscard]] auto write(const char *data, ssize_t offset, std::size_t size) -> bool
     {
         return static_cast<Derived *>(this)->write_impl(data, offset, size);
     }
 
-    [[nodiscard]] auto read(std::size_t offset, std::size_t size) -> std::string
+    [[nodiscard]] auto read(ssize_t offset, std::size_t size) -> std::string
     {
         return static_cast<Derived *>(this)->read_impl(offset, size);
     }

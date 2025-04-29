@@ -23,15 +23,24 @@ auto wal_t::operator=(wal_t &&other) noexcept -> wal_t &
     return *this;
 }
 
-void wal_t::add(const record_t &rec) noexcept
+auto wal_t::add(const record_t &rec) noexcept -> bool
 {
-    auto op_view{magic_enum::enum_name(rec.op)};
-    ASSERT(m_log.append(std::string{op_view.data(), op_view.size()},
-                        rec.kv.m_key.m_key,
-                        rec.kv.m_value.m_value),
-           "failed to append to WAL");
+    const auto op_view{magic_enum::enum_name(rec.op)};
+    if (!m_log.append(std::string{op_view.data(), op_view.size()},
+                      rec.kv.m_key.m_key,
+                      rec.kv.m_value.m_value))
+    {
+        spdlog::error(std::format("WAL: Failed to append entry: {} {} {}",
+                                  op_view,
+                                  rec.kv.m_key.m_key,
+                                  rec.kv.m_value.m_value));
+        return false;
+    }
 
-    spdlog::debug("Added new WAL entry {}", "FILL_ME");
+    spdlog::debug(
+        "WAL: Appended new entry: {} {} {}", op_view, rec.kv.m_key.m_key, rec.kv.m_value.m_value);
+
+    return true;
 }
 
 auto wal_t::reset() noexcept -> bool
@@ -48,7 +57,6 @@ auto wal_t::reset() noexcept -> bool
         return strStream.str();
     };
 
-    spdlog::info("wal_t::records() called");
     auto logStream = std::stringstream{};
     for (std::size_t idx{0}; idx < m_log.size(); ++idx)
     {
@@ -72,11 +80,11 @@ auto wal_t::reset() noexcept -> bool
         record_t           rec;
         rec.read(lineStream);
 
-        spdlog::debug("Recovered WAL record {}", recordToString(rec));
+        spdlog::debug("WAL: Recovered record: {}", recordToString(rec));
 
         result.emplace_back(std::move(rec));
     }
-    spdlog::info("WAL recovery finished");
+    spdlog::info("WAL: Recovery finished");
 
     return result;
 }

@@ -98,8 +98,8 @@ lsmtree_t::~lsmtree_t() noexcept
     m_flushing_thread.join();
 }
 
-void lsmtree_t::put(const structures::lsmtree::key_t   &key,
-                    const structures::lsmtree::value_t &value) noexcept
+auto lsmtree_t::put(const structures::lsmtree::key_t   &key,
+                    const structures::lsmtree::value_t &value) noexcept -> bool
 {
     assert(m_pConfig);
 
@@ -108,11 +108,16 @@ void lsmtree_t::put(const structures::lsmtree::key_t   &key,
 
     // Record addition of the new key into the WAL and add record into memtable
     auto record{record_t{key, value}};
-    m_pWal->add({.op = wal::operation_k::add_k, .kv = record});
+    if (!m_pWal->add({.op = wal::operation_k::add_k, .kv = record}))
+    {
+        spdlog::error("LSMTree: Failed to put entry: {} {}", key.m_key, value.m_value);
+        return false;
+    }
+
     m_table->emplace(std::move(record));
 
-    // TODO: Most probably this if block will causes periodic latencies during
-    // reads when the condition is met
+    // TODO: Most probably this 'if' block will causes periodic latencies during reads when the
+    // condition is met
     if (m_table->size() >= m_pConfig->LSMTreeConfig.DiskFlushThresholdSize)
     {
         // Push the memtable to the flushing queue
@@ -124,6 +129,8 @@ void lsmtree_t::put(const structures::lsmtree::key_t   &key,
         // Reset the Write-Ahead Log (WAL) to start logging anew
         m_pWal->reset();
     }
+
+    return true;
 }
 
 auto lsmtree_t::get(const key_t &key) noexcept -> std::optional<record_t>

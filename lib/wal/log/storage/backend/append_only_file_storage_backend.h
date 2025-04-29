@@ -9,21 +9,23 @@
 namespace wal::log::storage::backend
 {
 
-class file_storage_backend_t : public storage_backend_base_t<file_storage_backend_t>
+class append_only_file_storage_backend_t
+    : public storage_backend_base_t<append_only_file_storage_backend_t>
 {
   public:
-    explicit file_storage_backend_t(fs::append_only_file_t &&file)
+    explicit append_only_file_storage_backend_t(fs::append_only_file_t &&file)
         : m_file(std::move(file))
     {
     }
 
-    file_storage_backend_t(file_storage_backend_t &&other) noexcept
-        : storage_backend_base_t<file_storage_backend_t>{std::move(other)},
+    append_only_file_storage_backend_t(append_only_file_storage_backend_t &&other) noexcept
+        : storage_backend_base_t<append_only_file_storage_backend_t>{std::move(other)},
           m_file{std::move(other.m_file)}
     {
     }
 
-    auto operator=(file_storage_backend_t &&other) noexcept -> file_storage_backend_t &
+    auto operator=(append_only_file_storage_backend_t &&other) noexcept
+        -> append_only_file_storage_backend_t &
     {
         if (this != &other)
         {
@@ -32,16 +34,17 @@ class file_storage_backend_t : public storage_backend_base_t<file_storage_backen
         return *this;
     }
 
-    file_storage_backend_t(const file_storage_backend_t &other) = delete;
-    auto operator=(const file_storage_backend_t &) noexcept -> file_storage_backend_t & = delete;
+    append_only_file_storage_backend_t(const append_only_file_storage_backend_t &other) = delete;
+    auto operator=(const append_only_file_storage_backend_t &) noexcept
+        -> append_only_file_storage_backend_t & = delete;
 
-    ~file_storage_backend_t() = default;
+    ~append_only_file_storage_backend_t() = default;
 
     friend class storage_backend_base_t;
 
   private:
     // TODO(lnikon): Use StrongTypes for adjacent parameters with similar type
-    [[nodiscard]] auto write_impl(const char *data, std::size_t offset, std::size_t size) -> bool
+    [[nodiscard]] auto write_impl(const char *data, ssize_t offset, std::size_t size) -> bool
     {
         (void)offset;
         return m_file.append({data, size})
@@ -49,15 +52,17 @@ class file_storage_backend_t : public storage_backend_base_t<file_storage_backen
             .value_or(false);
     }
 
-    [[nodiscard]] auto read_impl(std::size_t offset, std::size_t size) -> std::string
+    [[nodiscard]] auto read_impl(ssize_t offset, std::size_t size) -> std::string
     {
-        std::string buffer;
-        buffer.resize(size);
-        if (const auto res = m_file.read(offset, buffer.data(), size); !res.has_value())
+        std::string buffer(size, '\0');
+        const auto  res = m_file.read(offset, buffer.data(), size);
+        if (!res.has_value())
         {
             spdlog::error("Failed to read from file storage. Offset={}, size={}", offset, size);
             return {};
         }
+
+        buffer.resize(res.value());
         return buffer;
     }
 
@@ -75,10 +80,10 @@ class file_storage_backend_t : public storage_backend_base_t<file_storage_backen
 };
 
 class file_storage_backend_builder_t final
-    : public storage_backend_builder_t<file_storage_backend_t>
+    : public storage_backend_builder_t<append_only_file_storage_backend_t>
 {
   public:
-    using base_t = storage_backend_builder_t<file_storage_backend_t>;
+    using base_t = storage_backend_builder_t<append_only_file_storage_backend_t>;
 
     explicit file_storage_backend_builder_t(storage_backend_config_t config)
         : base_t(std::move(config))
@@ -97,8 +102,8 @@ class file_storage_backend_builder_t final
         return std::nullopt;
     }
 
-    [[nodiscard]] auto build_impl()
-        -> std::expected<file_storage_backend_t, storage_backend_builder_error_t> override
+    [[nodiscard]] auto build_impl() -> std::expected<append_only_file_storage_backend_t,
+                                                     storage_backend_builder_error_t> override
     {
         auto file = fs::append_only_file_builder_t{}.build(config().file_path.c_str(), true);
         if (!file)
@@ -110,11 +115,11 @@ class file_storage_backend_builder_t final
                 return std::unexpected(storage_backend_builder_error_t::kUnableToOpenFile);
             }
         }
-        return file_storage_backend_t(std::move(file.value()));
+        return append_only_file_storage_backend_t(std::move(file.value()));
     }
 };
 
-static_assert(TStorageBackendConcept<file_storage_backend_t>,
+static_assert(TStorageBackendConcept<append_only_file_storage_backend_t>,
               "file_storage_backend_t must satisfy TStorageBackendConcept");
 
 } // namespace wal::log::storage::backend
