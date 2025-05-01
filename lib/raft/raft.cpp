@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <chrono>
-#include <cstdlib>
 #include <filesystem>
 #include <fmt/core.h>
 #include <fstream>
@@ -13,9 +12,10 @@
 
 #include <absl/synchronization/mutex.h>
 #include <absl/time/time.h>
-
 #include <fmt/format.h>
 #include <spdlog/spdlog.h>
+
+#include "wal/wal.h"
 
 namespace
 {
@@ -121,10 +121,12 @@ auto raft_node_grpc_client_t::ip() const -> ip_t
 // consensus_module_t
 // -------------------------------
 consensus_module_t::consensus_module_t(node_config_t                        nodeConfig,
-                                       std::vector<raft_node_grpc_client_t> replicas) noexcept
+                                       std::vector<raft_node_grpc_client_t> replicas,
+                                       wal_ptr_t                            pLog) noexcept
     : m_config{std::move(nodeConfig)},
       m_currentTerm{0},
       m_votedFor{0},
+      m_log{pLog},
       m_commitIndex{0},
       m_lastApplied{0},
       m_state{NodeState::FOLLOWER},
@@ -132,7 +134,7 @@ consensus_module_t::consensus_module_t(node_config_t                        node
       m_voteCount{0}
 {
     assert(m_config.m_id > 0);
-    assert(replicas.size() > 0);
+    // assert(replicas.size() > 0);
     assert(m_config.m_id <= replicas.size() + 1);
 
     for (auto &&nodeClient : replicas)
@@ -217,8 +219,8 @@ auto consensus_module_t::AppendEntries(grpc::ServerContext        *pContext,
     // 2. Log consistency check
     if (pRequest->prevlogindex() > 0)
     {
-        if (m_log.size() < pRequest->prevlogindex() ||
-            (m_log[pRequest->prevlogindex() - 1].term() != pRequest->prevlogterm()))
+        if (m_log->size() < pRequest->prevlogindex() ||
+            (m_log->read(pRequest->prevlogindex() - 1)->term() != pRequest->prevlogterm()))
         {
             pResponse->set_term(m_currentTerm);
             pResponse->set_success(false);
@@ -232,20 +234,27 @@ auto consensus_module_t::AppendEntries(grpc::ServerContext        *pContext,
     for (auto idx{0}; idx < pRequest->entries().size(); ++idx)
     {
         const auto newIdx{newEntryStart + idx - 1};
-        if (m_log.size() >= newEntryStart + idx &&
-            m_log[newIdx].term() != pRequest->entries(idx).term())
+        if (m_log->size() >= newEntryStart + idx &&
+            m_log->read(newIdx)->term() != pRequest->entries(idx).term())
         {
-            m_log.resize(newIdx);
+            // TODO(lnikon): How to handle resize() with wal::wal_t?
+            // m_log->resize(newIdx);
             break;
         }
     }
 
-    m_log.insert(m_log.end(), pRequest->entries().begin(), pRequest->entries().end());
+    {
+        const auto &entries{pRequest->entries()};
+        for (const auto &entry : entries)
+        {
+            m_log->add(entry);
+        }
+    }
 
     if (pRequest->leadercommit() > m_commitIndex)
     {
         // Update m_commitIndex
-        if (!updatePersistentState(std::min(pRequest->leadercommit(), (uint32_t)m_log.size()),
+        if (!updatePersistentState(std::min(pRequest->leadercommit(), (uint32_t)m_log->size()),
                                    std::nullopt))
         {
             spdlog::error("Node={} is unable to persist commitIndex", m_config.m_id, m_commitIndex);
@@ -265,7 +274,7 @@ auto consensus_module_t::AppendEntries(grpc::ServerContext        *pContext,
     pResponse->set_term(m_currentTerm);
     pResponse->set_success(true);
     pResponse->set_responderid(m_config.m_id);
-    pResponse->set_match_index(m_log.size());
+    pResponse->set_match_index(m_log->size());
 
     // Update @m_votedFor
     if (!updatePersistentState(std::nullopt, pRequest->senderid()))
@@ -393,7 +402,7 @@ auto consensus_module_t::replicate(LogEntry logEntry) -> bool
 
     {
         absl::MutexLock locker{&m_stateMutex};
-        m_log.emplace_back(logEntry);
+        m_log->add(logEntry);
     }
 
     for (auto &[id, client] : m_replicas)
@@ -432,7 +441,7 @@ auto consensus_module_t::votedFor() const -> uint32_t
 auto consensus_module_t::log() const -> std::vector<LogEntry>
 {
     absl::ReaderMutexLock locker{&m_stateMutex};
-    return m_log;
+    return m_log->records();
 }
 auto consensus_module_t::getState() const -> NodeState
 {
@@ -601,9 +610,9 @@ auto consensus_module_t::onSendAppendEntriesRPC(raft_node_grpc_client_t     &cli
         m_nextIndex[client.id()] = response.match_index() + 1;
 
         uint32_t majorityIndex = findMajorityIndexMatch();
-        if (majorityIndex > m_commitIndex && m_log.size() >= majorityIndex)
+        if (majorityIndex > m_commitIndex && m_log->size() >= majorityIndex)
         {
-            if (m_log[majorityIndex - 1].term() == m_currentTerm)
+            if (m_log->read(majorityIndex - 1)->term() == m_currentTerm)
             {
                 if (!updatePersistentState(majorityIndex, std::nullopt))
                 {
@@ -747,12 +756,13 @@ void consensus_module_t::sendRequestVoteRPCs(const RequestVoteRequest &request,
 
 auto consensus_module_t::getLastLogIndex() const -> uint32_t
 {
-    return m_log.empty() ? 0 : m_log.back().index();
+    // TODO(lnikon): Add a method into wal::wal_t for: m_log->read(m_log->size() - 1)
+    return m_log->empty() ? 0 : m_log->read(m_log->size() - 1)->index();
 }
 
 auto consensus_module_t::getLastLogTerm() const -> uint32_t
 {
-    return m_log.empty() ? 0 : m_log.back().term();
+    return m_log->empty() ? 0 : m_log->read(m_log->size() - 1)->term();
 }
 
 auto consensus_module_t::hasMajority(uint32_t votes) const -> bool
@@ -763,12 +773,12 @@ auto consensus_module_t::hasMajority(uint32_t votes) const -> bool
 
 auto consensus_module_t::getLogTerm(uint32_t index) const -> uint32_t
 {
-    if (index == 0 || index > m_log.size())
+    if (index == 0 || index > m_log->size())
     {
         return 0;
     }
 
-    return m_log[index - 1].term();
+    return m_log->read(index - 1)->term();
 }
 
 auto consensus_module_t::findMajorityIndexMatch() const -> uint32_t
@@ -821,11 +831,13 @@ auto consensus_module_t::initializePersistentState() -> bool
         return false;
     }
 
-    for (const auto &logEntry : m_log)
+    // for (const auto &logEntry : m_log)
+    for (std::size_t idx{0}; idx < m_log->size(); ++idx)
     {
-        (void)logEntry;
-        // TODO(lnikon): Should I update the state machine here?
-        // m_kv[logEntry.key()] = logEntry.value();
+        const auto &logEntry{m_log->read(idx)};
+        // TODO(lnikon): Should I update the state machine here? Maybe a callback e.g.
+        // onCommit(logEntry)?
+        //  m_kv[logEntry.key()] = logEntry.value();
     }
 
     return true;
@@ -887,9 +899,12 @@ auto consensus_module_t::flushPersistentState() -> bool
             return false;
         }
 
-        for (const auto &entry : m_log)
+        // for (const auto &entry : m_log)
+        for (std::size_t idx{0}; idx < m_log->size(); idx++)
         {
-            fsa << entry.key() << " " << entry.value() << " " << entry.term() << "\n";
+            const auto &entry{m_log->read(idx)};
+
+            fsa << entry->key() << " " << entry->value() << " " << entry->term() << "\n";
 
             if (fsa.fail())
             {
@@ -961,7 +976,7 @@ auto consensus_module_t::restorePersistentState() -> bool
             logEntry.set_key(key);
             logEntry.set_value(value);
             logEntry.set_term(term);
-            m_log.emplace_back(logEntry);
+            m_log->add(logEntry);
 
             spdlog::info("Node={} restored logEntry=[key={}, value={}, term={}]",
                          m_config.m_id,

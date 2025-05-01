@@ -1,6 +1,6 @@
 [buildenv]
-CC=/usr/bin/clang
-CXX=/usr/bin/clang++
+CC=/usr/bin/clang-19
+CXX=/usr/bin/clang++-19
 CXXFLAGS=-fsanitize=thread -g -O1
 CFLAGS=-fsanitize=thread -g -O1
 LDFLAGS=-fsanitize=thread

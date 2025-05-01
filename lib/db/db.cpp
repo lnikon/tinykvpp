@@ -6,7 +6,7 @@
 namespace db
 {
 
-db_t::db_t(config::shared_ptr_t config, wal::shared_ptr_t wal)
+db_t::db_t(config::shared_ptr_t config, wal::shared_ptr_t<wal::wal_entry_t> wal)
     : m_config{config},
       m_pManifest{manifest::make_shared(config)},
       m_pWal{std::move(wal)},

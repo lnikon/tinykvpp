@@ -8,5 +8,9 @@
         "spdlog",
         "stoken"
     ],
-    "sonarlint.pathToCompileCommands": "${workspaceFolder}/build/compile_commands.json"
+    "sonarlint.pathToCompileCommands": "${workspaceFolder}/build/compile_commands.json",
+    "C_Cpp.default.cppStandard": "c++23",
+    "C_Cpp.default.cStandard": "c23",
+    "clangd.checkUpdates": true,
+    "clangd.path": "/usr/bin/clangd"
 }

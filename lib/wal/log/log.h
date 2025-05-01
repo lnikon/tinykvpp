@@ -1,27 +1,29 @@
 #pragma once
 
 #include "concepts.h"
-#include "wal/log/storage/builder.h"
+#include "storage/builder.h"
 
 namespace wal::log
 {
 
-class log_t
+template <typename TEntry> class log_impl_t
 {
   public:
-    log_t() = delete;
+    using entry_type = TEntry;
 
-    explicit log_t(storage::log_storage_wrapper_t storage) noexcept
+    log_impl_t() = delete;
+
+    explicit log_impl_t(storage::log_storage_wrapper_t<TEntry> storage) noexcept
         : m_storage(std::move(storage))
     {
     }
 
-    log_t(log_t &&other) noexcept
+    log_impl_t(log_impl_t &&other) noexcept
         : m_storage{std::move(other.m_storage)}
     {
     }
 
-    auto operator=(log_t &&other) noexcept -> log_t &
+    auto operator=(log_impl_t &&other) noexcept -> log_impl_t &
     {
         if (this != &other)
         {
@@ -31,23 +33,17 @@ class log_t
         return *this;
     }
 
-    log_t(const log_t &) noexcept = delete;
-    auto operator=(const log_t &) noexcept -> log_t & = delete;
+    log_impl_t(const log_impl_t &) noexcept = delete;
+    auto operator=(const log_impl_t &) noexcept -> log_impl_t & = delete;
 
-    ~log_t() noexcept = default;
+    ~log_impl_t() noexcept = default;
 
-    [[nodiscard]] auto append(std::string entry) noexcept -> bool
+    [[nodiscard]] auto append(entry_type entry) noexcept -> bool
     {
         return m_storage.append(std::move(entry));
     }
 
-    [[nodiscard]] auto append(std::string command, std::string key, std::string value) noexcept
-        -> bool
-    {
-        return m_storage.append(std::move(command), std::move(key), std::move(value));
-    }
-
-    [[nodiscard]] auto read(std::size_t index) const noexcept -> std::optional<std::string>
+    [[nodiscard]] auto read(std::size_t index) const noexcept -> std::optional<entry_type>
     {
         return m_storage.read(index);
     }
@@ -62,24 +58,30 @@ class log_t
         return m_storage.size();
     }
 
+    [[nodiscard]] auto reset_last_n(std::size_t n) -> bool
+    {
+        return m_storage.reset_last_n(n);
+    }
+
   private:
-    storage::log_storage_wrapper_t m_storage;
+    storage::log_storage_wrapper_t<entry_type> m_storage;
 };
-static_assert(TLogConcept<log_t>, "log_t should satisfy TLogConcept");
+
+template <typename TEntry>
+    requires TLogStorageConcept<log_impl_t, TEntry>
+using log_t = log_impl_t<TEntry>;
 
 class log_builder_t
 {
   public:
     log_builder_t() = default;
 
-    [[nodiscard]] auto build(storage::log_storage_wrapper_t storage) const -> std::optional<log_t>
+    template <typename TEntry>
+    [[nodiscard]] auto build(storage::log_storage_wrapper_t<TEntry> storage) const
+        -> std::optional<log_t<TEntry>>
     {
         return log_t{std::move(storage)};
     }
-
-  private:
-    fs::path_t  m_file_path;
-    std::string m_url;
 };
 
 } // namespace wal::log

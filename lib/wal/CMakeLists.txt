@@ -1,10 +1,11 @@
 cmake_minimum_required(VERSION 3.25)
 project(frankie)
 
-add_library(WAL wal.cpp common.cpp)
+add_library(WAL common.cpp)
 
 set_target_properties(WAL PROPERTIES CXX_STANDARD 23)
-target_include_directories(WAL INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(WAL INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}
+                                         ${CMAKE_SOURCE_DIR}/lib)
 target_link_libraries(
   WAL
   PUBLIC abseil::abseil
@@ -14,7 +15,9 @@ target_link_libraries(
          nlohmann_json_schema_validator
          magic_enum::magic_enum
          Config
-         FS)
+         FS
+         Raft
+         RaftProtoObjects)
 
 # add_executable(WALTest "wal_test.cpp") set_target_properties(WALTest
 # PROPERTIES CXX_STANDARD 23) target_link_libraries( WALTest

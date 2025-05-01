@@ -4,8 +4,10 @@ project(frankie)
 add_executable(Main "main.cpp")
 
 set_target_properties(Main PROPERTIES CXX_STANDARD 23)
-target_include_directories(Main INTERFACE ${proto_import_dirs} ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(Main PUBLIC DB Server RaftLib)
+target_include_directories(Main INTERFACE ${proto_import_dirs}
+                                          ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(Main PUBLIC WAL DB Server Raft
+                                  RaftProtoObjects)
 
-#target_include_directories(GrpcAppMain INTERFACE  ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})
-
+# target_include_directories(GrpcAppMain INTERFACE  ${CMAKE_CURRENT_SOURCE_DIR}
+# ${CMAKE_CURRENT_BINARY_DIR})

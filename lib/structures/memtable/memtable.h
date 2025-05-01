@@ -6,7 +6,6 @@
 #include <sys/types.h>
 #include <chrono>
 #include <iostream>
-#include <csignal>
 
 #include <structures/sorted_vector/sorted_vector.h>
 #include <structures/skiplist/skiplist.h>

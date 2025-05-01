@@ -3,59 +3,52 @@
 #include <optional>
 #include <vector>
 
-#include <fmt/format.h>
+#include <spdlog/spdlog.h>
 
 #include "../concepts.h"
 
 namespace wal::log::storage
 {
 
-// TODO(lnikon): Maybe resize() m_log in ctor to some default_log_size_mb?
-class in_memory_log_storage_t
+template <typename TEntry> class in_memory_log_storage_impl_t
 {
   public:
-    in_memory_log_storage_t() = default;
+    using entry_type = TEntry;
 
-    explicit in_memory_log_storage_t(std::vector<std::string> m_log)
+    in_memory_log_storage_impl_t() = default;
+
+    explicit in_memory_log_storage_impl_t(std::vector<std::string> m_log)
         : m_log(std::move(m_log))
     {
     }
 
-    in_memory_log_storage_t(in_memory_log_storage_t &&other) noexcept
+    in_memory_log_storage_impl_t(in_memory_log_storage_impl_t &&other) noexcept
         : m_log{std::move(other.m_log)}
     {
     }
 
-    auto operator=(in_memory_log_storage_t &&other) noexcept -> in_memory_log_storage_t &
+    auto operator=(in_memory_log_storage_impl_t &&other) noexcept -> in_memory_log_storage_impl_t &
     {
         if (this == &other)
         {
             return *this;
         }
-
         m_log = std::move(other.m_log);
-
         return *this;
     }
 
-    in_memory_log_storage_t(const in_memory_log_storage_t &other) = delete;
-    auto operator=(const in_memory_log_storage_t &) -> in_memory_log_storage_t & = delete;
+    in_memory_log_storage_impl_t(const in_memory_log_storage_impl_t &other) = delete;
+    auto operator=(const in_memory_log_storage_impl_t &) -> in_memory_log_storage_impl_t & = delete;
 
-    ~in_memory_log_storage_t() noexcept = default;
+    ~in_memory_log_storage_impl_t() noexcept = default;
 
-    [[nodiscard]] auto append(std::string entry) -> bool
+    [[nodiscard]] auto append(TEntry entry) -> bool
     {
         m_log.emplace_back(std::move(entry));
         return true;
     }
 
-    [[nodiscard]] auto append(std::string command, std::string key, std::string value) -> bool
-    {
-        m_log.emplace_back(fmt::format("{} {} {}", command, key, value));
-        return true;
-    }
-
-    [[nodiscard]] auto read(size_t index) const -> std::optional<std::string>
+    [[nodiscard]] auto read(size_t index) const -> std::optional<entry_type>
     {
         if (index < m_log.size())
         {
@@ -75,21 +68,39 @@ class in_memory_log_storage_t
         return m_log.size();
     }
 
+    [[nodiscard]] auto reset_last_n(std::size_t n) -> bool
+    {
+        const auto logSize{m_log.size()};
+        if (logSize < n)
+        {
+            spdlog::error("in_memory_log_storage_impl_t::reset_last_n: Log size {} is smaller "
+                          "than provided {} removal size",
+                          logSize,
+                          n);
+            return false;
+        }
+
+        m_log.resize(logSize - n);
+
+        return true;
+    }
+
   private:
-    std::vector<std::string> m_log;
+    std::vector<TEntry> m_log;
 };
 
-static_assert(TLogStorageConcept<in_memory_log_storage_t, std::string>,
-              "in_memory_storage_t must satisfy TLogStorageConcept");
+template <typename TEntry>
+    requires TLogStorageConcept<in_memory_log_storage_impl_t, TEntry>
+using in_memory_log_storage_t = in_memory_log_storage_impl_t<TEntry>;
 
 class in_memory_storage_builder_t
 {
   public:
     in_memory_storage_builder_t() = default;
 
-    [[nodiscard]] auto build() -> std::optional<in_memory_log_storage_t>
+    template <typename TEntry> [[nodiscard]] auto build()
     {
-        return in_memory_log_storage_t{};
+        return std::make_optional(in_memory_log_storage_t<TEntry>{});
     }
 };
 

@@ -1,14 +1,15 @@
-#include "random_access_file.h"
 
-#include "fs/common.h"
-
-#include <liburing.h>
-#include <spdlog/spdlog.h>
-
+#include <format>
 #include <cstdio>
 #include <cstring>
 #include <fcntl.h>
-#include <format>
+
+#include <liburing.h>
+#include <spdlog/spdlog.h>
+#include <magic_enum/magic_enum.hpp>
+
+#include "random_access_file.h"
+#include "fs/common.h"
 
 namespace fs::random_access_file
 {
@@ -248,7 +249,10 @@ auto random_access_file_builder_t::build(fs::path_t path, posix_wrapper::open_fl
         });
     }
 
-    spdlog::debug("Opened file. path={}, fd={}", path.c_str(), fdes);
+    spdlog::info("Opened file. path={}, fd={}, flags={}",
+                 path.c_str(),
+                 fdes,
+                 magic_enum::enum_name(openFlags));
 
     return random_access_file_t{fdes, ring};
 }

@@ -6,6 +6,7 @@
 #include <spdlog/spdlog.h>
 #include <magic_enum/magic_enum.hpp>
 #include <libassert/assert.hpp>
+#include <absl/strings/ascii.h>
 
 #include "wal/common.h"
 #include "log/log.h"
@@ -15,68 +16,17 @@ namespace wal
 
 using namespace log;
 
-/**
- * @brief A Write-Ahead Log (WAL) manager for recording and recovering log
- * entries.
- *
- * The wal_t class encapsulates operations for managing a write-ahead log file,
- * including constructing the WAL with a given log interface, adding new
- * records, resetting (i.e., closing, removing, and reopening) the log file, and
- * recovering previously recorded log entries.
- *
- * Constructors:
- *   - wal_t(TLog log) noexcept:
- *       Constructs a wal_t instance using the specified TLog log interface.
- *   - wal_t(const wal_t &other):
- *       Copy constructor. Creates a new instance as a copy of an existing wal_t
- * object.
- *   - wal_t(wal_t &&other) noexcept:
- *       Move constructor. Creates a new instance by acquiring the resources of
- * an existing wal_t object.
- *
- * Assignment Operators:
- *   - operator=(const wal_t &other):
- *       Copy assignment operator. Assigns the content of one wal_t object to
- * another.
- *   - operator=(wal_t &&other) noexcept:
- *       Move assignment operator. Transfers the content from one wal_t object
- * to another.
- *
- * Destructor:
- *   - ~wal_t() = default:
- *       Default destructor.
- *
- * Member Functions:
- *   - void add(const record_t &rec) noexcept:
- *       Appends a new record to the internal records and writes it to the file
- * system. A debug message is logged detailing the content of the record.
- *
- *   - void reset() noexcept:
- *       Resets the WAL by closing the current log file and removing it from the
- * file system. Attempts to reopen the log file and throws a std::runtime_error
- * if reopening fails. Logs an informational message upon successful reset.
- *
- *   - [[nodiscard]] auto records() const -> std::vector<record_t>:
- *       Recovers WAL records by reading, parsing, and processing the log file
- * entries. Reads each log entry into a string stream, processes them line by
- * line, and trims empty lines. For each valid log entry, a record_t instance is
- * constructed and a debug message is logged. Returns a vector containing all
- * successfully recovered WAL records.
- *
- * Logging:
- *   - Uses spdlog for logging informational and debug messages during
- * operations.
- */
-class wal_t
+// TODO(lnikon): Because the wal_t is generic, this alias should be moved into db_t. Entry type used
+// by WAL log
+using wal_entry_t = record_t;
+
+template <typename TEntry> class wal_t
 {
   public:
-    /**
-     * @brief Constructs a wal_t object with the specified file system path.
-     *
-     * @param log
-     */
+    using wal_entry_t = TEntry;
+
     wal_t() = delete;
-    explicit wal_t(log_t log) noexcept;
+    explicit wal_t(log_t<TEntry> log) noexcept;
 
     wal_t(wal_t &&other) noexcept;
     auto operator=(wal_t &&other) noexcept -> wal_t &;
@@ -86,54 +36,24 @@ class wal_t
 
     ~wal_t() = default;
 
-    /**
-     * @brief Adds a new record to the Write-Ahead Log (WAL).
-     *
-     * This function appends a new record to the internal list of records and
-     * writes the serialized record to the log file. It also logs a debug
-     * message with the contents of the new record.
-     *
-     * @param rec The record to be added to the WAL.
-     */
-    [[nodiscard]] auto add(const record_t &rec) noexcept -> bool;
+    [[nodiscard]] auto add(const wal_entry_t &rec) noexcept -> bool;
+    [[nodiscard]] auto records() const noexcept -> std::vector<wal_entry_t>;
+    [[nodiscard]] auto read(std::size_t index) const noexcept -> std::optional<wal_entry_t>;
 
-    /**
-     * @brief Resets the Write-Ahead Log (WAL).
-     *
-     * This function closes the current log file, removes it from the
-     * filesystem, and then attempts to reopen it. If reopening the log file
-     * fails, a std::runtime_error is thrown. Upon successful reset, an
-     * informational message is logged.
-     *
-     * @throws std::runtime_error if the log file cannot be reopened.
-     */
+    [[nodiscard]] auto size() const noexcept -> std::size_t;
+    [[nodiscard]] auto empty() const noexcept -> bool;
+
     auto reset() noexcept -> bool;
 
-    /**
-     * @brief Parses and recovers write-ahead log (WAL) records.
-     *
-     * This method iterates over the underlying log storage to extract and
-     * reconstruct WAL records. It reads each log entry into a string stream,
-     * processes them line by line, and trims empty lines. For each non-empty
-     * line, it constructs a record_t instance by reading from a corresponding
-     * string stream and logs debug messages with the recovered record content.
-     *
-     * @return std::vector<record_t> A vector containing all successfully
-     * recovered WAL records.
-     *
-     * @note The function logs both informational and debug outputs to trace the
-     * recovery process.
-     */
-    [[nodiscard]] auto records() const -> std::vector<record_t>;
-
   private:
-    log_t m_log;
+    log_t<TEntry> m_log;
 };
 
-using shared_ptr_t = std::shared_ptr<wal_t>;
-template <typename... Args> auto make_shared(Args &&...args)
+template <typename TEntry> using shared_ptr_t = std::shared_ptr<wal_t<TEntry>>;
+
+template <typename TEntry, typename... Args> auto make_shared(Args &&...args)
 {
-    return std::make_shared<wal_t>(std::forward<Args>(args)...);
+    return std::make_shared<wal_t<TEntry>>(std::forward<Args>(args)...);
 }
 
 enum class wal_builder_error_t : std::uint8_t
@@ -143,17 +63,90 @@ enum class wal_builder_error_t : std::uint8_t
     kInvalidConfiguration,
 };
 
-/**
- * @brief Builder for wal_t with different log types
- * @tparam TStorageTag Tag type indicating the storage backend to use
- */
-class wal_builder_t
+template <typename TEntry>
+wal_t<TEntry>::wal_t(log_t<TEntry> log) noexcept
+    : m_log{std::move(log)}
+{
+}
+
+template <typename TEntry>
+wal_t<TEntry>::wal_t(wal_t &&other) noexcept
+    : m_log(std::move(other.m_log))
+{
+}
+
+template <typename TEntry> auto wal_t<TEntry>::operator=(wal_t &&other) noexcept -> wal_t &
+{
+    if (this == &other)
+    {
+        return *this;
+    }
+    m_log = std::move(other.m_log);
+    return *this;
+}
+
+template <typename TEntry>
+auto wal_t<TEntry>::add(const wal_t<TEntry>::wal_entry_t &rec) noexcept -> bool
+{
+    return m_log.append(rec);
+}
+
+template <typename TEntry> auto wal_t<TEntry>::reset() noexcept -> bool
+{
+    return m_log.reset();
+}
+
+template <typename TEntry>
+[[nodiscard]] auto wal_t<TEntry>::records() const noexcept
+    -> std::vector<wal_t<TEntry>::wal_entry_t>
+{
+    if (m_log.size() == 0)
+    {
+        spdlog::info("WAL: Log is empty. Nothing to recover.");
+        return {};
+    }
+
+    std::vector<wal_entry_t> result;
+    result.reserve(m_log.size());
+    for (std::size_t idx{0}; idx < m_log.size(); ++idx)
+    {
+        auto entry{m_log.read(idx)};
+        if (!entry)
+        {
+            spdlog::error("wal_t::records: Got nullopt as an entry");
+            continue;
+        }
+        result.emplace_back(std::move(*entry));
+    }
+    return result;
+}
+
+template <typename TEntry>
+[[nodiscard]] auto wal_t<TEntry>::read(std::size_t index) const noexcept
+    -> std::optional<wal_t<TEntry>::wal_entry_t>
+{
+    return m_log.read(index);
+}
+
+template <typename TEntry> [[nodiscard]] auto wal_t<TEntry>::size() const noexcept -> std::size_t
+{
+    return m_log.size();
+}
+
+template <typename TEntry> [[nodiscard]] auto wal_t<TEntry>::empty() const noexcept -> bool
+{
+    return size() == 0;
+}
+
+template <typename TEntry> class wal_builder_t
 {
   public:
+    using return_type_t = std::expected<wal::wal_t<TEntry>, wal::wal_builder_error_t>;
+
     wal_builder_t() = default;
 
     // Build method that creates the appropriate wal_t instance
-    auto build(log_t log) -> std::expected<wal_t, wal_builder_error_t>
+    auto build(log_t<TEntry> log) -> std::expected<wal_t<TEntry>, wal_builder_error_t>
     {
         return wal_t(std::move(log));
     }

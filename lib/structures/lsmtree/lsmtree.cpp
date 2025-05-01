@@ -26,9 +26,9 @@ using segment_operation_k = db::manifest::manifest_t::segment_record_t::operatio
  * ============================================================================
  */
 
-lsmtree_t::lsmtree_t(const config::shared_ptr_t &pConfig,
-                     db::manifest::shared_ptr_t  pManifest,
-                     wal::shared_ptr_t           wal) noexcept
+lsmtree_t::lsmtree_t(const config::shared_ptr_t         &pConfig,
+                     db::manifest::shared_ptr_t          pManifest,
+                     wal::shared_ptr_t<wal::wal_entry_t> wal) noexcept
     : m_pConfig{pConfig},
       m_table{std::make_optional<memtable::memtable_t>()},
       m_pManifest{std::move(pManifest)},

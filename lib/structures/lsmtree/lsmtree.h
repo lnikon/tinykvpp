@@ -8,6 +8,7 @@
 #include <wal/wal.h>
 #include <structures/lsmtree/levels/levels.h>
 #include <structures/lsmtree/lsmtree_types.h>
+#include "Raft.pb.h"
 #include "concurrency/thread_safe_queue.h"
 
 namespace structures::lsmtree
@@ -23,9 +24,9 @@ class lsmtree_t
      * @param pManifest Shared pointer to the database manifest.
      * @param wal Shared pointer to the write-ahead log.
      */
-    explicit lsmtree_t(const config::shared_ptr_t &pConfig,
-                       db::manifest::shared_ptr_t  pManifest,
-                       wal::shared_ptr_t           wal) noexcept;
+    explicit lsmtree_t(const config::shared_ptr_t         &pConfig,
+                       db::manifest::shared_ptr_t          pManifest,
+                       wal::shared_ptr_t<wal::wal_entry_t> wal) noexcept;
 
     /**
      * @brief Deleted default constructor for the lsmtree_t class.
@@ -184,7 +185,7 @@ class lsmtree_t
     absl::Mutex                         m_mutex;
     std::optional<memtable::memtable_t> m_table;
     db::manifest::shared_ptr_t          m_pManifest;
-    wal::shared_ptr_t                   m_pWal;
+    wal::shared_ptr_t<wal::wal_entry_t> m_pWal;
     levels::levels_t                    m_levels;
 
     // Thread-safe queues for inter-thread communication

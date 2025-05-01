@@ -18,13 +18,14 @@ enum class log_storage_type_k : int8_t
 {
     undefined_k = -1,
     in_memory_k,
-    file_based_persistent_k
+    file_based_persistent_k,
+    replicated_log_storage_k
 };
 
 [[nodiscard]] auto to_string(log_storage_type_k type) noexcept -> std::string_view;
 [[nodiscard]] auto from_string(std::string_view type) noexcept -> log_storage_type_k;
 
-struct record_t
+struct record_t final
 {
     operation_k op{operation_k::undefined_k};
     kv_t        kv;
@@ -47,6 +48,20 @@ struct record_t
 
         // Read key-value pair
         kv.read(stream);
+    }
+
+    template <typename TStream>
+    friend auto operator<<(TStream &stream, const wal::record_t &record) -> TStream &
+    {
+        record.write(stream);
+        return stream;
+    }
+
+    template <typename TStream>
+    friend auto operator>>(TStream &stream, wal::record_t &record) -> TStream &
+    {
+        record.read(stream);
+        return stream;
     }
 };
 

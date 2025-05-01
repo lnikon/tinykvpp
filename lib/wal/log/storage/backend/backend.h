@@ -54,9 +54,17 @@ template <typename Derived> class storage_backend_base_t
         return static_cast<Derived *>(this)->reset_impl();
     }
 
+    [[nodiscard]] auto reset_last_n(std::size_t n) -> bool
+    {
+        return static_cast<Derived *>(this)->reset_last_n_impl();
+    }
+
   private:
     storage_backend_base_t() = default;
 };
+// TODO(lnikon): Do the impl trick to make static assert work
+// static_assert(TStorageBackendConcept<storage_backend_base_t>,
+//   "storage_backend_base_t must satisfy TStorageBackendConcept");
 
 template <TStorageBackendConcept TBackendStorage> class storage_backend_builder_t
 {

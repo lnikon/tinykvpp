@@ -1,7 +1,3 @@
-//
-// Created by nikon on 3/8/25.
-//
-
 #include "common.h"
 
 namespace wal

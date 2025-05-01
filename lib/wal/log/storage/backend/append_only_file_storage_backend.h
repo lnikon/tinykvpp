@@ -1,5 +1,8 @@
 #pragma once
 
+#include <sstream>
+
+#include <absl/strings/ascii.h>
 #include <spdlog/spdlog.h>
 
 #include "backend.h"
@@ -76,8 +79,74 @@ class append_only_file_storage_backend_t
         return m_file.reset().has_value();
     }
 
+    // TODO(lnikon): Would be a better strategy to create entirely new file with the truncated log
+    // and then replace it with the existing one
+    [[nodiscard]] auto reset_last_n_impl(std::size_t n) noexcept -> bool
+    {
+        std::size_t currentSize{size_impl()};
+        if (currentSize == 0)
+        {
+            spdlog::warn("reset_last_n: File is empty.");
+            return true;
+        }
+
+        // Read the entire file content.
+        std::string data{read_impl(0, currentSize)};
+        if (data.empty())
+        {
+            spdlog::error("reset_last_n: Unable to read data from file");
+            return false;
+        }
+
+        // Split the data into log entries.
+        std::istringstream       iss(data);
+        std::vector<std::string> entries;
+        std::string              line;
+        while (std::getline(iss, line))
+        {
+            // Skip empty lines.
+            if (!absl::StripAsciiWhitespace(line).empty())
+            {
+                entries.emplace_back(std::move(line));
+            }
+        }
+
+        // Safety check.
+        if (n > entries.size())
+        {
+            spdlog::error(
+                "reset_last_n: Requested removal of {} entries exceeds existing {} entries.",
+                n,
+                entries.size());
+            return false;
+        }
+
+        // Remove the last n entries.
+        entries.resize(n);
+
+        // Reconstruct the file content.
+        std::string newContent;
+        for (const auto &entry : entries)
+        {
+            newContent.append(entry);
+            newContent.push_back('\n');
+        }
+
+        // Reset the underlying file.
+        if (!reset_impl())
+        {
+            spdlog::error("reset_last_n: Unable to reset the file.");
+            return false;
+        }
+
+        // Write back the truncated file.
+        return write_impl(newContent.c_str(), 0, newContent.size());
+    }
+
     fs::append_only_file_t m_file;
 };
+static_assert(TStorageBackendConcept<append_only_file_storage_backend_t>,
+              "append_only_file_storage_backend_t must satisfy TStorageBackendConcept");
 
 class file_storage_backend_builder_t final
     : public storage_backend_builder_t<append_only_file_storage_backend_t>

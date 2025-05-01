@@ -12,7 +12,7 @@ namespace db
 class db_t
 {
   public:
-    explicit db_t(config::shared_ptr_t config, wal::shared_ptr_t wal);
+    explicit db_t(config::shared_ptr_t config, wal::shared_ptr_t<wal::wal_entry_t> wal);
 
     db_t(db_t &&other) noexcept
         : m_config{std::move(other.m_config)},
@@ -75,10 +75,10 @@ class db_t
 
     void swap(db_t &other) noexcept;
 
-    config::shared_ptr_t           m_config;
-    manifest::shared_ptr_t         m_pManifest;
-    wal::shared_ptr_t              m_pWal;
-    structures::lsmtree::lsmtree_t m_lsmTree;
+    config::shared_ptr_t                m_config;
+    manifest::shared_ptr_t              m_pManifest;
+    wal::shared_ptr_t<wal::wal_entry_t> m_pWal;
+    structures::lsmtree::lsmtree_t      m_lsmTree;
 };
 
 using shared_ptr_t = std::shared_ptr<db_t>;
@@ -91,7 +91,7 @@ template <typename... Args> auto make_shared(Args &&...args)
 class db_builder_t
 {
   public:
-    [[nodiscard]] auto build(config::shared_ptr_t config, wal::shared_ptr_t wal)
+    [[nodiscard]] auto build(config::shared_ptr_t config, wal::shared_ptr_t<wal::wal_entry_t> wal)
         -> std::optional<db_t>
     {
         return std::make_optional(db_t{std::move(config), std::move(wal)});

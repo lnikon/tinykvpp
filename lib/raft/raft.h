@@ -22,6 +22,23 @@
 #include "Raft.grpc.pb.h"
 #include "Raft.pb.h"
 
+template <typename TStream> auto operator<<(TStream &stream, const LogEntry &record) -> TStream &
+{
+    record.SerializeToOstream(&stream);
+    return stream;
+}
+
+template <typename TStream> auto operator>>(TStream &stream, LogEntry &record) -> TStream &
+{
+    record.ParseFromIstream(&stream);
+    return stream;
+}
+
+namespace wal
+{
+template <typename TEntry> class wal_t;
+};
+
 namespace raft
 {
 
@@ -76,12 +93,16 @@ class raft_node_grpc_client_t
     std::unique_ptr<RaftService::StubInterface> m_stub{nullptr};
 };
 
-class consensus_module_t : public RaftService::Service
+class consensus_module_t final : public RaftService::Service
 {
   public:
+    using wal_entry_t = LogEntry;
+    using wal_ptr_t = std::shared_ptr<wal::wal_t<wal_entry_t>>;
+
     consensus_module_t() = delete;
     consensus_module_t(node_config_t                        nodeConfig,
-                       std::vector<raft_node_grpc_client_t> replicas) noexcept;
+                       std::vector<raft_node_grpc_client_t> replicas,
+                       wal_ptr_t                            pWal) noexcept;
 
     consensus_module_t(const consensus_module_t &) = delete;
     consensus_module_t &operator=(const consensus_module_t &) = delete;
@@ -166,10 +187,10 @@ class consensus_module_t : public RaftService::Service
     node_config_t m_config;
 
     // Persistent state on all servers
-    mutable absl::Mutex         m_stateMutex;
-    uint32_t m_currentTerm      ABSL_GUARDED_BY(m_stateMutex);
-    uint32_t m_votedFor         ABSL_GUARDED_BY(m_stateMutex);
-    std::vector<LogEntry> m_log ABSL_GUARDED_BY(m_stateMutex);
+    mutable absl::Mutex    m_stateMutex;
+    uint32_t m_currentTerm ABSL_GUARDED_BY(m_stateMutex);
+    uint32_t m_votedFor    ABSL_GUARDED_BY(m_stateMutex);
+    wal_ptr_t m_log        ABSL_GUARDED_BY(m_stateMutex);
 
     // Volatile state on all servers.
     uint32_t m_commitIndex ABSL_GUARDED_BY(m_stateMutex);
