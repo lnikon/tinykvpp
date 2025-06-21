@@ -1,11 +1,13 @@
 {
     "cSpell.words": [
         "absl",
+        "Allman",
         "lnikon",
         "lsmtree",
         "Memtable",
         "memtables",
         "spdlog",
+        "stdfs",
         "stoken"
     ],
     "sonarlint.pathToCompileCommands": "${workspaceFolder}/build/compile_commands.json",

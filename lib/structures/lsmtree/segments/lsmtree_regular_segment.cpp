@@ -16,9 +16,9 @@ namespace structures::lsmtree::segments::regular_segment
 
 const auto footerSize{128}; // bytes
 
-regular_segment_t::regular_segment_t(fs::path_t           path,
-                                     types::name_t        name,
-                                     memtable::memtable_t memtable) noexcept
+regular_segment_t::regular_segment_t(
+    fs::path_t path, types::name_t name, memtable::memtable_t memtable
+) noexcept
     : m_path{std::move(path)},
       m_name{std::move(name)},
       m_memtable{std::make_optional<memtable_t>(std::move(memtable))}
@@ -189,7 +189,7 @@ void regular_segment_t::restore()
         return;
     }
 
-    // Recover hashindex if its empty
+    // Recover hashindex if it is empty
     if (m_hashIndex.empty())
     {
         restore_index();

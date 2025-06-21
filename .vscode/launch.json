@@ -301,7 +301,7 @@
         },
         {
             "name": "Debug - Main - Standalone",
-            "type": "cppdbg",
+            "type": "lldb-dap",
             "request": "launch",
             "program": "${workspaceFolder}/build/Main",
             // Path to the compiled executable

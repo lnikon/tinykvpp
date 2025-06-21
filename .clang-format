@@ -10,7 +10,7 @@ BreakBeforeBraces: Allman
 AllowShortFunctionsOnASingleLine: None
 AllowShortIfStatementsOnASingleLine: false
 AllowShortLoopsOnASingleLine: false
-AlignAfterOpenBracket: Align
+AlignAfterOpenBracket: BlockIndent
 PackConstructorInitializers: Never
 ExperimentalAutoDetectBinPacking: false
 AllowAllParametersOfDeclarationOnNextLine: true

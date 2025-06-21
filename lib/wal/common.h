@@ -37,6 +37,9 @@ struct record_t final
 
         // Write key-value pair
         kv.write(stream);
+
+        // Put an endline
+        stream << '\n';
     }
 
     template <typename TStream> void read(TStream &stream)

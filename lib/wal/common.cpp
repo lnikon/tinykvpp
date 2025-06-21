@@ -1,4 +1,5 @@
 #include "common.h"
+#include <string_view>
 
 namespace wal
 {
@@ -15,6 +16,11 @@ namespace wal
         return std::string_view{"persistent"};
     }
 
+    if (type == log_storage_type_k::replicated_log_storage_k)
+    {
+        return std::string_view{"replicated"};
+    }
+
     return std::string_view{"undefined"};
 }
 
@@ -28,6 +34,11 @@ namespace wal
     if (type == "persistent")
     {
         return log_storage_type_k::file_based_persistent_k;
+    }
+
+    if (type == "replicated")
+    {
+        return log_storage_type_k::replicated_log_storage_k;
     }
 
     return log_storage_type_k::undefined_k;

@@ -1,18 +1,17 @@
-#include <absl/synchronization/mutex.h>
-
-#include <spdlog/spdlog.h>
-
 #include <optional>
-#include <stop_token>
 #include <cassert>
 #include <utility>
 
+#include <absl/synchronization/mutex.h>
+#include <spdlog/spdlog.h>
+
+#include "structures/lsmtree/segments/helpers.h"
+#include "structures/lsmtree/segments/lsmtree_segment_factory.h"
 #include "structures/memtable/memtable.h"
-#include <db/manifest/manifest.h>
-#include <structures/lsmtree/lsmtree_types.h>
-#include <structures/lsmtree/segments/helpers.h>
-#include <structures/lsmtree/lsmtree.h>
-#include <structures/lsmtree/segments/lsmtree_segment_factory.h>
+#include "structures/lsmtree/lsmtree_types.h"
+#include "structures/lsmtree/lsmtree.h"
+#include "db/manifest/manifest.h"
+#include "wal/wal.h"
 
 namespace structures::lsmtree
 {
@@ -20,117 +19,92 @@ namespace structures::lsmtree
 using level_operation_k = db::manifest::manifest_t::level_record_t::operation_k;
 using segment_operation_k = db::manifest::manifest_t::segment_record_t::operation_k;
 
-/**
- * ============================================================================
- * Public interface
- * ============================================================================
- */
-
-lsmtree_t::lsmtree_t(const config::shared_ptr_t         &pConfig,
-                     db::manifest::shared_ptr_t          pManifest,
-                     wal::shared_ptr_t<wal::wal_entry_t> wal) noexcept
+lsmtree_t::lsmtree_t(
+    config::shared_ptr_t       pConfig,
+    memtable::memtable_t       memtable,
+    db::manifest::shared_ptr_t pManifest,
+    levels::levels_t           levels
+) noexcept
     : m_pConfig{pConfig},
-      m_table{std::make_optional<memtable::memtable_t>()},
+      m_table{std::make_optional(memtable)},
       m_pManifest{std::move(pManifest)},
-      m_pWal{std::move(wal)},
-      m_levels{pConfig, m_pManifest},
-      m_recovered(false),
-      m_flushing_thread(
-          [this](std::stop_token stoken)
-          {
-              // Wait until LSMTree is recovered. Important during the DB
-              // opening phase.
-              while (!m_recovered.load())
-              {
-                  if (stoken.stop_requested())
-                  {
-                      break;
-                  }
-              }
-
-              spdlog::info("Flushing thread started");
-
-              // Continuously flush memtables to disk
-              // TODO: Is it possible to do the flushing async?
-              while (true)
-              {
-                  if (stoken.stop_requested())
-                  {
-                      // Flush the remaining memtables on stop request
-                      spdlog::debug("Flushing remaining memtables on stop "
-                                    "request. queue.size={}",
-                                    m_flushing_queue.size());
-
-                      auto memtables = m_flushing_queue.pop_all();
-                      while (!memtables.empty())
-                      {
-                          auto memtable = memtables.front();
-                          memtables.pop_front();
-
-                          // TODO: Assert will crash the program, maybe we
-                          // should return an error code?
-                          assert(m_levels.flush_to_level0(std::move(memtable)));
-                      }
-                      return;
-                  }
-
-                  if (std::optional<memtable::memtable_t> memtable = m_flushing_queue.pop();
-                      memtable.has_value() && !memtable->empty())
-                  {
-                      spdlog::debug("Flushing memtable to level0. "
-                                    "memtable.size={}, flushing_queue.size={}",
-                                    memtable.value().size(),
-                                    m_flushing_queue.size());
-
-                      // TODO: Assert will crash the program, maybe we should
-                      // return an error code?
-                      absl::WriterMutexLock lock{&m_mutex};
-                      assert(m_levels.flush_to_level0(std::move(memtable.value())));
-                  }
-              }
-          })
+      m_levels{std::move(levels)},
+      m_flushing_thread([this](std::stop_token stoken) { memtable_flush_task(stoken); })
 {
+}
+
+lsmtree_t::lsmtree_t(lsmtree_t &&other) noexcept
+    : m_pConfig(std::move(other.m_pConfig)),
+      m_table(std::move(other.m_table)),
+      m_pManifest(std::move(other.m_pManifest)),
+      m_levels(std::move(other.m_levels))
+//   m_flushing_thread(std::move(other.m_flushing_thread)),
+//   m_flushing_queue(std::move(other.m_flushing_queue))
+{
+    // m_mutex does not support move; mutexes aren't moveable
+    // other.m_mutex state is left default-constructed
+
+    other.m_flushing_thread.request_stop();
+    if (other.m_flushing_thread.joinable())
+    {
+        spdlog::debug("Waiting for flushing thread to finish");
+        other.m_flushing_thread.join();
+    }
+    else
+    {
+        spdlog::debug("Flushing thread is not joinable, skipping join");
+    }
+
+    // Start a new flushing thread for the moved object
+    m_flushing_thread =
+        std::jthread([this](std::stop_token stoken) { memtable_flush_task(stoken); });
+    spdlog::debug("Flushing thread started for moved lsmtree_t object");
+    m_flushing_queue = std::move(other.m_flushing_queue);
+}
+
+auto lsmtree_t::operator=(lsmtree_t &&other) noexcept -> lsmtree_t &
+{
+    if (this != &other)
+    {
+        concurrency::absl_dual_mutex_lock_guard lock{m_mutex, other.m_mutex};
+        lsmtree_t                               temp{std::move(other)};
+        swap(other);
+    }
+    return *this;
 }
 
 lsmtree_t::~lsmtree_t() noexcept
 {
     m_flushing_thread.request_stop();
-    m_flushing_thread.join();
+    if (m_flushing_thread.joinable())
+    {
+        spdlog::debug("Waiting for flushing thread to finish");
+        m_flushing_thread.join();
+    }
+    else
+    {
+        spdlog::debug("Flushing thread is not joinable, skipping join");
+    }
 }
 
-auto lsmtree_t::put(const structures::lsmtree::key_t   &key,
-                    const structures::lsmtree::value_t &value) noexcept -> bool
+auto lsmtree_t::put(record_t record) noexcept -> lsmtree_status_k
 {
     assert(m_pConfig);
 
     absl::WriterMutexLock lock{&m_mutex};
     assert(m_table);
 
-    // Record addition of the new key into the WAL and add record into memtable
-    auto record{record_t{key, value}};
-    if (!m_pWal->add({.op = wal::operation_k::add_k, .kv = record}))
-    {
-        spdlog::error("LSMTree: Failed to put entry: {} {}", key.m_key, value.m_value);
-        return false;
-    }
-
     m_table->emplace(std::move(record));
 
-    // TODO: Most probably this 'if' block will causes periodic latencies during reads when the
-    // condition is met
+    // TODO: Most probably this 'if' block will causes periodic latencies during reads
     if (m_table->size() >= m_pConfig->LSMTreeConfig.DiskFlushThresholdSize)
     {
-        // Push the memtable to the flushing queue
         m_flushing_queue.push(std::move(m_table.value()));
-
-        // Create a new memtable
         m_table = std::make_optional<memtable::memtable_t>();
-
-        // Reset the Write-Ahead Log (WAL) to start logging anew
-        m_pWal->reset();
+        return lsmtree_status_k::memtable_reset_k;
     }
 
-    return true;
+    return lsmtree_status_k::ok_k;
 }
 
 auto lsmtree_t::get(const key_t &key) noexcept -> std::optional<record_t>
@@ -165,158 +139,119 @@ auto lsmtree_t::get(const key_t &key) noexcept -> std::optional<record_t>
     return result;
 }
 
-auto lsmtree_t::recover() noexcept -> bool
+void lsmtree_t::memtable_flush_task(std::stop_token stoken) noexcept
 {
-    assert(m_pConfig);
-    assert(m_pManifest);
+    spdlog::info("Flushing thread started");
 
-    // Disable all updates to manifest in recovery phase
-    // because nothing new is happening, lsmtree is re-using already
-    // existing information
-    m_pManifest->disable();
-
-    // Restore lsmtree structure from the manifest file
-    if (!restore_from_manifest())
+    // Continuously flush memtables to disk.
+    // TODO: Is it possible to do the flushing async?
+    while (true)
     {
-        spdlog::error("Unable to restore manifest at {}", m_pManifest->path().c_str());
-        return false;
-    }
+        if (stoken.stop_requested())
+        {
+            // Flush the remaining memtables on stop request
+            spdlog::debug(
+                "Flushing remaining memtables on stop "
+                "request. queue.size={}",
+                m_flushing_queue.size()
+            );
 
-    // Restore memtable from WAL
-    if (!restore_from_wal())
-    {
-        spdlog::error("Unable to restore WAL at {}", m_pConfig->WALConfig.path.c_str());
-        return false;
-    }
-
-    // Enable updates to manifest after recovery is finished
-    m_pManifest->enable();
-
-    // Signal that recovery is finished
-    m_recovered.store(true);
-
-    return true;
-}
-
-/**
- * ============================================================================
- * Private, utility functions
- * ============================================================================
- */
-
-auto lsmtree_t::restore_from_manifest() noexcept -> bool
-{
-    const auto &records{m_pManifest->records()};
-    for (const auto &record : records)
-    {
-        std::visit(
-            [this](auto record)
+            auto memtables = m_flushing_queue.pop_all();
+            while (!memtables.empty())
             {
-                using T = std::decay_t<decltype(record)>;
-                if constexpr (std::is_same_v<T, db::manifest::manifest_t::segment_record_t>)
-                {
-                    switch (record.op)
-                    {
-                    case segment_operation_k::add_segment_k:
-                    {
-                        m_levels.level(record.level)
-                            ->emplace(segments::factories::lsmtree_segment_factory(
-                                record.name,
-                                segments::helpers::segment_path(m_pConfig->datadir_path(),
-                                                                record.name),
-                                memtable_t{}));
-                        spdlog::debug("Segment {} added into level {} during recovery",
-                                      record.name,
-                                      record.level);
-                        break;
-                    }
-                    case segment_operation_k::remove_segment_k:
-                    {
-                        m_levels.level(record.level)->purge(record.name);
-                        spdlog::debug("Segment {} removed from level {} during recovery",
-                                      record.name,
-                                      record.level);
-                        break;
-                    }
-                    default:
-                    {
-                        spdlog::error("Unknown segment operation={}",
-                                      static_cast<std::int32_t>(record.op));
-                        break;
-                    }
-                    }
-                }
-                else if constexpr (std::is_same_v<T, db::manifest::manifest_t::level_record_t>)
-                {
-                    switch (record.op)
-                    {
-                    case level_operation_k::add_level_k:
-                    {
-                        m_levels.level();
-                        spdlog::debug("Level {} created during recovery", record.level);
-                        break;
-                    }
-                    case level_operation_k::compact_level_k:
-                    {
-                        spdlog::debug("Ignoring {} during recovery",
-                                      db::manifest::manifest_t::level_record_t::ToString(
-                                          level_operation_k::compact_level_k));
-                        break;
-                    }
-                    case level_operation_k::purge_level_k:
-                    {
-                        spdlog::debug("Ignoring {} during recovery",
-                                      db::manifest::manifest_t::level_record_t::ToString(
-                                          level_operation_k::purge_level_k));
-                        break;
-                    }
-                    default:
-                    {
-                        spdlog::error("Unknown level operation={}",
-                                      static_cast<std::int32_t>(record.op));
-                        break;
-                    }
-                    }
-                }
-                else
-                {
-                    spdlog::error("Unknown manifest record type");
-                    assert(false);
-                }
-            },
-            record);
+                auto memtable = memtables.front();
+                memtables.pop_front();
+
+                // TODO: Assert will crash the program, maybe we
+                // should return an error code?
+                assert(m_levels.flush_to_level0(std::move(memtable)));
+            }
+            return;
+        }
+
+        if (std::optional<memtable::memtable_t> memtable = m_flushing_queue.pop();
+            memtable.has_value() && !memtable->empty())
+        {
+            spdlog::debug(
+                "Flushing memtable to level0. "
+                "memtable.size={}, flushing_queue.size={}",
+                memtable.value().size(),
+                m_flushing_queue.size()
+            );
+
+            // TODO: Assert will crash the program, maybe we should
+            // return an error code?
+            absl::WriterMutexLock lock{&m_mutex};
+            assert(m_levels.flush_to_level0(std::move(memtable.value())));
+        }
     }
-
-    spdlog::debug("Restoring levels");
-    m_levels.restore();
-    spdlog::debug("Recovery finished");
-
-    return true;
 }
 
-auto lsmtree_t::restore_from_wal() noexcept -> bool
+void lsmtree_t::swap(lsmtree_t &other) noexcept
 {
-    auto stringify_record = [](const memtable_t::record_t &record) -> std::string
+    using std::swap;
+
+    swap(m_pConfig, other.m_pConfig);
+    swap(m_table, other.m_table);
+    swap(m_pManifest, other.m_pManifest);
+    swap(m_levels, other.m_levels);
+    swap(m_flushing_thread, other.m_flushing_thread);
+    swap(m_flushing_queue, other.m_flushing_queue);
+}
+
+auto lsmtree_builder_t::build(
+    config::shared_ptr_t                pConfig,
+    db::manifest::shared_ptr_t          pManifest,
+    wal::shared_ptr_t<wal::wal_entry_t> pWal
+) const -> std::shared_ptr<lsmtree_t>
+{
+    auto memtable{build_memtable_from_wal(std::move(pWal))};
+    if (!memtable.has_value())
+    {
+        spdlog::error("lsmtree_builder_t::build: Unable to build memtable.");
+        return nullptr;
+    }
+
+    auto levels{build_levels_from_manifest(pConfig, pManifest)};
+    if (!levels.has_value())
+    {
+        spdlog::error("lsmtree_builder_t::build: Unable to build levels.");
+        return nullptr;
+    }
+
+    return std::make_shared<lsmtree_t>(
+        std::move(pConfig),
+        std::move(memtable.value()),
+        std::move(pManifest),
+        std::move(levels.value())
+    );
+}
+
+auto lsmtree_builder_t::build_memtable_from_wal(
+    wal::shared_ptr_t<wal::wal_entry_t> pWal
+) const noexcept -> std::optional<memtable::memtable_t>
+{
+    auto stringify_record = [](const memtable_t::record_t &record)
     {
         std::stringstream strStream;
         record.write(strStream);
         return strStream.str();
     };
 
-    for (const auto &records{m_pWal->records()}; const auto &record : records)
+    memtable::memtable_t table;
+    for (const auto &records{pWal->records()}; const auto &record : records)
     {
         switch (record.op)
         {
         case wal::operation_k::add_k:
         {
-            assert(m_table.has_value());
             spdlog::debug("Recovering record {} from WAL", stringify_record(record.kv));
-            m_table->emplace(record.kv);
+            table.emplace(record.kv);
             break;
         }
         case wal::operation_k::delete_k:
         {
-            spdlog::debug("Recovery of delete records from WAS is not supported");
+            spdlog::debug("Recovery of delete records from WAL is not supported");
             break;
         }
         default:
@@ -327,22 +262,129 @@ auto lsmtree_t::restore_from_wal() noexcept -> bool
         };
     }
 
-    return true;
+    return std::make_optional(std::move(table));
 }
 
-void lsmtree_t::swap(lsmtree_t &other) noexcept
+auto lsmtree_builder_t::build_levels_from_manifest(
+    config::shared_ptr_t pConfig, db::manifest::shared_ptr_t pManifest
+) const noexcept -> std::optional<levels::levels_t>
 {
-    using std::swap;
+    assert(pManifest);
 
-    swap(m_pConfig, other.m_pConfig);
-    swap(m_table, other.m_table);
-    swap(m_pManifest, other.m_pManifest);
-    swap(m_pWal, other.m_pWal);
-    swap(m_levels, other.m_levels);
+    using level_operation_k = db::manifest::manifest_t::level_record_t::operation_k;
+    using segment_operation_k = db::manifest::manifest_t::segment_record_t::operation_k;
 
-    m_recovered.store(other.m_recovered.exchange(m_recovered.load()));
+    pManifest->disable();
 
-    swap(m_flushing_thread, other.m_flushing_thread);
-    swap(m_flushing_queue, other.m_flushing_queue);
+    levels::levels_t levels{pConfig, pManifest};
+
+    const auto &records{pManifest->records()};
+    for (const auto &record : records)
+    {
+        std::visit(
+            [&](auto record)
+            {
+                using T = std::decay_t<decltype(record)>;
+                if constexpr (std::is_same_v<T, db::manifest::manifest_t::segment_record_t>)
+                {
+                    switch (record.op)
+                    {
+                    case segment_operation_k::add_segment_k:
+                    {
+                        levels.level(record.level)
+                            ->emplace(
+                                segments::factories::lsmtree_segment_factory(
+                                    record.name,
+                                    segments::helpers::segment_path(
+                                        pConfig->datadir_path(), record.name
+                                    ),
+                                    memtable_t{}
+                                )
+                            );
+
+                        spdlog::debug(
+                            "Segment {} added into level {} during recovery",
+                            record.name,
+                            record.level
+                        );
+
+                        break;
+                    }
+                    case segment_operation_k::remove_segment_k:
+                    {
+                        levels.level(record.level)->purge(record.name);
+                        spdlog::debug(
+                            "Segment {} removed from level {} during recovery",
+                            record.name,
+                            record.level
+                        );
+                        break;
+                    }
+                    default:
+                    {
+                        spdlog::error(
+                            "Unknown segment operation={}", static_cast<std::int32_t>(record.op)
+                        );
+                        break;
+                    }
+                    }
+                }
+                else if constexpr (std::is_same_v<T, db::manifest::manifest_t::level_record_t>)
+                {
+                    switch (record.op)
+                    {
+                    case level_operation_k::add_level_k:
+                    {
+                        levels.level();
+                        spdlog::debug("Level {} created during recovery", record.level);
+                        break;
+                    }
+                    case level_operation_k::compact_level_k:
+                    {
+                        spdlog::debug(
+                            "Ignoring {} during recovery",
+                            db::manifest::manifest_t::level_record_t::ToString(
+                                level_operation_k::compact_level_k
+                            )
+                        );
+                        break;
+                    }
+                    case level_operation_k::purge_level_k:
+                    {
+                        spdlog::debug(
+                            "Ignoring {} during recovery",
+                            db::manifest::manifest_t::level_record_t::ToString(
+                                level_operation_k::purge_level_k
+                            )
+                        );
+                        break;
+                    }
+                    default:
+                    {
+                        spdlog::error(
+                            "Unknown level operation={}", static_cast<std::int32_t>(record.op)
+                        );
+                        break;
+                    }
+                    }
+                }
+                else
+                {
+                    spdlog::error("Unknown manifest record type");
+                    assert(false);
+                }
+            },
+            record
+        );
+    }
+
+    spdlog::debug("Restoring levels");
+    levels.restore();
+    spdlog::debug("Recovery finished");
+
+    pManifest->enable();
+
+    return std::make_optional<levels::levels_t>(std::move(levels));
 }
+
 } // namespace structures::lsmtree

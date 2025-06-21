@@ -27,12 +27,24 @@ class levels_t
     levels_t(levels_t &&other) noexcept
         : m_pConfig(std::move(other.m_pConfig)),
           m_pManifest(std::move(other.m_pManifest)),
-          m_levels(std::move(other.m_levels)),
-          m_compaction_thread(std::move(other.m_compaction_thread))
+          m_levels(std::move(other.m_levels))
     {
         // Mutex and Notification are not movable; construct default instances.
         // other.m_mutex and other.m_level0_segment_flushed_notification are left in valid default
         // states.
+
+        other.m_compaction_thread.request_stop();
+        if (other.m_compaction_thread.joinable())
+        {
+            spdlog::debug("Waiting for compaction thread to finish");
+            other.m_compaction_thread.join();
+        }
+        else
+        {
+            spdlog::debug("Compaction thread is not joinable, skipping join");
+        }
+        m_compaction_thread =
+            std::jthread([this](std::stop_token stoken) { compaction_task(stoken); });
     }
 
     auto operator=(levels_t &&other) noexcept -> levels_t &
@@ -133,6 +145,8 @@ class levels_t
         // Note: m_mutex and m_level0_segment_flushed_notification are per-object
         // and not logically swapped.
     }
+
+    void compaction_task(std::stop_token stoken) noexcept;
 
     config::shared_ptr_t m_pConfig;
 

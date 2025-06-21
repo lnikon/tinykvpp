@@ -18,7 +18,7 @@ target_include_directories(
                     ${CMAKE_CURRENT_SOURCE_DIR}/segments)
 target_link_libraries(
   LSMTree PUBLIC spdlog::spdlog abseil::abseil libassert::assert
-                 magic_enum::magic_enum Raft RaftProtoObjects)
+                 magic_enum::magic_enum WAL Raft RaftProtoObjects)
 
 add_executable(LSMTreeTest "lsmtree_test.cpp")
 set_target_properties(LSMTreeTest PROPERTIES CXX_STANDARD 23)
@@ -31,6 +31,7 @@ target_link_libraries(
           MemTable
           Config
           HashIndex
+          WAL
           FS
           DB
           Concurrency)

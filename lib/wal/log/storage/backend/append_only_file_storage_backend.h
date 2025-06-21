@@ -117,7 +117,8 @@ class append_only_file_storage_backend_t
             spdlog::error(
                 "reset_last_n: Requested removal of {} entries exceeds existing {} entries.",
                 n,
-                entries.size());
+                entries.size()
+            );
             return false;
         }
 
@@ -145,8 +146,10 @@ class append_only_file_storage_backend_t
 
     fs::append_only_file_t m_file;
 };
-static_assert(TStorageBackendConcept<append_only_file_storage_backend_t>,
-              "append_only_file_storage_backend_t must satisfy TStorageBackendConcept");
+static_assert(
+    TStorageBackendConcept<append_only_file_storage_backend_t>,
+    "append_only_file_storage_backend_t must satisfy TStorageBackendConcept"
+);
 
 class file_storage_backend_builder_t final
     : public storage_backend_builder_t<append_only_file_storage_backend_t>
@@ -171,8 +174,8 @@ class file_storage_backend_builder_t final
         return std::nullopt;
     }
 
-    [[nodiscard]] auto build_impl() -> std::expected<append_only_file_storage_backend_t,
-                                                     storage_backend_builder_error_t> override
+    [[nodiscard]] auto build_impl() -> std::
+        expected<append_only_file_storage_backend_t, storage_backend_builder_error_t> override
     {
         auto file = fs::append_only_file_builder_t{}.build(config().file_path.c_str(), true);
         if (!file)
@@ -188,7 +191,9 @@ class file_storage_backend_builder_t final
     }
 };
 
-static_assert(TStorageBackendConcept<append_only_file_storage_backend_t>,
-              "file_storage_backend_t must satisfy TStorageBackendConcept");
+static_assert(
+    TStorageBackendConcept<append_only_file_storage_backend_t>,
+    "file_storage_backend_t must satisfy TStorageBackendConcept"
+);
 
 } // namespace wal::log::storage::backend

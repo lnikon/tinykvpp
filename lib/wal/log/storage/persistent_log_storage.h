@@ -72,14 +72,17 @@ class persistent_log_storage_impl_t
     {
         std::stringstream ss;
         ss << entry << '\n';
-        if (auto stringEntry = ss.str();
-            !m_backendStorage.write(static_cast<const char *>(stringEntry.data()),
-                                    m_backendStorage.size(),
-                                    stringEntry.size()))
+        if (auto stringEntry = ss.str(); !m_backendStorage.write(
+                static_cast<const char *>(stringEntry.data()),
+                m_backendStorage.size(),
+                stringEntry.size()
+            ))
         {
-            spdlog::error("Persistent log storage write failed. Entry={}, size={}\n",
-                          stringEntry,
-                          stringEntry.size());
+            spdlog::error(
+                "Persistent log storage write failed. Entry={}, size={}\n",
+                stringEntry,
+                stringEntry.size()
+            );
             return false;
         }
         m_inMemoryLog.emplace_back(std::move(entry));
@@ -112,17 +115,20 @@ class persistent_log_storage_impl_t
         const auto inMemoryLogSize{m_inMemoryLog.size()};
         if (inMemoryLogSize < n)
         {
-            spdlog::error("persistent_log_storage_impl_t::reset_last_n: Log size {} is smaller "
-                          "than provided {} removal size",
-                          inMemoryLogSize,
-                          n);
+            spdlog::error(
+                "persistent_log_storage_impl_t::reset_last_n: Log size {} is smaller "
+                "than provided {} removal size",
+                inMemoryLogSize,
+                n
+            );
             return false;
         }
 
-        if (m_backendStorage.reset_last_n())
+        if (m_backendStorage.reset_last_n(n))
         {
             spdlog::error(
-                "persistent_log_storage_impl_t::reset_last_n: Failed to reset last {} entries", n);
+                "persistent_log_storage_impl_t::reset_last_n: Failed to reset last {} entries", n
+            );
             return false;
         }
 
@@ -210,8 +216,9 @@ class persistent_log_storage_builder_t
      * @brief Build the persistent_log_storage_t with the configured backend
      * @return Expected containing the built storage or an error
      */
-    [[nodiscard]] auto build() -> std::expected<persistent_log_storage_t<TBackendStorage, TEntry>,
-                                                persistent_log_storage_builder_error_t>
+    [[nodiscard]] auto build() -> std::expected<
+        persistent_log_storage_t<TBackendStorage, TEntry>,
+        persistent_log_storage_builder_error_t>
     {
         // Create the appropriate backend builder
         auto backend_builder = create_storage_backend_builder<TBackendStorage>(m_config);
@@ -220,8 +227,9 @@ class persistent_log_storage_builder_t
         auto backend_result = backend_builder->build();
         if (!backend_result)
         {
-            spdlog::error("Failed to build backend storage: {}",
-                          static_cast<int>(backend_result.error()));
+            spdlog::error(
+                "Failed to build backend storage: {}", static_cast<int>(backend_result.error())
+            );
             return std::unexpected(persistent_log_storage_builder_error_t::kBackendBuildFailed);
         }
 

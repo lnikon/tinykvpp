@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.25)
 project(frankie)
 
-add_executable(Main "main.cpp")
+add_executable(Main main.cpp config.cpp)
 
 set_target_properties(Main PROPERTIES CXX_STANDARD 23)
 target_include_directories(Main INTERFACE ${proto_import_dirs}

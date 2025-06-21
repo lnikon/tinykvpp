@@ -4,6 +4,7 @@
 #include <cstring>
 #include <fcntl.h>
 
+#include <iostream>
 #include <liburing.h>
 #include <spdlog/spdlog.h>
 #include <magic_enum/magic_enum.hpp>
@@ -70,11 +71,13 @@ auto random_access_file_t::write(std::string_view data, ssize_t offset) noexcept
     io_uring_sqe *sqe = io_uring_get_sqe(&m_ring);
     if (sqe == nullptr)
     {
-        return std::unexpected(file_error_t{
-            .code = file_error_code_k::write_failed,
-            .system_errno = 0,
-            .message = std::format("Failed to get io_uring sqe. fd={}", m_fd),
-        });
+        return std::unexpected(
+            file_error_t{
+                .code = file_error_code_k::write_failed,
+                .system_errno = 0,
+                .message = std::format("Failed to get io_uring sqe. fd={}", m_fd),
+            }
+        );
     }
 
     auto iov = iovec{.iov_base = const_cast<char *>(data.data()), .iov_len = data.size()};
@@ -89,11 +92,13 @@ auto random_access_file_t::write(std::string_view data, ssize_t offset) noexcept
 
     if (res < 0)
     {
-        return std::unexpected(file_error_t{
-            .code = file_error_code_k::write_failed,
-            .system_errno = -res,
-            .message = std::format("Write operation failed. fd={}", m_fd),
-        });
+        return std::unexpected(
+            file_error_t{
+                .code = file_error_code_k::write_failed,
+                .system_errno = -res,
+                .message = std::format("Write operation failed. fd={}", m_fd),
+            }
+        );
     }
     return res;
 }
@@ -105,11 +110,13 @@ auto random_access_file_t::read(ssize_t offset, char *buffer, size_t size) noexc
     ssize_t res = pread(m_fd, buffer, size, offset);
     if (res < 0)
     {
-        return std::unexpected(file_error_t{
-            .code = file_error_code_k::read_failed,
-            .system_errno = errno,
-            .message = std::format("Read operation failed. fd={}", m_fd),
-        });
+        return std::unexpected(
+            file_error_t{
+                .code = file_error_code_k::read_failed,
+                .system_errno = errno,
+                .message = std::format("Read operation failed. fd={}", m_fd),
+            }
+        );
     }
     return res;
 }
@@ -119,11 +126,13 @@ auto random_access_file_t::size() const noexcept -> std::expected<std::size_t, f
     struct stat st;
     if (fstat(m_fd, &st) == -1)
     {
-        return std::unexpected(file_error_t{
-            .code = file_error_code_k::stat_failed,
-            .system_errno = errno,
-            .message = std::format("Failed to get file size. fd={}", m_fd),
-        });
+        return std::unexpected(
+            file_error_t{
+                .code = file_error_code_k::stat_failed,
+                .system_errno = errno,
+                .message = std::format("Failed to get file size. fd={}", m_fd),
+            }
+        );
     }
     return static_cast<std::size_t>(st.st_size);
 }
@@ -132,11 +141,13 @@ auto random_access_file_t::flush() noexcept -> std::expected<void, file_error_t>
 {
     if (fsync(m_fd) != 0)
     {
-        return std::unexpected(file_error_t{
-            .code = file_error_code_k::flush_failed,
-            .system_errno = errno,
-            .message = std::format("Flush operation failed. fd={}", m_fd),
-        });
+        return std::unexpected(
+            file_error_t{
+                .code = file_error_code_k::flush_failed,
+                .system_errno = errno,
+                .message = std::format("Flush operation failed. fd={}", m_fd),
+            }
+        );
     }
     return {};
 }
@@ -145,14 +156,20 @@ auto random_access_file_t::reset() noexcept -> std::expected<void, file_error_t>
 {
     if (ftruncate(m_fd, 0) != 0)
     {
-        return std::unexpected(file_error_t::from_errno(
-            file_error_code_k::truncate_failed, errno, "File truncate operation failed"));
+        return std::unexpected(
+            file_error_t::from_errno(
+                file_error_code_k::truncate_failed, errno, "File truncate operation failed"
+            )
+        );
     }
 
     if (lseek(m_fd, 0, SEEK_SET) < 0)
     {
-        return std::unexpected(file_error_t::from_errno(
-            file_error_code_k::seek_failed, errno, "File seek operation failed"));
+        return std::unexpected(
+            file_error_t::from_errno(
+                file_error_code_k::seek_failed, errno, "File seek operation failed"
+            )
+        );
     }
 
     return {};
@@ -221,38 +238,47 @@ auto random_access_file_builder_t::build(fs::path_t path, posix_wrapper::open_fl
 {
     if (path.empty())
     {
-        return std::unexpected(file_error_t{
-            .code = file_error_code_k::open_failed,
-            .system_errno = errno,
-            .message = std::format("Provided file path is empty"),
-        });
+        return std::unexpected(
+            file_error_t{
+                .code = file_error_code_k::open_failed,
+                .system_errno = errno,
+                .message = std::format("Provided file path is empty"),
+            }
+        );
     }
 
     int fdes = open(path.c_str(), posix_wrapper::to_native(openFlags), kDefaultFilePermissions);
     if (fdes < 0)
     {
-        return std::unexpected(file_error_t{
-            .code = file_error_code_k::open_failed,
-            .system_errno = errno,
-            .message = std::format("Failed to open file. path={}", path.c_str()),
-        });
+        std::cerr << "errorno: " << strerror(errno) << '\n';
+        return std::unexpected(
+            file_error_t{
+                .code = file_error_code_k::open_failed,
+                .system_errno = errno,
+                .message = std::format("Failed to open file. path={}", path.c_str()),
+            }
+        );
     }
 
     io_uring ring{};
     if (int res = io_uring_queue_init(kIOUringQueueEntries, &ring, 0); res < 0)
     {
         close(fdes);
-        return std::unexpected(file_error_t{
-            .code = file_error_code_k::io_uring_init_failed,
-            .system_errno = errno,
-            .message = std::format("io_uring_queue_init failed"),
-        });
+        return std::unexpected(
+            file_error_t{
+                .code = file_error_code_k::io_uring_init_failed,
+                .system_errno = errno,
+                .message = std::format("io_uring_queue_init failed"),
+            }
+        );
     }
 
-    spdlog::info("Opened file. path={}, fd={}, flags={}",
-                 path.c_str(),
-                 fdes,
-                 magic_enum::enum_name(openFlags));
+    spdlog::info(
+        "Opened file. path={}, fd={}, flags={}",
+        path.c_str(),
+        fdes,
+        magic_enum::enum_name(openFlags)
+    );
 
     return random_access_file_t{fdes, ring};
 }

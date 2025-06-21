@@ -1,8 +1,8 @@
 #pragma once
 
-#include <db/db_config.h>
-#include <structures/lsmtree/lsmtree_config.h>
-#include <structures/lsmtree/segments/segment_config.h>
+#include "db/db_config.h"
+#include "structures/lsmtree/lsmtree_config.h"
+#include "structures/lsmtree/segments/segment_config.h"
 #include "server/server_config.h"
 #include "wal/config.h"
 
@@ -17,7 +17,8 @@ struct config_t
     server::server_config_t                         ServerConfig;
     wal::config_t                                   WALConfig;
 
-    [[nodiscard]] auto datadir_path() const -> std::filesystem::path;
+    [[nodiscard]] auto datadir_path() const -> fs::path_t;
+    [[nodiscard]] auto manifest_path() const -> fs::path_t;
 };
 
 using shared_ptr_t = std::shared_ptr<config_t>;

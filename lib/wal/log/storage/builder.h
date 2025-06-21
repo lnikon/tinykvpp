@@ -1,10 +1,12 @@
 #pragma once
 
 #include <optional>
+#include <utility>
 #include <variant>
 #include <filesystem>
 
 #include <spdlog/spdlog.h>
+#include <magic_enum/magic_enum.hpp>
 
 #include "../../common.h"
 #include "in_memory_log_storage.h"
@@ -56,7 +58,7 @@ template <typename TEntry> class log_storage_wrapper_impl_t final
 
     [[nodiscard]] auto reset_last_n(std::size_t n) -> bool
     {
-        return m_storage.reset_last_n(n);
+        return std::visit([&](auto &storage) { return storage.reset_last_n(n); }, m_storage);
     }
 
   private:
@@ -85,7 +87,7 @@ class log_storage_builder_t final
     auto set_consensus_module(std::shared_ptr<raft::consensus_module_t> consensusModule)
         -> log_storage_builder_t &
     {
-        m_pConsensusModule = consensusModule;
+        m_pConsensusModule = std::move(consensusModule);
         return *this;
     }
 
@@ -105,14 +107,15 @@ class log_storage_builder_t final
                 return std::nullopt;
             }
 
-            if (auto storage =
-                    persistent_log_storage_builder_t<backend::append_only_file_storage_backend_t,
-                                                     TEntry>{{.file_path = m_path.value()}}
-                        .build();
+            if (auto storage = persistent_log_storage_builder_t<
+                                   backend::append_only_file_storage_backend_t,
+                                   TEntry>{{.file_path = m_path.value()}}
+                                   .build();
                 storage.has_value())
             {
                 return std::make_optional(
-                    log_storage_wrapper_t<TEntry>{std::move(storage.value())});
+                    log_storage_wrapper_t<TEntry>{std::move(storage.value())}
+                );
             }
 
             return std::nullopt;
@@ -131,18 +134,20 @@ class log_storage_builder_t final
                 return std::nullopt;
             }
 
-            if (auto fileBasedStorage =
-                    persistent_log_storage_builder_t<backend::append_only_file_storage_backend_t,
-                                                     TEntry>{{.file_path = m_path.value()}}
-                        .build();
+            if (auto fileBasedStorage = persistent_log_storage_builder_t<
+                                            backend::append_only_file_storage_backend_t,
+                                            TEntry>{{.file_path = m_path.value()}}
+                                            .build();
                 fileBasedStorage.has_value())
             {
                 if (auto replicatedStorage = replicated_log_storage_builder_t{}.build<TEntry>(
-                        std::move(fileBasedStorage.value()), std::move(m_pConsensusModule));
+                        std::move(fileBasedStorage.value()), std::move(m_pConsensusModule)
+                    );
                     replicatedStorage.has_value())
                 {
                     return std::make_optional(
-                        log_storage_wrapper_t<TEntry>{std::move(replicatedStorage.value())});
+                        log_storage_wrapper_t<TEntry>{std::move(replicatedStorage.value())}
+                    );
                 }
 
                 spdlog::error("log_storage_builder_t: Unable to build replicated log storage");
@@ -150,7 +155,8 @@ class log_storage_builder_t final
             }
 
             spdlog::error(
-                "log_storage_builder_t: Unable to build persistent file-based log storage");
+                "log_storage_builder_t: Unable to build persistent file-based log storage"
+            );
             return std::nullopt;
         }
 

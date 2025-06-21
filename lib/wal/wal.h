@@ -43,7 +43,8 @@ template <typename TEntry> class wal_t
     [[nodiscard]] auto size() const noexcept -> std::size_t;
     [[nodiscard]] auto empty() const noexcept -> bool;
 
-    auto reset() noexcept -> bool;
+    [[nodiscard]] auto reset() noexcept -> bool;
+    [[nodiscard]] auto reset_last_n(std::size_t n) -> bool;
 
   private:
     log_t<TEntry> m_log;
@@ -91,9 +92,14 @@ auto wal_t<TEntry>::add(const wal_t<TEntry>::wal_entry_t &rec) noexcept -> bool
     return m_log.append(rec);
 }
 
-template <typename TEntry> auto wal_t<TEntry>::reset() noexcept -> bool
+template <typename TEntry> [[nodiscard]] auto wal_t<TEntry>::reset() noexcept -> bool
 {
     return m_log.reset();
+}
+
+template <typename TEntry> inline auto wal_t<TEntry>::reset_last_n(std::size_t n) -> bool
+{
+    return m_log.reset_last_n(n);
 }
 
 template <typename TEntry>

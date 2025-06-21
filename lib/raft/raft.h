@@ -1,8 +1,9 @@
 #pragma once
 
-#include <chrono>        // for 'std::chrono::high_resolution_clock'
-#include <cstdint>       // for 'uint32_t'
-#include <string>        // for 'std::string'
+#include <chrono>  // for 'std::chrono::high_resolution_clock'
+#include <cstdint> // for 'uint32_t'
+#include <string>  // for 'std::string'
+#include <sys/types.h>
 #include <thread>        // for 'std::jthread'
 #include <memory>        // for 'std::shared_ptr', 'std::unique_ptr'
 #include <optional>      // for 'std::optional'
@@ -24,13 +25,23 @@
 
 template <typename TStream> auto operator<<(TStream &stream, const LogEntry &record) -> TStream &
 {
-    record.SerializeToOstream(&stream);
+    stream << record.SerializeAsString();
+
+    // TODO(lnikon): Uncomment when protobuf serialization is implemented. Protobuf serializes into
+    // binary format by default.
+    // record.SerializeToOstream(&stream);
+
     return stream;
 }
 
 template <typename TStream> auto operator>>(TStream &stream, LogEntry &record) -> TStream &
 {
-    record.ParseFromIstream(&stream);
+    record.ParseFromString(stream.str());
+
+    // TODO(lnikon): Uncomment when protobuf serialization is implemented. Protobuf serializes into
+    // binary format by default.
+    // record.ParseFromIstream(&stream);
+
     return stream;
 }
 
@@ -52,27 +63,32 @@ using timepoint_t = std::chrono::high_resolution_clock::time_point;
 // Valid IDs start from 1
 constexpr const id_t gInvalidId = 0;
 
+// Configuration for a Raft node
 struct node_config_t
 {
     id_t m_id{gInvalidId};
     ip_t m_ip;
 };
 
-/**
- * Client for communicating with other nodes in the Raft cluster.
- * Handles RPC operations for consensus and key-value operations.
- */
+enum class raft_operation_status_k : int8_t
+{
+    unknown_k = -1,
+    success_k,
+    failure_k,
+    timeout_k,
+    invalid_request_k,
+    not_leader_k,
+    leader_not_found_k,
+    wal_add_failed_k,
+    replicate_failed_k,
+};
+
 class raft_node_grpc_client_t
 {
   public:
-    /**
-     * Constructs a client for communicating with a specific node.
-     * @param nodeId Unique identifier for the target node
-     * @param nodeIp IP address of the target node
-     * @throws std::runtime_error if connection cannot be established
-     */
-    raft_node_grpc_client_t(node_config_t                               config,
-                            std::unique_ptr<RaftService::StubInterface> pRaftStub);
+    raft_node_grpc_client_t(
+        node_config_t config, std::unique_ptr<RaftService::StubInterface> pRaftStub
+    );
     virtual ~raft_node_grpc_client_t() noexcept = default;
 
     raft_node_grpc_client_t(const raft_node_grpc_client_t &) = delete;
@@ -81,9 +97,14 @@ class raft_node_grpc_client_t
     raft_node_grpc_client_t(raft_node_grpc_client_t &&) = default;
     auto operator=(raft_node_grpc_client_t &&) -> raft_node_grpc_client_t & = default;
 
-    auto appendEntries(const AppendEntriesRequest &request, AppendEntriesResponse *response)
+    [[nodiscard]] auto
+    appendEntries(const AppendEntriesRequest &request, AppendEntriesResponse *response) -> bool;
+
+    [[nodiscard]] auto requestVote(const RequestVoteRequest &request, RequestVoteResponse *response)
         -> bool;
-    auto requestVote(const RequestVoteRequest &request, RequestVoteResponse *response) -> bool;
+
+    [[nodiscard]] auto
+    replicate(const ReplicateEntriesRequest &request, ReplicateEntriesResponse *response) -> bool;
 
     [[nodiscard]] auto id() const -> id_t;
     [[nodiscard]] auto ip() const -> ip_t;
@@ -99,10 +120,15 @@ class consensus_module_t final : public RaftService::Service
     using wal_entry_t = LogEntry;
     using wal_ptr_t = std::shared_ptr<wal::wal_t<wal_entry_t>>;
 
+    using on_commit_cbk_t = std::function<bool(const LogEntry &)>;
+
     consensus_module_t() = delete;
-    consensus_module_t(node_config_t                        nodeConfig,
-                       std::vector<raft_node_grpc_client_t> replicas,
-                       wal_ptr_t                            pWal) noexcept;
+    consensus_module_t(
+        node_config_t                        nodeConfig,
+        std::vector<raft_node_grpc_client_t> replicas,
+        wal_ptr_t                            pWal,
+        on_commit_cbk_t                      onCommit
+    ) noexcept;
 
     consensus_module_t(const consensus_module_t &) = delete;
     consensus_module_t &operator=(const consensus_module_t &) = delete;
@@ -116,22 +142,26 @@ class consensus_module_t final : public RaftService::Service
     void               start();
     void               stop();
 
-    [[nodiscard]] grpc::Status AppendEntries(grpc::ServerContext        *pContext,
-                                             const AppendEntriesRequest *pRequest,
-                                             AppendEntriesResponse      *pResponse) override
-        ABSL_LOCKS_EXCLUDED(m_stateMutex);
+    [[nodiscard]] grpc::Status AppendEntries(
+        grpc::ServerContext        *pContext,
+        const AppendEntriesRequest *pRequest,
+        AppendEntriesResponse      *pResponse
+    ) override ABSL_LOCKS_EXCLUDED(m_stateMutex);
 
-    [[nodiscard]] grpc::Status RequestVote(grpc::ServerContext      *pContext,
-                                           const RequestVoteRequest *pRequest,
-                                           RequestVoteResponse      *pResponse) override
-        ABSL_LOCKS_EXCLUDED(m_stateMutex);
+    [[nodiscard]] grpc::Status RequestVote(
+        grpc::ServerContext      *pContext,
+        const RequestVoteRequest *pRequest,
+        RequestVoteResponse      *pResponse
+    ) override ABSL_LOCKS_EXCLUDED(m_stateMutex);
 
-    [[nodiscard]] auto replicate(LogEntry logEntry) -> bool;
+    [[nodiscard]] auto replicate(std::string payload) -> raft_operation_status_k;
+    [[nodiscard]] auto forward(std::string payload) -> raft_operation_status_k;
 
     [[nodiscard]] std::uint32_t         currentTerm() const;
     [[nodiscard]] id_t                  votedFor() const;
     [[nodiscard]] std::vector<LogEntry> log() const;
     [[nodiscard]] NodeState             getState() const ABSL_SHARED_LOCKS_REQUIRED(m_stateMutex);
+    [[nodiscard]] NodeState             getStateSafe() const ABSL_LOCKS_EXCLUDED(m_stateMutex);
 
   private:
     // ---- State transitions ----
@@ -142,9 +172,14 @@ class consensus_module_t final : public RaftService::Service
     // ---- Heartbeat ----
     void runHeartbeatThread(std::stop_token token);
     auto waitForHeartbeat(std::stop_token token) -> bool;
-    void sendAppendEntriesRPC(raft_node_grpc_client_t &client, std::vector<LogEntry> logEntries);
-    auto onSendAppendEntriesRPC(raft_node_grpc_client_t     &client,
-                                const AppendEntriesResponse &response) noexcept -> bool;
+    void sendAppendEntriesRPC(
+        raft_node_grpc_client_t &client, std::vector<LogEntry> logEntries, bool heartbeat = false
+    );
+    auto onSendAppendEntriesRPC(
+        raft_node_grpc_client_t     &client,
+        const AppendEntriesResponse &response,
+        bool                         heartbeat = false
+    ) noexcept -> bool;
     // --------
 
     // ---- Leader election ----
@@ -157,8 +192,8 @@ class consensus_module_t final : public RaftService::Service
     [[nodiscard]] uint32_t getLastLogIndex() const ABSL_SHARED_LOCKS_REQUIRED(m_stateMutex);
     [[nodiscard]] uint32_t getLastLogTerm() const ABSL_SHARED_LOCKS_REQUIRED(m_stateMutex);
     [[nodiscard]] auto     hasMajority(uint32_t votes) const -> bool;
-    [[nodiscard]] uint32_t getLogTerm(uint32_t index) const
-        ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_stateMutex);
+    [[nodiscard]] uint32_t
+    getLogTerm(uint32_t index) const ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_stateMutex);
     [[nodiscard]] uint32_t findMajorityIndexMatch() const ABSL_SHARED_LOCKS_REQUIRED(m_stateMutex);
     [[nodiscard]] auto     waitForMajorityReplication(uint32_t logIndex) const -> bool;
     // --------
@@ -166,9 +201,9 @@ class consensus_module_t final : public RaftService::Service
     // ---- Persistent state management ----
     // TODO(lnikon): Move into separate class
     [[nodiscard]] bool initializePersistentState() ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_stateMutex);
-    [[nodiscard]] bool updatePersistentState(std::optional<std::uint32_t> commitIndex,
-                                             std::optional<std::uint32_t> votedFor)
-        ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_stateMutex);
+    [[nodiscard]] bool updatePersistentState(
+        std::optional<std::uint32_t> commitIndex, std::optional<std::uint32_t> votedFor
+    ) ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_stateMutex);
 
     [[nodiscard]] bool flushPersistentState() ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_stateMutex);
     [[nodiscard]] bool restorePersistentState() ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_stateMutex);
@@ -185,6 +220,9 @@ class consensus_module_t final : public RaftService::Service
 
     // Stores ID and IP of the current node. Received from outside.
     node_config_t m_config;
+
+    // Executed on follower node after successful log replication to update the state machine.
+    on_commit_cbk_t m_onCommitCbk;
 
     // Persistent state on all servers
     mutable absl::Mutex    m_stateMutex;
