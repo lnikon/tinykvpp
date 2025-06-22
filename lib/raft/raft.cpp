@@ -25,7 +25,7 @@ const std::string_view gLogFilename = "RAFT_LOG";
 
 auto constructFilename(std::string_view filename, std::uint32_t peerId) -> std::string
 {
-    return fmt::format("{}_NODE_{}", filename, peerId);
+    return fmt::format("var/tkvpp/{}_NODE_{}", filename, peerId);
 }
 
 auto generate_random_timeout(const int minTimeout, const int maxTimeout) -> int
@@ -153,13 +153,9 @@ auto raft_node_grpc_client_t::ip() const -> ip_t
 // consensus_module_t
 // -------------------------------
 consensus_module_t::consensus_module_t(
-    node_config_t                        nodeConfig,
-    std::vector<raft_node_grpc_client_t> replicas,
-    wal_ptr_t                            pLog,
-    on_commit_cbk_t                      onCommitCbk
+    node_config_t nodeConfig, std::vector<raft_node_grpc_client_t> replicas, wal_ptr_t pLog
 ) noexcept
     : m_config{std::move(nodeConfig)},
-      m_onCommitCbk{std::move(onCommitCbk)},
       m_currentTerm{0},
       m_votedFor{0},
       m_log{std::move(pLog)},
@@ -171,7 +167,7 @@ consensus_module_t::consensus_module_t(
 {
     assert(m_config.m_id > 0);
 
-    // TODO(lnikon): This assertion is imporant, but also gets in the way of testing.
+    // TODO(lnikon): This assertion is important, but also gets in the way of testing.
     // assert(replicas.size() > 0);
 
     assert(m_config.m_id <= replicas.size() + 1);
@@ -265,16 +261,30 @@ auto consensus_module_t::AppendEntries(
     if (pRequest->prevlogindex() > 0)
     {
         const auto &logEntry{m_log->read(pRequest->prevlogindex() - 1)};
-        if (!logEntry.has_value() || logEntry->term() != pRequest->prevlogterm())
+        if (!logEntry.has_value())
         {
             spdlog::error(
-                "Node={} recevied prevlogindex={} is out of sync with "
-                "prevlogterm={}. Current log term={} logSize={}",
+                "Node={} received prevlogindex={} which does not exist. logSize={}",
+                m_config.m_id,
+                pRequest->prevlogindex(),
+                m_log->size()
+            );
+
+            pResponse->set_term(m_currentTerm);
+            pResponse->set_success(false);
+            pResponse->set_responderid(m_config.m_id);
+            return grpc::Status::OK;
+        }
+
+        if (logEntry->term() != pRequest->prevlogterm())
+        {
+            spdlog::error(
+                "Node={} received prevlogindex={} with mismatched prevlogterm={}. Current log "
+                "term={}",
                 m_config.m_id,
                 pRequest->prevlogindex(),
                 pRequest->prevlogterm(),
-                logEntry.has_value() ? logEntry->term() : 0,
-                m_log->size()
+                logEntry->term()
             );
 
             pResponse->set_term(m_currentTerm);
@@ -298,12 +308,10 @@ auto consensus_module_t::AppendEntries(
         }
     }
 
+    const auto &entries{pRequest->entries()};
+    for (const auto &entry : entries)
     {
-        const auto &entries{pRequest->entries()};
-        for (const auto &entry : entries)
-        {
-            m_log->add(entry);
-        }
+        m_log->add(entry);
     }
 
     if (!pRequest->entries().empty())
@@ -326,12 +334,15 @@ auto consensus_module_t::AppendEntries(
         }
     }
 
-    spdlog::info(
-        "Follower Node={} PREPARING applying m_lastApplied+1={}, m_commitIndex={}",
-        m_config.m_id,
-        m_lastApplied + 1,
-        m_commitIndex
-    );
+    if (!entries.empty())
+    {
+        spdlog::info(
+            "Follower Node={} PREPARING applying m_lastApplied+1={}, m_commitIndex={}",
+            m_config.m_id,
+            m_lastApplied + 1,
+            m_commitIndex
+        );
+    }
 
     // Apply committed entries to the state machine
     while (m_lastApplied < m_commitIndex)
@@ -682,27 +693,54 @@ void consensus_module_t::sendAppendEntriesRPC(
     raft_node_grpc_client_t &client, std::vector<LogEntry> logEntries, bool heartbeat /* = false */
 )
 {
+    // TODO(lnikon): Implement upper bound for the number of retries
+    // TODO(lnikon): Implement exponential backoff for retries
     while (true)
     {
         AppendEntriesRequest request;
+        uint32_t             nextIndex = 1; // Default for a fresh follower
+
         {
             absl::MutexLock locker{&m_stateMutex};
 
             request.set_term(m_currentTerm);
 
-            if (!logEntries.empty())
+            // Determine nextIndex for this follower
+            auto it = m_nextIndex.find(client.id());
+            if (it != m_nextIndex.end())
             {
-                m_nextIndex[client.id()] = getLastLogIndex() + 1;
-                request.set_prevlogindex(getLastLogIndex());
-                request.set_prevlogterm(getLastLogTerm());
+                nextIndex = it->second;
+            }
+            else
+            {
+                // Initialize nextIndex for new follower
+                nextIndex = getLastLogIndex() + 1;
+                m_nextIndex[client.id()] = nextIndex;
+            }
+
+            // Set prevLogIndex and prevLogTerm based on nextIndex
+            if (nextIndex > 1)
+            {
+                auto prevEntry = m_log->read(nextIndex - 2); // log is 0-based
+                request.set_prevlogindex(nextIndex - 1);
+                request.set_prevlogterm(prevEntry.has_value() ? prevEntry->term() : 0);
+            }
+            else
+            {
+                request.set_prevlogindex(0);
+                request.set_prevlogterm(0);
             }
 
             request.set_leadercommit(m_commitIndex);
             request.set_senderid(m_config.m_id);
 
-            for (const auto &logEntry : logEntries)
+            // Add log entries starting from nextIndex
+            for (size_t i = 0; i < logEntries.size(); ++i)
             {
-                request.add_entries()->CopyFrom(logEntry);
+                if (logEntries[i].index() >= nextIndex)
+                {
+                    request.add_entries()->CopyFrom(logEntries[i]);
+                }
             }
         }
 
@@ -787,12 +825,12 @@ auto consensus_module_t::onSendAppendEntriesRPC(
 
         uint32_t majorityIndex = findMajorityIndexMatch();
 
-        spdlog::info(
-            "MajorityIndex={}, m_commitIndex={}, m_log->size()={}",
-            majorityIndex,
-            m_commitIndex,
-            m_log->size()
-        );
+        // spdlog::info(
+        //     "MajorityIndex={}, m_commitIndex={}, m_log->size()={}",
+        //     majorityIndex,
+        //     m_commitIndex,
+        //     m_log->size()
+        // );
 
         if (m_log->size() >= majorityIndex && majorityIndex > m_commitIndex)
         {
@@ -1019,7 +1057,7 @@ auto consensus_module_t::findMajorityIndexMatch() const -> uint32_t
     }
 
     std::ranges::sort(matchIndexes);
-    spdlog::info("Node={} matchIndexes={}", m_config.m_id, fmt::join(matchIndexes, ", "));
+    // spdlog::info("Node={} matchIndexes={}", m_config.m_id, fmt::join(matchIndexes, ", "));
     return matchIndexes[matchIndexes.size() / 2];
 }
 
@@ -1165,4 +1203,8 @@ void consensus_module_t::cleanupElectionThread()
     }
 }
 
+void consensus_module_t::setOnCommitCallback(on_commit_cbk_t onCommitCbk)
+{
+    m_onCommitCbk = std::move(onCommitCbk);
+}
 } // namespace raft

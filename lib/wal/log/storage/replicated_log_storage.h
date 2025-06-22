@@ -125,16 +125,16 @@ template <typename TEntry>
 
     spdlog::info("replicated_log_storage_impl_t::append: Going append entry={}", entryStream.str());
 
-    // Replicate first, if it succeeds, then update the WAL.
-    if (m_pConsensusModule->replicate(entryStream.str()) !=
-        raft::raft_operation_status_k::success_k)
-    {
-        spdlog::error(
-            "replicated_log_storage_t::append: Unable to replicate the log entry. entry={}",
-            entryStream.str()
-        );
-        return false;
-    }
+    // // Replicate first, if it succeeds, then update the WAL.
+    // if (m_pConsensusModule->replicate(entryStream.str()) !=
+    //     raft::raft_operation_status_k::success_k)
+    // {
+    //     spdlog::error(
+    //         "replicated_log_storage_t::append: Unable to replicate the log entry. entry={}",
+    //         entryStream.str()
+    //     );
+    //     return false;
+    // }
 
     // This means that log got successfully replicated, time to update the WAL.
     if (!m_log.append(std::move(entry)))

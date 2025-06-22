@@ -124,10 +124,7 @@ class consensus_module_t final : public RaftService::Service
 
     consensus_module_t() = delete;
     consensus_module_t(
-        node_config_t                        nodeConfig,
-        std::vector<raft_node_grpc_client_t> replicas,
-        wal_ptr_t                            pWal,
-        on_commit_cbk_t                      onCommit
+        node_config_t nodeConfig, std::vector<raft_node_grpc_client_t> replicas, wal_ptr_t pWal
     ) noexcept;
 
     consensus_module_t(const consensus_module_t &) = delete;
@@ -162,6 +159,8 @@ class consensus_module_t final : public RaftService::Service
     [[nodiscard]] std::vector<LogEntry> log() const;
     [[nodiscard]] NodeState             getState() const ABSL_SHARED_LOCKS_REQUIRED(m_stateMutex);
     [[nodiscard]] NodeState             getStateSafe() const ABSL_LOCKS_EXCLUDED(m_stateMutex);
+
+    void setOnCommitCallback(on_commit_cbk_t onCommitCbk);
 
   private:
     // ---- State transitions ----

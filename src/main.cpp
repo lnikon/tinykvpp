@@ -132,16 +132,7 @@ template <typename TEntry>
     auto pConsensusModule = std::make_shared<raft::consensus_module_t>(
         nodeConfig,
         std::move(replicas),
-        wal::make_shared<raft::consensus_module_t::wal_entry_t>(std::move(maybeWal.value())),
-        [pDatabase = std::move(pDatabase)](const raft::consensus_module_t::wal_entry_t &entry)
-        {
-            db::db_t::record_t record;
-            std::stringstream  sstream{entry.payload()};
-            record.read(sstream);
-
-            return pDatabase ? pDatabase->put(record, db::db_put_context_k::do_not_replicate_k)
-                             : false;
-        }
+        wal::make_shared<raft::consensus_module_t::wal_entry_t>(std::move(maybeWal.value()))
     );
 
     if (!pConsensusModule->init())
@@ -302,7 +293,7 @@ auto main(int argc, char *argv[]) -> int
         // ==== End: Build LSMTree
 
         // ==== Start: Build database
-        pDatabase = db::make_shared(pDbConfig, pWAL, pManifest, pLSMTree);
+        pDatabase = db::make_shared(pDbConfig, pWAL, pManifest, pLSMTree, pConsensusModule);
         if (!pDatabase->open())
         {
             spdlog::error("Main: Unable to open the database");
@@ -325,6 +316,23 @@ auto main(int argc, char *argv[]) -> int
 
         if (pDbConfig->DatabaseConfig.mode == db::db_mode_t::kReplicated && pConsensusModule)
         {
+            pConsensusModule->setOnCommitCallback(
+                [pDatabase](const raft::consensus_module_t::wal_entry_t &entry)
+                {
+                    if (!pDatabase)
+                    {
+                        spdlog::error("pDatabase is null, cannot commit entry");
+                        return false;
+                    }
+
+                    db::db_t::record_t record;
+                    std::stringstream  sstream{entry.payload()};
+                    record.read(sstream);
+
+                    return pDatabase->put(record, db::db_put_context_k::do_not_replicate_k);
+                }
+            );
+
             pConsensusModule->start();
         }
 

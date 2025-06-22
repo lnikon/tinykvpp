@@ -12,15 +12,17 @@ namespace db
 {
 
 db_t::db_t(
-    config::shared_ptr_t   config,
-    wal_ptr_t              pWal,
-    manifest::shared_ptr_t pManifest,
-    lsmtree_ptr_t          pLsmtree
+    config::shared_ptr_t                      config,
+    wal_ptr_t                                 pWal,
+    manifest::shared_ptr_t                    pManifest,
+    lsmtree_ptr_t                             pLsmtree,
+    std::shared_ptr<raft::consensus_module_t> pConsensusModule
 ) noexcept
     : m_config{config},
       m_pWal{std::move(pWal)},
       m_pManifest{std::move(pManifest)},
-      m_pLsmtree{std::move(pLsmtree)}
+      m_pLsmtree{std::move(pLsmtree)},
+      m_pConsensusModule{std::move(pConsensusModule)}
 {
     assert(m_config);
     assert(m_pManifest);
@@ -67,7 +69,7 @@ auto db_t::put(
     {
         if (context == db_put_context_k::do_not_replicate_k)
         {
-            spdlog::debug(
+            spdlog::info(
                 "db_t::put: Skipping replication for entry: {} {}",
                 record.m_key.m_key,
                 record.m_value.m_value
@@ -77,7 +79,7 @@ auto db_t::put(
         {
             if (m_pConsensusModule->getStateSafe() == NodeState::FOLLOWER)
             {
-                spdlog::debug(
+                spdlog::info(
                     "db_t::put: Forwarding entry: {} {}", record.m_key.m_key, record.m_value.m_value
                 );
                 std::stringstream sstream;
@@ -96,13 +98,26 @@ auto db_t::put(
         }
         else
         {
-            spdlog::debug(
+            spdlog::info(
                 "db_t::put: Not replicating entry: {} {}",
                 record.m_key.m_key,
                 record.m_value.m_value
             );
         }
     }
+
+    else
+    {
+        spdlog::info(
+            "db_t::put: Consensus module is not set, skipping replication for entry: {} {}",
+            record.m_key.m_key,
+            record.m_value.m_value
+        );
+    }
+
+    spdlog::info(
+        "db_t::put: Adding entry into wal: {} {}", record.m_key.m_key, record.m_value.m_value
+    );
 
     if (!m_pWal->add({.op = wal::operation_k::add_k, .kv = record}))
     {
@@ -116,7 +131,7 @@ auto db_t::put(
     {
         if (context == db_put_context_k::do_not_replicate_k)
         {
-            spdlog::debug(
+            spdlog::info(
                 "db_t::put: Skipping replication for entry: {} {}",
                 record.m_key.m_key,
                 record.m_value.m_value
@@ -126,7 +141,7 @@ auto db_t::put(
         {
             if (m_pConsensusModule->getStateSafe() == NodeState::LEADER)
             {
-                spdlog::debug(
+                spdlog::info(
                     "db_t::put: Forwarding entry: {} {}", record.m_key.m_key, record.m_value.m_value
                 );
                 std::stringstream sstream;
@@ -145,13 +160,26 @@ auto db_t::put(
         }
         else
         {
-            spdlog::debug(
+            spdlog::info(
                 "db_t::put: Not replicating entry: {} {}",
                 record.m_key.m_key,
                 record.m_value.m_value
             );
         }
     }
+
+    else
+    {
+        spdlog::info(
+            "db_t::put: Consensus module is not set, skipping replication for entry: {} {}",
+            record.m_key.m_key,
+            record.m_value.m_value
+        );
+    }
+
+    spdlog::info(
+        "db_t::put: Adding entry into lsm: {} {}", record.m_key.m_key, record.m_value.m_value
+    );
 
     switch (m_pLsmtree->put(std::move(record)))
     {

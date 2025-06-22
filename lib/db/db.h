@@ -27,10 +27,11 @@ class db_t final
     using value_t = structures::lsmtree::value_t;
 
     explicit db_t(
-        config::shared_ptr_t   config,
-        wal_ptr_t              pWal,
-        manifest::shared_ptr_t pManifest,
-        lsmtree_ptr_t          pLsmtree
+        config::shared_ptr_t                      config,
+        wal_ptr_t                                 pWal,
+        manifest::shared_ptr_t                    pManifest,
+        lsmtree_ptr_t                             pLsmtree,
+        std::shared_ptr<raft::consensus_module_t> pConsensusModule
     ) noexcept;
 
     db_t(db_t &&other) noexcept;
@@ -72,14 +73,21 @@ class db_builder_t
 {
   public:
     [[nodiscard]] auto build(
-        config::shared_ptr_t   config,
-        db_t::wal_ptr_t        pWal,
-        manifest::shared_ptr_t pManifest,
-        db_t::lsmtree_ptr_t    pLSMTree
+        config::shared_ptr_t                      config,
+        db_t::wal_ptr_t                           pWal,
+        manifest::shared_ptr_t                    pManifest,
+        db_t::lsmtree_ptr_t                       pLSMTree,
+        std::shared_ptr<raft::consensus_module_t> pConsensusModule
     ) -> std::optional<db_t>
     {
         return std::make_optional(
-            db_t{std::move(config), std::move(pWal), std::move(pManifest), std::move(pLSMTree)}
+            db_t{
+                std::move(config),
+                std::move(pWal),
+                std::move(pManifest),
+                std::move(pLSMTree),
+                pConsensusModule
+            }
         );
     }
 };
