@@ -1,15 +1,15 @@
-#include "fs/append_only_file.h"
-#include <iostream>
-#include <spdlog/spdlog.h>
-#include <structures/lsmtree/lsmtree_types.h>
-#include <structures/lsmtree/segments/lsmtree_regular_segment.h>
-
 #include <cassert>
 #include <fstream>
 #include <optional>
 #include <ios>
 #include <stdexcept>
 #include <string>
+#include <iostream>
+
+#include <spdlog/spdlog.h>
+
+#include "structures/lsmtree/lsmtree_types.h"
+#include "structures/lsmtree/segments/lsmtree_regular_segment.h"
 
 namespace structures::lsmtree::segments::regular_segment
 {
@@ -25,7 +25,7 @@ regular_segment_t::regular_segment_t(
 {
 }
 
-[[nodiscard]] auto regular_segment_t::record(const lsmtree::key_t &key)
+[[nodiscard]] auto regular_segment_t::record(const key_t &key)
     -> std::vector<std::optional<record_t>>
 {
     if (m_hashIndex.empty())
@@ -166,7 +166,7 @@ types::name_t regular_segment_t::get_name() const
     return m_name;
 }
 
-auto regular_segment_t::get_path() const -> types::path_t
+auto regular_segment_t::get_path() const -> fs::path_t
 {
     return m_path;
 }

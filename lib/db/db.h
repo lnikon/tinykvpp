@@ -10,7 +10,7 @@
 namespace db
 {
 
-enum class db_put_context_k
+enum class db_put_context_k : int8_t
 {
     none_k,             // No context
     do_not_replicate_k, // Do not replicate this put operation
@@ -21,10 +21,10 @@ class db_t final
 {
   public:
     using record_t = structures::memtable::memtable_t::record_t;
+    using key_t = record_t::key_t;
+    using value_t = record_t::value_t;
     using wal_ptr_t = std::shared_ptr<wal::wal_t<wal::wal_entry_t>>;
     using lsmtree_ptr_t = std::shared_ptr<structures::lsmtree::lsmtree_t>;
-    using key_t = structures::lsmtree::key_t;
-    using value_t = structures::lsmtree::value_t;
 
     explicit db_t(
         config::shared_ptr_t                      config,
@@ -46,7 +46,6 @@ class db_t final
 
     [[nodiscard]] auto put(key_t key, value_t value, db_put_context_k context) noexcept -> bool;
     [[nodiscard]] auto put(record_t record, db_put_context_k context) noexcept -> bool;
-
     [[nodiscard]] auto get(const key_t &key) -> std::optional<record_t>;
 
     [[nodiscard]] auto config() const noexcept -> config::shared_ptr_t;
@@ -59,7 +58,7 @@ class db_t final
     config::shared_ptr_t                      m_config;
     wal_ptr_t                                 m_pWal;
     manifest::shared_ptr_t                    m_pManifest;
-    structures::lsmtree::shared_ptr_t         m_pLsmtree;
+    lsmtree_ptr_t                             m_pLSMtree;
     std::shared_ptr<raft::consensus_module_t> m_pConsensusModule;
 };
 
@@ -86,9 +85,10 @@ class db_builder_t
                 std::move(pWal),
                 std::move(pManifest),
                 std::move(pLSMTree),
-                pConsensusModule
+                std::move(pConsensusModule)
             }
         );
     }
 };
+
 } // namespace db

@@ -77,11 +77,9 @@ template <typename TEntry>
     return db::manifest::manifest_builder_t{}.build(path, std::move(maybeWal.value()));
 }
 
-[[nodiscard]] auto maybe_create_consensus_module(
-    config::shared_ptr_t      pConfig,
-    raft::node_config_t       nodeConfig,
-    std::shared_ptr<db::db_t> pDatabase
-) noexcept -> std::optional<std::shared_ptr<raft::consensus_module_t>>
+[[nodiscard]] auto
+maybe_create_consensus_module(config::shared_ptr_t pConfig, raft::node_config_t nodeConfig) noexcept
+    -> std::optional<std::shared_ptr<raft::consensus_module_t>>
 {
     if (pConfig->ServerConfig.id == 0)
     {
@@ -213,9 +211,7 @@ auto main(int argc, char *argv[]) -> int
         std::shared_ptr<db::db_t>                 pDatabase{nullptr};
         if (pDbConfig->DatabaseConfig.mode == db::db_mode_t::kReplicated)
         {
-            if (auto maybeConsensusModule{
-                    maybe_create_consensus_module(pDbConfig, nodeConfig, pDatabase)
-                };
+            if (auto maybeConsensusModule{maybe_create_consensus_module(pDbConfig, nodeConfig)};
                 maybeConsensusModule.has_value())
             {
                 pConsensusModule = std::move(maybeConsensusModule.value());

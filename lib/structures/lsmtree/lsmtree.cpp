@@ -1,3 +1,4 @@
+#include <memory>
 #include <optional>
 #include <cassert>
 #include <utility>
@@ -20,46 +21,23 @@ using level_operation_k = db::manifest::manifest_t::level_record_t::operation_k;
 using segment_operation_k = db::manifest::manifest_t::segment_record_t::operation_k;
 
 lsmtree_t::lsmtree_t(
-    config::shared_ptr_t       pConfig,
-    memtable::memtable_t       memtable,
-    db::manifest::shared_ptr_t pManifest,
-    levels::levels_t           levels
+    config::shared_ptr_t              pConfig,
+    memtable::memtable_t              memtable,
+    db::manifest::shared_ptr_t        pManifest,
+    std::unique_ptr<levels::levels_t> pLevels
 ) noexcept
     : m_pConfig{pConfig},
       m_table{std::make_optional(memtable)},
       m_pManifest{std::move(pManifest)},
-      m_levels{std::move(levels)},
+      m_pLevels{std::move(pLevels)},
       m_flushing_thread([this](std::stop_token stoken) { memtable_flush_task(stoken); })
 {
 }
 
 lsmtree_t::lsmtree_t(lsmtree_t &&other) noexcept
-    : m_pConfig(std::move(other.m_pConfig)),
-      m_table(std::move(other.m_table)),
-      m_pManifest(std::move(other.m_pManifest)),
-      m_levels(std::move(other.m_levels))
-//   m_flushing_thread(std::move(other.m_flushing_thread)),
-//   m_flushing_queue(std::move(other.m_flushing_queue))
 {
-    // m_mutex does not support move; mutexes aren't moveable
-    // other.m_mutex state is left default-constructed
-
-    other.m_flushing_thread.request_stop();
-    if (other.m_flushing_thread.joinable())
-    {
-        spdlog::debug("Waiting for flushing thread to finish");
-        other.m_flushing_thread.join();
-    }
-    else
-    {
-        spdlog::debug("Flushing thread is not joinable, skipping join");
-    }
-
-    // Start a new flushing thread for the moved object
-    m_flushing_thread =
-        std::jthread([this](std::stop_token stoken) { memtable_flush_task(stoken); });
-    spdlog::debug("Flushing thread started for moved lsmtree_t object");
-    m_flushing_queue = std::move(other.m_flushing_queue);
+    absl::WriterMutexLock otherLock{&other.m_mutex};
+    move_from(std::move(other));
 }
 
 auto lsmtree_t::operator=(lsmtree_t &&other) noexcept -> lsmtree_t &
@@ -67,8 +45,7 @@ auto lsmtree_t::operator=(lsmtree_t &&other) noexcept -> lsmtree_t &
     if (this != &other)
     {
         concurrency::absl_dual_mutex_lock_guard lock{m_mutex, other.m_mutex};
-        lsmtree_t                               temp{std::move(other)};
-        swap(other);
+        move_from(std::move(other));
     }
     return *this;
 }
@@ -133,7 +110,7 @@ auto lsmtree_t::get(const key_t &key) noexcept -> std::optional<record_t>
     // Lookup for the key in on-disk segments
     if (!result.has_value())
     {
-        result = m_levels.record(key);
+        result = m_pLevels->record(key);
     }
 
     return result;
@@ -164,7 +141,7 @@ void lsmtree_t::memtable_flush_task(std::stop_token stoken) noexcept
 
                 // TODO: Assert will crash the program, maybe we
                 // should return an error code?
-                assert(m_levels.flush_to_level0(std::move(memtable)));
+                assert(m_pLevels->flush_to_level0(std::move(memtable)));
             }
             return;
         }
@@ -182,21 +159,34 @@ void lsmtree_t::memtable_flush_task(std::stop_token stoken) noexcept
             // TODO: Assert will crash the program, maybe we should
             // return an error code?
             absl::WriterMutexLock lock{&m_mutex};
-            assert(m_levels.flush_to_level0(std::move(memtable.value())));
+            assert(m_pLevels->flush_to_level0(std::move(memtable.value())));
         }
     }
 }
 
-void lsmtree_t::swap(lsmtree_t &other) noexcept
+void lsmtree_t::move_from(lsmtree_t &&other) noexcept
 {
-    using std::swap;
+    m_pConfig = std::move(other.m_pConfig);
+    m_table = std::move(other.m_table);
+    m_pManifest = std::move(other.m_pManifest);
+    m_pLevels = std::move(other.m_pLevels);
 
-    swap(m_pConfig, other.m_pConfig);
-    swap(m_table, other.m_table);
-    swap(m_pManifest, other.m_pManifest);
-    swap(m_levels, other.m_levels);
-    swap(m_flushing_thread, other.m_flushing_thread);
-    swap(m_flushing_queue, other.m_flushing_queue);
+    other.m_flushing_thread.request_stop();
+    if (other.m_flushing_thread.joinable())
+    {
+        spdlog::debug("Waiting for flushing thread to finish");
+        other.m_flushing_thread.join();
+    }
+    else
+    {
+        spdlog::debug("Flushing thread is not joinable, skipping join");
+    }
+
+    // Start a new flushing thread for the moved object
+    m_flushing_queue = std::move(other.m_flushing_queue);
+    m_flushing_thread =
+        std::jthread([this](std::stop_token stoken) { memtable_flush_task(stoken); });
+    spdlog::debug("Flushing thread started for moved lsmtree_t object");
 }
 
 auto lsmtree_builder_t::build(
@@ -267,7 +257,7 @@ auto lsmtree_builder_t::build_memtable_from_wal(
 
 auto lsmtree_builder_t::build_levels_from_manifest(
     config::shared_ptr_t pConfig, db::manifest::shared_ptr_t pManifest
-) const noexcept -> std::optional<levels::levels_t>
+) const noexcept -> std::optional<std::unique_ptr<levels::levels_t>>
 {
     assert(pManifest);
 
@@ -276,7 +266,7 @@ auto lsmtree_builder_t::build_levels_from_manifest(
 
     pManifest->disable();
 
-    levels::levels_t levels{pConfig, pManifest};
+    auto pLevels = std::make_unique<levels::levels_t>(pConfig, pManifest);
 
     const auto &records{pManifest->records()};
     for (const auto &record : records)
@@ -291,7 +281,7 @@ auto lsmtree_builder_t::build_levels_from_manifest(
                     {
                     case segment_operation_k::add_segment_k:
                     {
-                        levels.level(record.level)
+                        pLevels->level(record.level)
                             ->emplace(
                                 segments::factories::lsmtree_segment_factory(
                                     record.name,
@@ -312,12 +302,13 @@ auto lsmtree_builder_t::build_levels_from_manifest(
                     }
                     case segment_operation_k::remove_segment_k:
                     {
-                        levels.level(record.level)->purge(record.name);
+                        pLevels->level(record.level)->purge(record.name);
                         spdlog::debug(
                             "Segment {} removed from level {} during recovery",
                             record.name,
                             record.level
                         );
+
                         break;
                     }
                     default:
@@ -325,6 +316,7 @@ auto lsmtree_builder_t::build_levels_from_manifest(
                         spdlog::error(
                             "Unknown segment operation={}", static_cast<std::int32_t>(record.op)
                         );
+
                         break;
                     }
                     }
@@ -335,7 +327,7 @@ auto lsmtree_builder_t::build_levels_from_manifest(
                     {
                     case level_operation_k::add_level_k:
                     {
-                        levels.level();
+                        pLevels->level();
                         spdlog::debug("Level {} created during recovery", record.level);
                         break;
                     }
@@ -379,12 +371,12 @@ auto lsmtree_builder_t::build_levels_from_manifest(
     }
 
     spdlog::debug("Restoring levels");
-    levels.restore();
+    pLevels->restore();
     spdlog::debug("Recovery finished");
 
     pManifest->enable();
 
-    return std::make_optional<levels::levels_t>(std::move(levels));
+    return std::make_optional<std::unique_ptr<levels::levels_t>>(std::move(pLevels));
 }
 
 } // namespace structures::lsmtree

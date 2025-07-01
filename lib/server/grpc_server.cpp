@@ -17,7 +17,7 @@ namespace server::grpc_communication
 {
 
 tinykvpp_service_impl_t::tinykvpp_service_impl_t(db::shared_ptr_t db)
-    : m_database(db)
+    : m_database(std::move(db))
 {
 }
 
@@ -29,21 +29,21 @@ auto tinykvpp_service_impl_t::Put(
 
     try
     {
-        std::string status;
-        if (!m_database->put(
-                structures::lsmtree::key_t{pRequest->key()},
-                structures::lsmtree::value_t{pRequest->value()},
-                db::db_put_context_k::replicate_k
-            ))
+        const bool success = m_database->put(
+            db::db_t::key_t{pRequest->key()},
+            db::db_t::value_t{pRequest->value()},
+            db::db_put_context_k::replicate_k
+        );
+
+        if (!success)
         {
-            status = std::string("Request failed");
+            spdlog::warn("Put operation failed for key: {}", pRequest->key());
+            pResponse->set_status("FAILED");
         }
         else
         {
-            status = std::string("OK");
+            pResponse->set_status("OK");
         }
-
-        pResponse->set_status(status);
         return grpc::Status::OK;
     }
     catch (std::exception &e)
@@ -61,7 +61,7 @@ auto tinykvpp_service_impl_t::Get(
     (void)pContext;
     try
     {
-        const auto &record = m_database->get(structures::lsmtree::key_t{pRequest->key()});
+        const auto &record = m_database->get(db::db_t::key_t{pRequest->key()});
         if (record)
         {
             pResponse->set_value(record.value().m_value.m_value);

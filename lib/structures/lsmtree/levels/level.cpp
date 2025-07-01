@@ -1,10 +1,3 @@
-#include "level.h"
-#include "structures/lsmtree/lsmtree_types.h"
-#include "structures/lsmtree/segments/lsmtree_segment_factory.h"
-#include "structures/lsmtree/segments/segment_storage.h"
-#include "structures/lsmtree/segments/helpers.h"
-#include "structures/memtable/memtable.h"
-
 #include <algorithm>
 #include <cassert>
 #include <iterator>
@@ -15,8 +8,14 @@
 #include <cmath>
 
 #include <spdlog/spdlog.h>
-
 #include <absl/debugging/stacktrace.h>
+
+#include "level.h"
+#include "structures/lsmtree/lsmtree_types.h"
+#include "structures/lsmtree/segments/lsmtree_segment_factory.h"
+#include "structures/lsmtree/segments/segment_storage.h"
+#include "structures/lsmtree/segments/helpers.h"
+#include "structures/memtable/memtable.h"
 
 namespace structures::lsmtree::level
 {
@@ -27,18 +26,20 @@ using segment_operation_k = db::manifest::manifest_t::segment_record_t::operatio
 
 template <typename T, typename U = T> struct IteratorCompare
 {
-    auto
-    operator()(const std::pair<typename T::const_iterator, typename T::const_iterator> &lhs,
-               const std::pair<typename U::const_iterator, typename U::const_iterator> &rhs) const
-        -> bool
+    auto operator()(
+        const std::pair<typename T::const_iterator, typename T::const_iterator> &lhs,
+        const std::pair<typename U::const_iterator, typename U::const_iterator> &rhs
+    ) const -> bool
     {
         return *lhs.first > *rhs.first;
     }
 };
 
-level_t::level_t(const level_index_type_t   levelIndex,
-                 config::shared_ptr_t       pConfig,
-                 db::manifest::shared_ptr_t manifest) noexcept
+level_t::level_t(
+    const level_index_type_t   levelIndex,
+    config::shared_ptr_t       pConfig,
+    db::manifest::shared_ptr_t manifest
+) noexcept
     : m_levelIndex{levelIndex},
       m_pConfig{std::move(pConfig)},
       m_manifest{std::move(std::move(manifest))}
@@ -59,8 +60,11 @@ void level_t::emplace(const lsmtree::segments::regular_segment::shared_ptr_t &pS
         m_storage.emplace(pSegment, segments::storage::key_range_comparator_t{});
     }
 
-    ASSERT(m_manifest->add(db::manifest::manifest_t::segment_record_t{
-        .op = segment_operation_k::add_segment_k, .name = pSegment->get_name(), .level = index()}));
+    ASSERT(m_manifest->add(
+        db::manifest::manifest_t::segment_record_t{
+            .op = segment_operation_k::add_segment_k, .name = pSegment->get_name(), .level = index()
+        }
+    ));
 }
 
 auto level_t::segment(memtable::memtable_t memtable) -> segments::regular_segment::shared_ptr_t
@@ -78,7 +82,8 @@ auto level_t::segment(memtable::memtable_t memtable, const std::string &name)
     // Generate a path for the segment, including its name, then based on @type
     // and @pMemtable create a segment
     auto pSegment{segments::factories::lsmtree_segment_factory(
-        name, helpers::segment_path(m_pConfig->datadir_path(), name), std::move(memtable))};
+        name, helpers::segment_path(m_pConfig->datadir_path(), name), std::move(memtable)
+    )};
     assert(pSegment);
 
     // Add the segment to the storage and flush it to disk
@@ -96,10 +101,12 @@ auto level_t::record(const key_t &key) const noexcept
     {
         if (const auto &result = pSegment->record(key); !result.empty())
         {
-            spdlog::debug("Found record {} at level {} in segment {}",
-                          key.m_key,
-                          index(),
-                          pSegment->get_name());
+            spdlog::debug(
+                "Found record {} at level {} in segment {}",
+                key.m_key,
+                index(),
+                pSegment->get_name()
+            );
             return result[0];
         }
     }
@@ -121,11 +128,14 @@ auto level_t::compact() const noexcept -> segments::regular_segment::shared_ptr_
         return nullptr;
     }
 
-    std::priority_queue<std::pair<typename memtable::memtable_t::const_iterator,
-                                  typename memtable::memtable_t::const_iterator>,
-                        std::vector<std::pair<typename memtable::memtable_t::const_iterator,
-                                              typename memtable::memtable_t::const_iterator>>,
-                        IteratorCompare<memtable_t, memtable_t>>
+    std::priority_queue<
+        std::pair<
+            typename memtable::memtable_t::const_iterator,
+            typename memtable::memtable_t::const_iterator>,
+        std::vector<std::pair<
+            typename memtable::memtable_t::const_iterator,
+            typename memtable::memtable_t::const_iterator>>,
+        IteratorCompare<memtable_t, memtable_t>>
         minHeap;
 
     for (const auto &segment : m_storage)
@@ -165,7 +175,8 @@ auto level_t::compact() const noexcept -> segments::regular_segment::shared_ptr_
     // result
     auto name{fmt::format("{}_{}_compacted", helpers::segment_name(), index())};
     return segments::factories::lsmtree_segment_factory(
-        name, helpers::segment_path(m_pConfig->datadir_path(), name), mergedMemtable);
+        name, helpers::segment_path(m_pConfig->datadir_path(), name), mergedMemtable
+    );
 }
 
 void level_t::merge(const segments::regular_segment::shared_ptr_t &pSegment) noexcept
@@ -181,9 +192,12 @@ void level_t::merge(const segments::regular_segment::shared_ptr_t &pSegment) noe
         m_storage | std::views::filter(
                         [pSegment](const auto &currentSegment)
                         {
-                            return !(currentSegment->max().value() < pSegment->min().value() ||
-                                     currentSegment->min().value() > pSegment->max().value());
-                        });
+                            return !(
+                                currentSegment->max().value() < pSegment->min().value() ||
+                                currentSegment->min().value() > pSegment->max().value()
+                            );
+                        }
+                    );
 
     // Calculate total number of records in memtables overlapping with @pSegment
     std::size_t overlappingSegmentsRecordsCount{0};
@@ -202,15 +216,18 @@ void level_t::merge(const segments::regular_segment::shared_ptr_t &pSegment) noe
         overlappingSegmentsRecords.insert(
             std::end(overlappingSegmentsRecords),
             std::make_move_iterator(std::begin(currentSegmentRecords)),
-            std::make_move_iterator(std::end(currentSegmentRecords)));
+            std::make_move_iterator(std::end(currentSegmentRecords))
+        );
     }
 
     // Merge overlapping memtables and segments
     std::vector<memtable::memtable_t::record_t> mergedMemtable;
-    std::ranges::merge(inMemtableRecords,
-                       overlappingSegmentsRecords,
-                       std::back_inserter(mergedMemtable),
-                       std::less<>{});
+    std::ranges::merge(
+        inMemtableRecords,
+        overlappingSegmentsRecords,
+        std::back_inserter(mergedMemtable),
+        std::less<>{}
+    );
 
     // TODO(lnikon): Make this parameter configurable. Use measurement
     // units(mb).
@@ -226,8 +243,10 @@ void level_t::merge(const segments::regular_segment::shared_ptr_t &pSegment) noe
             auto name{fmt::format("{}_{}", helpers::segment_name(), index())};
             newSegments.emplace(
                 segments::factories::lsmtree_segment_factory(
-                    name, helpers::segment_path(m_pConfig->datadir_path(), name), newMemtable),
-                segments::storage::key_range_comparator_t{});
+                    name, helpers::segment_path(m_pConfig->datadir_path(), name), newMemtable
+                ),
+                segments::storage::key_range_comparator_t{}
+            );
             newMemtable = memtable::memtable_t{};
         }
     }
@@ -238,13 +257,16 @@ void level_t::merge(const segments::regular_segment::shared_ptr_t &pSegment) noe
         auto name{fmt::format("{}_{}", helpers::segment_name(), index())};
         newSegments.emplace(
             segments::factories::lsmtree_segment_factory(
-                name, helpers::segment_path(m_pConfig->datadir_path(), name), newMemtable),
-            segments::storage::key_range_comparator_t{});
+                name, helpers::segment_path(m_pConfig->datadir_path(), name), newMemtable
+            ),
+            segments::storage::key_range_comparator_t{}
+        );
     }
 
     // Delete overlapping segments after the merging process is complete
-    std::ranges::for_each(overlappingSegmentsView,
-                          [this](auto pSegment) { this->purge(pSegment); });
+    std::ranges::for_each(
+        overlappingSegmentsView, [this](auto pSegment) { this->purge(pSegment); }
+    );
 
     // Flush new segments
     for (const auto &pNewCurrentLevelSegment : newSegments)
@@ -264,9 +286,12 @@ void level_t::purge() noexcept
         pSegment->remove_from_disk();
 
         ASSERT(m_manifest->add(
-            db::manifest::manifest_t::segment_record_t{.op = segment_operation_k::remove_segment_k,
-                                                       .name = pSegment->get_name(),
-                                                       .level = idx}));
+            db::manifest::manifest_t::segment_record_t{
+                .op = segment_operation_k::remove_segment_k,
+                .name = pSegment->get_name(),
+                .level = idx
+            }
+        ));
     }
     m_storage.clear();
 }
@@ -280,7 +305,8 @@ auto level_t::purge(const segments::types::name_t &segmentName) noexcept -> void
     else
     {
         spdlog::warn(
-            "Unable to find segment with name {} at level {} to purge", segmentName, index());
+            "Unable to find segment with name {} at level {} to purge", segmentName, index()
+        );
     }
 }
 
@@ -292,9 +318,12 @@ void level_t::purge(const segments::regular_segment::shared_ptr_t &pSegment) noe
     spdlog::debug("Removing segment {} from level {}", pSegment->get_name(), index());
 
     ASSERT(m_manifest->add(
-        db::manifest::manifest_t::segment_record_t{.op = segment_operation_k::remove_segment_k,
-                                                   .name = pSegment->get_name(),
-                                                   .level = index()}));
+        db::manifest::manifest_t::segment_record_t{
+            .op = segment_operation_k::remove_segment_k,
+            .name = pSegment->get_name(),
+            .level = index()
+        }
+    ));
 
     pSegment->remove_from_disk();
     m_storage.remove(pSegment);

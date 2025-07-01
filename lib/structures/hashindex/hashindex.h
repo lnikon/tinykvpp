@@ -1,30 +1,32 @@
 #pragma once
 
-#include <structures/lsmtree/lsmtree_types.h>
-
-#include <cstdint>
 #include <map>
+#include <cstdint>
+
+#include "structures/memtable/memtable.h"
 
 namespace structures::hashindex
 {
 
 // TODO(lnikon): Benchmark with flat_*maps to understand the
 // performance.
-class hashindex_t
+class hashindex_t final
 {
   public:
+    using key_t = structures::memtable::memtable_t::record_t::key_t;
+    using record_t = structures::memtable::memtable_t::record_t;
     using offset_t = std::uint64_t;
-    using storage_t = std::multimap<structures::lsmtree::key_t, offset_t>;
+    using storage_t = std::multimap<key_t, offset_t>;
     using iterator = storage_t::iterator;
 
     [[nodiscard]] auto begin() -> iterator;
     [[nodiscard]] auto end() -> iterator;
 
-    void               emplace(structures::lsmtree::record_t key, std::size_t length);
+    void               emplace(record_t record, std::size_t length);
     [[nodiscard]] auto empty() const -> bool;
-    [[nodiscard]] auto offset(const structures::lsmtree::key_t &key) const -> std::vector<offset_t>;
+    [[nodiscard]] auto offset(const key_t &key) const -> std::vector<offset_t>;
 
-    auto num_of_bytes_used() const noexcept -> std::size_t;
+    [[nodiscard]] auto num_of_bytes_used() const noexcept -> std::size_t;
 
   private:
     storage_t   m_offsets;

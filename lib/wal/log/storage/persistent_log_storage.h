@@ -110,6 +110,15 @@ class persistent_log_storage_impl_t
         return m_inMemoryLog.size();
     }
 
+    // TODO(lnikon): Consider safer approach e.g. in backend storage:
+    // 1. Create a new file, fill it with the data
+    // 2. Rename current file
+    // 3. Rename the new file to be the current
+    // 4. Rename the old current
+    // For in-memory log(perform swap idiom):
+    // 1. Create a new vector, fill it with the data
+    // 2. Then swap vectors
+    // 3. Let the RAII handle the old one
     [[nodiscard]] auto reset_last_n(std::size_t n) -> bool
     {
         const auto inMemoryLogSize{m_inMemoryLog.size()};

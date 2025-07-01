@@ -8,6 +8,7 @@
 #include "levels.h"
 #include "../segments/helpers.h"
 #include "db/manifest/manifest.h"
+#include "concurrency/helpers.h"
 
 namespace structures::lsmtree::levels
 {
@@ -27,6 +28,22 @@ levels_t::levels_t(config::shared_ptr_t pConfig, db::manifest::shared_ptr_t pMan
     {
         level();
     }
+}
+
+levels_t::levels_t(levels_t &&other) noexcept
+{
+    absl::WriterMutexLock otherLock{&other.m_mutex};
+    move_from(std::move(other));
+}
+
+auto levels_t::operator=(levels_t &&other) noexcept -> levels_t &
+{
+    if (this != &other)
+    {
+        concurrency::absl_dual_mutex_lock_guard lock{m_mutex, other.m_mutex};
+        move_from(std::move(other));
+    }
+    return *this;
 }
 
 levels_t::~levels_t() noexcept
@@ -217,6 +234,25 @@ void levels_t::compaction_task(std::stop_token stoken) noexcept
             continue;
         }
     }
+}
+
+void levels_t::move_from(levels_t &&other) noexcept
+{
+    m_pConfig = std::move(other.m_pConfig);
+    m_pManifest = std::move(other.m_pManifest);
+    m_levels = std::move(other.m_levels);
+
+    other.m_compaction_thread.request_stop();
+    if (other.m_compaction_thread.joinable())
+    {
+        spdlog::debug("Waiting for compaction thread to finish");
+        other.m_compaction_thread.join();
+    }
+    else
+    {
+        spdlog::debug("Compaction thread is not joinable, skipping join");
+    }
+    m_compaction_thread = std::jthread([this](std::stop_token stoken) { compaction_task(stoken); });
 }
 
 } // namespace structures::lsmtree::levels

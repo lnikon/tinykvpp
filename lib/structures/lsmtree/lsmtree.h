@@ -2,15 +2,14 @@
 
 #include <memory>
 #include <optional>
-#include <atomic>
 #include <sys/types.h>
 
 #include <spdlog/spdlog.h>
+#include <absl/synchronization/mutex.h>
 
 #include "db/manifest/manifest.h"
 #include "wal/wal.h"
 #include "structures/lsmtree/levels/levels.h"
-#include "structures/lsmtree/lsmtree_types.h"
 #include "concurrency/thread_safe_queue.h"
 
 namespace structures::lsmtree
@@ -39,11 +38,14 @@ enum class lsmtree_status_k : uint8_t
 class lsmtree_t final
 {
   public:
+    using record_t = structures::memtable::memtable_t::record_t;
+    using key_t = record_t::key_t;
+
     explicit lsmtree_t(
-        config::shared_ptr_t       pConfig,
-        memtable::memtable_t       memtable,
-        db::manifest::shared_ptr_t pManifest,
-        levels::levels_t           levels
+        config::shared_ptr_t              pConfig,
+        memtable::memtable_t              memtable,
+        db::manifest::shared_ptr_t        pManifest,
+        std::unique_ptr<levels::levels_t> pLevels
     ) noexcept;
 
     lsmtree_t() = delete;
@@ -61,17 +63,15 @@ class lsmtree_t final
 
   private:
     void memtable_flush_task(std::stop_token stoken) noexcept;
-
-    void swap(lsmtree_t &other) noexcept;
+    void move_from(lsmtree_t &&other) noexcept;
 
     config::shared_ptr_t m_pConfig;
 
     // TODO(lnikon): Add absl:: thread guards!
-    absl::Mutex                         m_mutex;
-    std::optional<memtable::memtable_t> m_table;
-    db::manifest::shared_ptr_t          m_pManifest;
-    levels::levels_t                    m_levels;
-
+    absl::Mutex                                            m_mutex;
+    std::optional<memtable::memtable_t> m_table            ABSL_GUARDED_BY(m_mutex);
+    db::manifest::shared_ptr_t m_pManifest                 ABSL_GUARDED_BY(m_mutex);
+    std::unique_ptr<levels::levels_t> m_pLevels            ABSL_GUARDED_BY(m_mutex);
     std::jthread                                           m_flushing_thread;
     concurrency::thread_safe_queue_t<memtable::memtable_t> m_flushing_queue;
 };
@@ -93,7 +93,7 @@ struct lsmtree_builder_t final
 
     [[nodiscard]] auto build_levels_from_manifest(
         config::shared_ptr_t pConfig, db::manifest::shared_ptr_t pManifest
-    ) const noexcept -> std::optional<levels::levels_t>;
+    ) const noexcept -> std::optional<std::unique_ptr<levels::levels_t>>;
 };
 
 } // namespace structures::lsmtree

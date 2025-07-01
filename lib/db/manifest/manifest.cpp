@@ -20,17 +20,11 @@ auto manifest_t::path() const noexcept -> fs::path_t
 
 auto manifest_t::add(record_t info) -> bool
 {
-    if (!m_enabled)
+    return m_enabled ? m_wal.add(std::move(info)) : [this]()
     {
         spdlog::info("Manifest at {} is disabled - skipping record addition", m_path.c_str());
-        if (spdlog::get_level() == spdlog::level::debug)
-        {
-            spdlog::debug("Skipped record details");
-        }
-        return true;
-    }
-
-    return m_wal.add(info);
+        return false;
+    }();
 }
 
 auto manifest_t::records() const noexcept -> std::vector<record_t>

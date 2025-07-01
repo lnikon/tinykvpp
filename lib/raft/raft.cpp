@@ -67,9 +67,9 @@ auto raft_node_grpc_client_t::appendEntries(
     const AppendEntriesRequest &request, AppendEntriesResponse *response
 ) -> bool
 {
-    const auto          RPC_TIMEOUT = std::chrono::seconds(generate_raft_timeout());
+    const auto          rpc_timeout_duration = std::chrono::milliseconds(generate_raft_timeout());
     grpc::ClientContext context;
-    context.set_deadline(std::chrono::system_clock::now() + RPC_TIMEOUT);
+    context.set_deadline(std::chrono::system_clock::now() + rpc_timeout_duration);
     grpc::Status status = m_stub->AppendEntries(&context, request, response);
     if (!status.ok())
     {
@@ -91,10 +91,10 @@ auto raft_node_grpc_client_t::requestVote(
     const RequestVoteRequest &request, RequestVoteResponse *response
 ) -> bool
 {
-    const auto RPC_TIMEOUT = std::chrono::seconds(generate_raft_timeout());
+    const auto rpc_timeout_duration = std::chrono::milliseconds(generate_raft_timeout());
 
     grpc::ClientContext context;
-    context.set_deadline(std::chrono::system_clock::now() + RPC_TIMEOUT);
+    context.set_deadline(std::chrono::system_clock::now() + rpc_timeout_duration);
 
     grpc::Status status = m_stub->RequestVote(&context, request, response);
     if (!status.ok())
@@ -117,10 +117,10 @@ auto raft_node_grpc_client_t::requestVote(
     const ReplicateEntriesRequest &request, ReplicateEntriesResponse *response
 ) -> bool
 {
-    const auto RPC_TIMEOUT = std::chrono::seconds(generate_raft_timeout());
+    const auto rpc_timeout_duration = std::chrono::milliseconds(generate_raft_timeout());
 
     grpc::ClientContext context;
-    context.set_deadline(std::chrono::system_clock::now() + RPC_TIMEOUT);
+    context.set_deadline(std::chrono::system_clock::now() + rpc_timeout_duration);
 
     grpc::Status status = m_stub->Replicate(&context, request, response);
     if (!status.ok())
@@ -690,7 +690,7 @@ auto consensus_module_t::waitForHeartbeat(std::stop_token token) -> bool
 }
 
 void consensus_module_t::sendAppendEntriesRPC(
-    raft_node_grpc_client_t &client, std::vector<LogEntry> logEntries, bool heartbeat /* = false */
+    raft_node_grpc_client_t &client, std::vector<LogEntry> logEntries
 )
 {
     // TODO(lnikon): Implement upper bound for the number of retries
@@ -1169,7 +1169,6 @@ auto consensus_module_t::restorePersistentState() -> bool
         }
 
         ifs >> m_commitIndex >> m_votedFor;
-        m_votedFor = 0;
         spdlog::info(
             "Node={} restored commitIndex={} and votedFor={}",
             m_config.m_id,

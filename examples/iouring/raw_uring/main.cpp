@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <print>
 #include <liburing.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -106,12 +107,14 @@ auto app_setup_uring(struct submitter *s) -> int
         cring_sz = sring_sz;
     }
 
-    sq_ptr = mmap(0,
-                  sring_sz,
-                  PROT_READ | PROT_WRITE,
-                  MAP_SHARED | MAP_POPULATE,
-                  s->ring_fd,
-                  IORING_OFF_SQ_RING);
+    sq_ptr = mmap(
+        0,
+        sring_sz,
+        PROT_READ | PROT_WRITE,
+        MAP_SHARED | MAP_POPULATE,
+        s->ring_fd,
+        IORING_OFF_SQ_RING
+    );
     if (sq_ptr == MAP_FAILED)
     {
         perror("mmap");
@@ -124,12 +127,14 @@ auto app_setup_uring(struct submitter *s) -> int
     }
     else
     {
-        cq_ptr = mmap(0,
-                      cring_sz,
-                      PROT_READ | PROT_WRITE,
-                      MAP_SHARED | MAP_POPULATE,
-                      s->ring_fd,
-                      IORING_OFF_CQ_RING);
+        cq_ptr = mmap(
+            0,
+            cring_sz,
+            PROT_READ | PROT_WRITE,
+            MAP_SHARED | MAP_POPULATE,
+            s->ring_fd,
+            IORING_OFF_CQ_RING
+        );
         if (cq_ptr == MAP_FAILED)
         {
             perror("mmap");
@@ -144,12 +149,14 @@ auto app_setup_uring(struct submitter *s) -> int
     sring->flags = (unsigned char *)sq_ptr + p.sq_off.flags;
     sring->array = (unsigned char *)sq_ptr + p.sq_off.array;
 
-    s->sqes = (io_uring_sqe *)mmap(0,
-                                   p.sq_entries * sizeof(struct io_uring_sqe),
-                                   PROT_READ | PROT_WRITE,
-                                   MAP_SHARED | MAP_POPULATE,
-                                   s->ring_fd,
-                                   IORING_OFF_SQES);
+    s->sqes = (io_uring_sqe *)mmap(
+        0,
+        p.sq_entries * sizeof(struct io_uring_sqe),
+        PROT_READ | PROT_WRITE,
+        MAP_SHARED | MAP_POPULATE,
+        s->ring_fd,
+        IORING_OFF_SQES
+    );
     if (s->sqes == MAP_FAILED)
     {
         perror("mmap");
@@ -382,7 +389,7 @@ int main(int argc, char *argv[])
 
     if (app_setup_uring(s))
     {
-        fprintf(stderr, "Unable to setup uring!\n");
+        std::println(stderr, "Unable to setup uring!");
         return 1;
     }
 
@@ -391,7 +398,7 @@ int main(int argc, char *argv[])
         if (submit_to_sq(argv[i], s))
         {
             fprintf(stderr, "Error reading file\n");
-            return 0;
+            return 1;
         }
         read_from_cq(s);
     }

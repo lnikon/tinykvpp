@@ -1,12 +1,11 @@
+#include <sstream>
+
+#include <spdlog/spdlog.h>
+
 #include "db.h"
 #include "db/manifest/manifest.h"
 #include "memtable.h"
 #include "raft/raft.h"
-#include "wal.h"
-
-#include <spdlog/spdlog.h>
-#include <sstream>
-#include <string>
 
 namespace db
 {
@@ -18,23 +17,24 @@ db_t::db_t(
     lsmtree_ptr_t                             pLsmtree,
     std::shared_ptr<raft::consensus_module_t> pConsensusModule
 ) noexcept
-    : m_config{config},
+    : m_config{std::move(config)},
       m_pWal{std::move(pWal)},
       m_pManifest{std::move(pManifest)},
-      m_pLsmtree{std::move(pLsmtree)},
+      m_pLSMtree{std::move(pLsmtree)},
       m_pConsensusModule{std::move(pConsensusModule)}
 {
     assert(m_config);
     assert(m_pManifest);
     assert(m_pWal);
-    assert(m_pLsmtree);
+    assert(m_pLSMtree);
 }
 
 db_t::db_t(db_t &&other) noexcept
     : m_config{std::move(other.m_config)},
       m_pWal{std::move(other.m_pWal)},
       m_pManifest{std::move(other.m_pManifest)},
-      m_pLsmtree{std::move(other.m_pLsmtree)}
+      m_pLSMtree{std::move(other.m_pLSMtree)},
+      m_pConsensusModule{std::move(other.m_pConsensusModule)}
 {
 }
 
@@ -54,11 +54,9 @@ auto db_t::open() -> bool
 }
 
 // Notes(lnikon): Use the same serialized record both in WAL and Raft consensus module
-auto db_t::put(
-    structures::lsmtree::key_t key, structures::lsmtree::value_t value, db_put_context_k context
-) noexcept -> bool
+auto db_t::put(key_t key, value_t value, db_put_context_k context) noexcept -> bool
 {
-    return put(record_t{key, value}, context);
+    return put(record_t{std::move(key), std::move(value)}, context);
 }
 
 [[nodiscard]] auto db_t::put(record_t record, db_put_context_k context) noexcept -> bool
@@ -105,7 +103,6 @@ auto db_t::put(
             );
         }
     }
-
     else
     {
         spdlog::info(
@@ -131,7 +128,7 @@ auto db_t::put(
     {
         if (context == db_put_context_k::do_not_replicate_k)
         {
-            spdlog::info(
+            spdlog::debug(
                 "db_t::put: Skipping replication for entry: {} {}",
                 record.m_key.m_key,
                 record.m_value.m_value
@@ -141,7 +138,7 @@ auto db_t::put(
         {
             if (m_pConsensusModule->getStateSafe() == NodeState::LEADER)
             {
-                spdlog::info(
+                spdlog::debug(
                     "db_t::put: Forwarding entry: {} {}", record.m_key.m_key, record.m_value.m_value
                 );
                 std::stringstream sstream;
@@ -160,7 +157,7 @@ auto db_t::put(
         }
         else
         {
-            spdlog::info(
+            spdlog::debug(
                 "db_t::put: Not replicating entry: {} {}",
                 record.m_key.m_key,
                 record.m_value.m_value
@@ -170,18 +167,18 @@ auto db_t::put(
 
     else
     {
-        spdlog::info(
+        spdlog::debug(
             "db_t::put: Consensus module is not set, skipping replication for entry: {} {}",
             record.m_key.m_key,
             record.m_value.m_value
         );
     }
 
-    spdlog::info(
+    spdlog::debug(
         "db_t::put: Adding entry into lsm: {} {}", record.m_key.m_key, record.m_value.m_value
     );
 
-    switch (m_pLsmtree->put(std::move(record)))
+    switch (m_pLSMtree->put(std::move(record)))
     {
     case structures::lsmtree::lsmtree_status_k::ok_k:
     {
@@ -205,11 +202,10 @@ auto db_t::put(
     return true;
 }
 
-auto db_t::get(const structures::lsmtree::key_t &key)
-    -> std::optional<structures::memtable::memtable_t::record_t>
+auto db_t::get(const key_t &key) -> std::optional<record_t>
 {
     // TODO(lnikon): Should lock a ReadMutex here!
-    return m_pLsmtree->get(key);
+    return m_pLSMtree->get(key);
 }
 
 auto db_t::config() const noexcept -> config::shared_ptr_t
@@ -261,7 +257,8 @@ void db_t::swap(db_t &other) noexcept
     swap(m_config, other.m_config);
     swap(m_pManifest, other.m_pManifest);
     swap(m_pWal, other.m_pWal);
-    swap(m_pLsmtree, other.m_pLsmtree);
+    swap(m_pLSMtree, other.m_pLSMtree);
+    swap(m_pConsensusModule, other.m_pConsensusModule);
 }
 
 } // namespace db

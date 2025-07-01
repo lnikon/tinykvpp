@@ -13,6 +13,9 @@ namespace types = lsmtree::segments::types;
 class regular_segment_t final
 {
   public:
+    using key_t = structures::memtable::memtable_t::record_t::key_t;
+    using record_t = structures::memtable::memtable_t::record_t;
+
     regular_segment_t(fs::path_t path, types::name_t name, memtable::memtable_t memtable) noexcept;
 
     regular_segment_t(const regular_segment_t &) = delete;
@@ -23,14 +26,14 @@ class regular_segment_t final
 
     ~regular_segment_t() = default;
 
-    [[nodiscard]] auto record(const lsmtree::key_t &key)
+    [[nodiscard]] auto record(const key_t &key)
         -> std::vector<std::optional<memtable::memtable_t::record_t>>;
 
     [[nodiscard]] auto record(const hashindex::hashindex_t::offset_t &offset)
         -> std::optional<memtable::memtable_t::record_t>;
 
     [[nodiscard]] auto get_name() const -> types::name_t;
-    [[nodiscard]] auto get_path() const -> types::path_t;
+    [[nodiscard]] auto get_path() const -> fs::path_t;
 
     auto memtable() -> std::optional<memtable::memtable_t> &;
     auto moved_memtable() -> std::optional<memtable::memtable_t>;

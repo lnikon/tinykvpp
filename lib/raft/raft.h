@@ -171,9 +171,7 @@ class consensus_module_t final : public RaftService::Service
     // ---- Heartbeat ----
     void runHeartbeatThread(std::stop_token token);
     auto waitForHeartbeat(std::stop_token token) -> bool;
-    void sendAppendEntriesRPC(
-        raft_node_grpc_client_t &client, std::vector<LogEntry> logEntries, bool heartbeat = false
-    );
+    void sendAppendEntriesRPC(raft_node_grpc_client_t &client, std::vector<LogEntry> logEntries);
     auto onSendAppendEntriesRPC(
         raft_node_grpc_client_t     &client,
         const AppendEntriesResponse &response,

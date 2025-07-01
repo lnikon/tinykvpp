@@ -36,7 +36,7 @@ template <typename TEntry> class wal_t
 
     ~wal_t() = default;
 
-    [[nodiscard]] auto add(const wal_entry_t &rec) noexcept -> bool;
+    [[nodiscard]] auto add(wal_entry_t rec) noexcept -> bool;
     [[nodiscard]] auto records() const noexcept -> std::vector<wal_entry_t>;
     [[nodiscard]] auto read(std::size_t index) const noexcept -> std::optional<wal_entry_t>;
 
@@ -86,8 +86,7 @@ template <typename TEntry> auto wal_t<TEntry>::operator=(wal_t &&other) noexcept
     return *this;
 }
 
-template <typename TEntry>
-auto wal_t<TEntry>::add(const wal_t<TEntry>::wal_entry_t &rec) noexcept -> bool
+template <typename TEntry> auto wal_t<TEntry>::add(wal_t<TEntry>::wal_entry_t rec) noexcept -> bool
 {
     return m_log.append(rec);
 }
