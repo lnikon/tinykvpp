@@ -11,7 +11,7 @@
     "wal": {
         "enable": true,
         "filename": "wal",
-        "storageType": "replicated"
+        "storageType": "persistent"
     },
     "lsm": {
         "flushThreshold": 1024,

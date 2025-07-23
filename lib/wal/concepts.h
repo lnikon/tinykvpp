@@ -3,7 +3,7 @@
 #include <optional>
 #include <string>
 
-namespace wal::log
+namespace wal
 {
 
 template <typename T>
@@ -18,14 +18,16 @@ concept TStorageBackendConcept =
 
 // A common interface shared between all log storages.
 template <template <typename...> class TStorage, typename... Ts>
-concept TLogStorageConcept = requires(const TStorage<Ts...>                const_storage,
-                                      TStorage<Ts...>                      storage,
-                                      typename TStorage<Ts...>::entry_type entry,
-                                      std::size_t                          index,
-                                      std::size_t                          n) {
+concept TLogStorageConcept = requires(
+    const TStorage<Ts...>                  const_storage,
+    TStorage<Ts...>                        storage,
+    typename TStorage<Ts...>::entry_type_t entry,
+    std::size_t                            index,
+    std::size_t                            n
+) {
     {
         const_storage.read(index)
-    } -> std::convertible_to<std::optional<typename TStorage<Ts...>::entry_type>>;
+    } -> std::convertible_to<std::optional<typename TStorage<Ts...>::entry_type_t>>;
     { storage.reset() } -> std::convertible_to<bool>;
     { const_storage.size() } -> std::same_as<std::size_t>;
     { storage.append(entry) } -> std::convertible_to<bool>;
@@ -37,4 +39,4 @@ concept TLogStorageConcept = requires(const TStorage<Ts...>                const
 template <template <typename> class TStorage, typename TEntry = std::string>
 concept TLogConcept = TLogStorageConcept<TStorage, TEntry>;
 
-} // namespace wal::log
+} // namespace wal

@@ -190,9 +190,7 @@ void lsmtree_t::move_from(lsmtree_t &&other) noexcept
 }
 
 auto lsmtree_builder_t::build(
-    config::shared_ptr_t                pConfig,
-    db::manifest::shared_ptr_t          pManifest,
-    wal::shared_ptr_t<wal::wal_entry_t> pWal
+    config::shared_ptr_t pConfig, db::manifest::shared_ptr_t pManifest, wal_t pWal
 ) const -> std::shared_ptr<lsmtree_t>
 {
     auto memtable{build_memtable_from_wal(std::move(pWal))};
@@ -217,9 +215,8 @@ auto lsmtree_builder_t::build(
     );
 }
 
-auto lsmtree_builder_t::build_memtable_from_wal(
-    wal::shared_ptr_t<wal::wal_entry_t> pWal
-) const noexcept -> std::optional<memtable::memtable_t>
+auto lsmtree_builder_t::build_memtable_from_wal(wal_t pWal) const noexcept
+    -> std::optional<memtable::memtable_t>
 {
     auto stringify_record = [](const memtable_t::record_t &record)
     {

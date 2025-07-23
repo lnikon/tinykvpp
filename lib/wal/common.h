@@ -1,71 +1,19 @@
 #pragma once
 
-#include <structures/memtable/memtable.h>
+#include <cstdint>
+#include <string_view>
 
 namespace wal
 {
-
-using kv_t = structures::memtable::memtable_t::record_t;
-
-enum class operation_k : int8_t
-{
-    undefined_k = -1,
-    add_k,
-    delete_k,
-};
 
 enum class log_storage_type_k : int8_t
 {
     undefined_k = -1,
     in_memory_k,
     file_based_persistent_k,
-    replicated_log_storage_k
 };
 
 [[nodiscard]] auto to_string(log_storage_type_k type) noexcept -> std::string_view;
 [[nodiscard]] auto from_string(std::string_view type) noexcept -> log_storage_type_k;
-
-struct record_t final
-{
-    operation_k op{operation_k::undefined_k};
-    kv_t        kv;
-
-    template <typename TStream> void write(TStream &stream) const
-    {
-        // Write operation opcode
-        stream << static_cast<std::int32_t>(op) << ' ';
-
-        // Write key-value pair
-        kv.write(stream);
-
-        // Put an endline
-        stream << '\n';
-    }
-
-    template <typename TStream> void read(TStream &stream)
-    {
-        // Read operation opcode
-        int32_t opInt{0};
-        stream >> opInt;
-        op = static_cast<operation_k>(opInt);
-
-        // Read key-value pair
-        kv.read(stream);
-    }
-
-    template <typename TStream>
-    friend auto operator<<(TStream &stream, const wal::record_t &record) -> TStream &
-    {
-        record.write(stream);
-        return stream;
-    }
-
-    template <typename TStream>
-    friend auto operator>>(TStream &stream, wal::record_t &record) -> TStream &
-    {
-        record.read(stream);
-        return stream;
-    }
-};
 
 } // namespace wal

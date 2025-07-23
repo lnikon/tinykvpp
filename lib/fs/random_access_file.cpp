@@ -1,5 +1,3 @@
-
-#include <format>
 #include <cstdio>
 #include <cstring>
 #include <fcntl.h>
@@ -8,6 +6,7 @@
 #include <liburing.h>
 #include <spdlog/spdlog.h>
 #include <magic_enum/magic_enum.hpp>
+#include <fmt/format.h>
 
 #include "random_access_file.h"
 #include "fs/common.h"
@@ -75,7 +74,7 @@ auto random_access_file_t::write(std::string_view data, ssize_t offset) noexcept
             file_error_t{
                 .code = file_error_code_k::write_failed,
                 .system_errno = 0,
-                .message = std::format("Failed to get io_uring sqe. fd={}", m_fd),
+                .message = fmt::format("Failed to get io_uring sqe. fd={}", m_fd),
             }
         );
     }
@@ -96,7 +95,7 @@ auto random_access_file_t::write(std::string_view data, ssize_t offset) noexcept
             file_error_t{
                 .code = file_error_code_k::write_failed,
                 .system_errno = -res,
-                .message = std::format("Write operation failed. fd={}", m_fd),
+                .message = fmt::format("Write operation failed. fd={}", m_fd),
             }
         );
     }
@@ -114,7 +113,7 @@ auto random_access_file_t::read(ssize_t offset, char *buffer, size_t size) noexc
             file_error_t{
                 .code = file_error_code_k::read_failed,
                 .system_errno = errno,
-                .message = std::format("Read operation failed. fd={}", m_fd),
+                .message = fmt::format("Read operation failed. fd={}", m_fd),
             }
         );
     }
@@ -130,7 +129,7 @@ auto random_access_file_t::size() const noexcept -> std::expected<std::size_t, f
             file_error_t{
                 .code = file_error_code_k::stat_failed,
                 .system_errno = errno,
-                .message = std::format("Failed to get file size. fd={}", m_fd),
+                .message = fmt::format("Failed to get file size. fd={}", m_fd),
             }
         );
     }
@@ -145,7 +144,7 @@ auto random_access_file_t::flush() noexcept -> std::expected<void, file_error_t>
             file_error_t{
                 .code = file_error_code_k::flush_failed,
                 .system_errno = errno,
-                .message = std::format("Flush operation failed. fd={}", m_fd),
+                .message = fmt::format("Flush operation failed. fd={}", m_fd),
             }
         );
     }
@@ -238,11 +237,12 @@ auto random_access_file_builder_t::build(fs::path_t path, posix_wrapper::open_fl
 {
     if (path.empty())
     {
+        std::cerr << "errorno: " << strerror(errno) << '\n';
         return std::unexpected(
             file_error_t{
                 .code = file_error_code_k::open_failed,
                 .system_errno = errno,
-                .message = std::format("Provided file path is empty"),
+                .message = fmt::format("Provided file path is empty"),
             }
         );
     }
@@ -255,7 +255,7 @@ auto random_access_file_builder_t::build(fs::path_t path, posix_wrapper::open_fl
             file_error_t{
                 .code = file_error_code_k::open_failed,
                 .system_errno = errno,
-                .message = std::format("Failed to open file. path={}", path.c_str()),
+                .message = fmt::format("Failed to open file. path={}", path.c_str()),
             }
         );
     }
@@ -263,12 +263,13 @@ auto random_access_file_builder_t::build(fs::path_t path, posix_wrapper::open_fl
     io_uring ring{};
     if (int res = io_uring_queue_init(kIOUringQueueEntries, &ring, 0); res < 0)
     {
+        std::cerr << "errorno=" << strerror(errno) << " ... io_uring_queue_init=Failure" << '\n';
         close(fdes);
         return std::unexpected(
             file_error_t{
                 .code = file_error_code_k::io_uring_init_failed,
                 .system_errno = errno,
-                .message = std::format("io_uring_queue_init failed"),
+                .message = fmt::format("io_uring_queue_init failed"),
             }
         );
     }

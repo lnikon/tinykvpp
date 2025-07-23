@@ -6,7 +6,6 @@
 
 #include <absl/synchronization/mutex.h>
 #include <absl/time/time.h>
-#include <spdlog/spdlog.h>
 
 #include "helpers.h"
 
@@ -28,7 +27,7 @@ template <typename TItem> class thread_safe_queue_t
 
     ~thread_safe_queue_t() noexcept = default;
 
-    void push(TItem item);
+    auto push(TItem item) -> bool;
 
     auto pop() -> std::optional<TItem>;
     auto pop_all() -> queue_t;
@@ -38,9 +37,13 @@ template <typename TItem> class thread_safe_queue_t
     template <typename TRecord, typename TKey = TRecord::Key>
     auto find(const TKey &recordKey) const noexcept -> std::optional<TRecord>;
 
+    void shutdown();
+
   private:
     mutable absl::Mutex m_mutex;
-    queue_t             m_queue;
+    queue_t m_queue     ABSL_GUARDED_BY(m_mutex);
+
+    std::atomic<bool> m_shutdown{false};
 };
 
 template <typename TItem>
@@ -67,6 +70,50 @@ inline auto thread_safe_queue_t<TItem>::operator=(thread_safe_queue_t &&other) n
     return *this;
 }
 
+template <typename TItem> inline auto thread_safe_queue_t<TItem>::push(TItem item) -> bool
+{
+    [[likely]] if (!m_shutdown.load())
+    {
+        absl::WriterMutexLock lock(&m_mutex);
+        m_queue.emplace_back(std::move(item));
+        return true;
+    }
+    return false;
+}
+
+template <typename TItem> inline auto thread_safe_queue_t<TItem>::pop() -> std::optional<TItem>
+{
+    absl::WriterMutexLock lock(&m_mutex);
+    if (!m_mutex.AwaitWithTimeout(
+            absl::Condition(
+                +[](queue_t *queue, std::atomic<bool> *shutdown)
+                { return !queue->empty() || shutdown->load(); },
+                &m_queue,
+                &m_shutdown
+            ),
+            absl::Seconds(1)
+        ))
+    {
+        return std::nullopt;
+    }
+
+    auto item = std::make_optional(m_queue.front());
+    m_queue.pop_front();
+    return item;
+}
+
+template <typename TItem> inline auto thread_safe_queue_t<TItem>::pop_all() -> queue_t
+{
+    absl::WriterMutexLock lock(&m_mutex);
+    return m_queue.empty() ? queue_t{} : std::move(m_queue);
+}
+
+template <typename TItem> inline auto thread_safe_queue_t<TItem>::size() -> std::size_t
+{
+    absl::ReaderMutexLock lock(&m_mutex);
+    return m_queue.size();
+}
+
 template <typename TItem>
 template <typename TRecord, typename TKey>
 inline auto thread_safe_queue_t<TItem>::find(const TKey &recordKey) const noexcept
@@ -85,43 +132,9 @@ inline auto thread_safe_queue_t<TItem>::find(const TKey &recordKey) const noexce
     return std::nullopt;
 }
 
-template <typename TItem> inline auto thread_safe_queue_t<TItem>::size() -> std::size_t
+template <typename TItem> void thread_safe_queue_t<TItem>::shutdown()
 {
-    absl::ReaderMutexLock lock(&m_mutex);
-    spdlog::debug("Getting queue size. size={}", m_queue.size());
-    return m_queue.size();
-}
-
-template <typename TItem> inline auto thread_safe_queue_t<TItem>::pop_all() -> queue_t
-{
-    absl::WriterMutexLock lock(&m_mutex);
-    return m_queue.empty() ? queue_t{} : std::move(m_queue);
-}
-
-template <typename TItem> inline auto thread_safe_queue_t<TItem>::pop() -> std::optional<TItem>
-{
-    absl::WriterMutexLock lock(&m_mutex);
-    if (!m_mutex.AwaitWithTimeout(
-            absl::Condition(
-                +[](queue_t *queue) { return !queue->empty(); }, &m_queue
-            ),
-            absl::Seconds(1)
-        ))
-    {
-        return std::nullopt;
-    }
-
-    spdlog::debug("Popping item from the queue. size={}", m_queue.size());
-    auto item = std::make_optional(m_queue.front());
-    m_queue.pop_front();
-    return item;
-}
-
-template <typename TItem> inline void thread_safe_queue_t<TItem>::push(TItem item)
-{
-    absl::WriterMutexLock lock(&m_mutex);
-    spdlog::debug("Pushing item to the queue. size={}", m_queue.size());
-    m_queue.emplace_back(std::move(item));
+    m_shutdown.store(true);
 }
 
 } // namespace concurrency

@@ -1,5 +1,5 @@
 ARG TARGET=gcc
-FROM ${TARGET} AS build
+FROM ${TARGET} AS build-base
 
 ARG COMPILER=gcc
 ARG BUILD_TYPE=release
@@ -33,13 +33,15 @@ RUN conan install . --output-folder=build \
     --profile:host=conan/profiles/${BUILD_TYPE}-${COMPILER} \
     --build=missing
 
+FROM build-base AS build
+
 # Copy project files after dependencies to maximize caching
 COPY . .
 
 # Generate and build the project
 RUN cp -f ./build/CMakePresets.json . && \
     cmake --preset conan-${BUILD_TYPE} && \
-    cmake --build ./build
+    cmake --build ./build -t Main
 
 # Test stage for running tests
 FROM build AS test
@@ -50,3 +52,12 @@ WORKDIR /workspaces
 COPY --from=build /workspaces/build/DBTest build/DBTest
 COPY --from=build /workspaces/build/LSMTreeTest build/LSMTreeTest
 COPY --from=build /workspaces/build/MemTableTest build/MemTableTest
+
+# Run the database
+FROM build AS run
+
+RUN mkdir -p /var/tkvpp
+RUN chmod 755 /var/tkvpp
+
+COPY --from=build /workspaces/build/Main /app/tkvpp
+ENTRYPOINT [ "/app/tkvpp" ]

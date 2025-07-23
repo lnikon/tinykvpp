@@ -1,14 +1,15 @@
 #pragma once
 
-#include <chrono>  // for 'std::chrono::high_resolution_clock'
-#include <cstdint> // for 'uint32_t'
-#include <string>  // for 'std::string'
-#include <sys/types.h>
-#include <thread>        // for 'std::jthread'
-#include <memory>        // for 'std::shared_ptr', 'std::unique_ptr'
-#include <optional>      // for 'std::optional'
-#include <unordered_map> // for 'std::unordered_map'
-#include <vector>        // for 'std::vector'
+#include <atomic>
+#include <chrono>        // `std::chrono::high_resolution_clock`
+#include <cstdint>       // `uint32_t`
+#include <future>        // `std::promise`
+#include <string>        // `std::string`
+#include <thread>        // `std::jthread`
+#include <memory>        // `std::shared_ptr`, `std::unique_ptr`
+#include <optional>      // `std::optional`
+#include <unordered_map> // `std::unordered_map`
+#include <vector>        // `std::vector`
 
 #include <grpc/grpc.h>
 #include <grpcpp/channel.h>
@@ -22,6 +23,7 @@
 
 #include "Raft.grpc.pb.h"
 #include "Raft.pb.h"
+#include "concurrency/thread_pool.h"
 
 template <typename TStream> auto operator<<(TStream &stream, const LogEntry &record) -> TStream &
 {
@@ -81,6 +83,7 @@ enum class raft_operation_status_k : int8_t
     leader_not_found_k,
     wal_add_failed_k,
     replicate_failed_k,
+    forward_failed_k,
 };
 
 class raft_node_grpc_client_t
@@ -119,8 +122,8 @@ class consensus_module_t final : public RaftService::Service
   public:
     using wal_entry_t = LogEntry;
     using wal_ptr_t = std::shared_ptr<wal::wal_t<wal_entry_t>>;
-
     using on_commit_cbk_t = std::function<bool(const LogEntry &)>;
+    using on_leader_change_cbk_t = std::function<void(bool)>;
 
     consensus_module_t() = delete;
     consensus_module_t(
@@ -133,34 +136,45 @@ class consensus_module_t final : public RaftService::Service
     consensus_module_t(consensus_module_t &&) = delete;
     consensus_module_t &operator=(consensus_module_t &&) = delete;
 
-    ~consensus_module_t() override = default;
+    ~consensus_module_t() override;
 
     [[nodiscard]] auto init() -> bool;
     void               start();
     void               stop();
 
+    // Executed on the follower
     [[nodiscard]] grpc::Status AppendEntries(
         grpc::ServerContext        *pContext,
         const AppendEntriesRequest *pRequest,
         AppendEntriesResponse      *pResponse
     ) override ABSL_LOCKS_EXCLUDED(m_stateMutex);
 
+    // Executed on the follower
     [[nodiscard]] grpc::Status RequestVote(
         grpc::ServerContext      *pContext,
         const RequestVoteRequest *pRequest,
         RequestVoteResponse      *pResponse
     ) override ABSL_LOCKS_EXCLUDED(m_stateMutex);
 
-    [[nodiscard]] auto replicate(std::string payload) -> raft_operation_status_k;
-    [[nodiscard]] auto forward(std::string payload) -> raft_operation_status_k;
+    // Executed on the leader
+    [[nodiscard]] grpc::Status Replicate(
+        grpc::ServerContext           *pContext,
+        const ReplicateEntriesRequest *pRequest,
+        ReplicateEntriesResponse      *pResponse
+    ) override ABSL_LOCKS_EXCLUDED(m_stateMutex);
+
+    [[nodiscard]] [[deprecated]] auto replicate(std::string payload) -> raft_operation_status_k;
+    [[nodiscard]] auto                replicateAsync(std::string payload) -> std::future<bool>;
 
     [[nodiscard]] std::uint32_t         currentTerm() const;
     [[nodiscard]] id_t                  votedFor() const;
     [[nodiscard]] std::vector<LogEntry> log() const;
     [[nodiscard]] NodeState             getState() const ABSL_SHARED_LOCKS_REQUIRED(m_stateMutex);
     [[nodiscard]] NodeState             getStateSafe() const ABSL_LOCKS_EXCLUDED(m_stateMutex);
+    [[nodiscard]] bool                  isLeader() const ABSL_LOCKS_EXCLUDED(m_stateMutex);
 
     void setOnCommitCallback(on_commit_cbk_t onCommitCbk);
+    void setOnLeaderChangeCallback(on_leader_change_cbk_t onLeaderChangeCbk);
 
   private:
     // ---- State transitions ----
@@ -171,11 +185,9 @@ class consensus_module_t final : public RaftService::Service
     // ---- Heartbeat ----
     void runHeartbeatThread(std::stop_token token);
     auto waitForHeartbeat(std::stop_token token) -> bool;
-    void sendAppendEntriesRPC(raft_node_grpc_client_t &client, std::vector<LogEntry> logEntries);
+    void sendAppendEntriesAsync(raft_node_grpc_client_t &client, std::vector<LogEntry> logEntries);
     auto onSendAppendEntriesRPC(
-        raft_node_grpc_client_t     &client,
-        const AppendEntriesResponse &response,
-        bool                         heartbeat = false
+        raft_node_grpc_client_t &client, const AppendEntriesResponse &response
     ) noexcept -> bool;
     // --------
 
@@ -183,6 +195,7 @@ class consensus_module_t final : public RaftService::Service
     void runElectionThread(std::stop_token token) noexcept;
     void startElection();
     void sendRequestVoteRPCs(const RequestVoteRequest &request, std::uint64_t newTerm);
+    void sendRequestVoteAsync(const RequestVoteRequest &request, raft_node_grpc_client_t &client);
     // --------
 
     // ---- Constant utility methods ----
@@ -206,20 +219,49 @@ class consensus_module_t final : public RaftService::Service
     [[nodiscard]] bool restorePersistentState() ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_stateMutex);
     // --------
 
+    // ---- Async helpers ----
+    void monitorPendingReplications();
+    void applyCommittedEntries() ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_stateMutex);
+    // --------
+
     // ---- Cleanup ----
     void cleanupHeartbeatThread();
     void cleanupElectionThread();
     // --------
 
-    // ---- Member fields ----
+    // ---- Async replication tracking ----
+    struct pending_replication_t
+    {
+        std::promise<bool>                    promise;
+        uint32_t                              logIndex;
+        std::chrono::steady_clock::time_point deadline;
+    };
+
+    mutable absl::Mutex m_pendingMutex;
+    absl::flat_hash_map<uint64_t, pending_replication_t>
+        m_pendingReplications ABSL_GUARDED_BY(m_pendingMutex);
+    std::atomic<uint64_t>     m_replicationIdCounter{0};
+    std::thread               m_replicationMonitor;
+    // --------
+
+    // ---- Thread pools ----
+    std::unique_ptr<concurrency::thread_pool_t> m_rpcThreadPool;
+    std::unique_ptr<concurrency::thread_pool_t> m_internalThreadPool;
+    // --------
+
     // Map from client ID to a gRPC client.
     std::unordered_map<id_t, std::optional<raft_node_grpc_client_t>> m_replicas;
+
+    // Current leader tracking
+    mutable absl::Mutex             m_leaderMutex;
+    std::string m_currentLeaderHint ABSL_GUARDED_BY(m_leaderMutex);
 
     // Stores ID and IP of the current node. Received from outside.
     node_config_t m_config;
 
     // Executed on follower node after successful log replication to update the state machine.
-    on_commit_cbk_t m_onCommitCbk;
+    on_commit_cbk_t        m_onCommitCbk;
+    on_leader_change_cbk_t m_onLeaderChangeCbk;
 
     // Persistent state on all servers
     mutable absl::Mutex    m_stateMutex;
@@ -228,9 +270,9 @@ class consensus_module_t final : public RaftService::Service
     wal_ptr_t m_log        ABSL_GUARDED_BY(m_stateMutex);
 
     // Volatile state on all servers.
-    uint32_t m_commitIndex ABSL_GUARDED_BY(m_stateMutex);
-    uint32_t m_lastApplied ABSL_GUARDED_BY(m_stateMutex);
-    NodeState m_state      ABSL_GUARDED_BY(m_stateMutex);
+    uint32_t m_commitIndex              ABSL_GUARDED_BY(m_stateMutex);
+    std::atomic<uint32_t> m_lastApplied ABSL_GUARDED_BY(m_stateMutex);
+    NodeState m_state                   ABSL_GUARDED_BY(m_stateMutex);
 
     // Log replication related fields. Volatile state on leaders.
     std::unordered_map<id_t, uint32_t> m_matchIndex ABSL_GUARDED_BY(m_stateMutex);
@@ -245,7 +287,7 @@ class consensus_module_t final : public RaftService::Service
     std::jthread m_heartbeatThread;
 
     // Used to shutdown the entire consensus module
-    bool m_shutdown{false};
+    std::atomic<bool> m_shutdown{false};
 };
 
 // NOLINTEND(modernize-use-trailing-return-type)

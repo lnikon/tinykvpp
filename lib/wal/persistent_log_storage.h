@@ -6,12 +6,11 @@
 #include <spdlog/spdlog.h>
 #include <absl/strings/ascii.h>
 
-#include "../concepts.h"
+#include "concepts.h"
 #include "backend/backend.h"
-
 #include "backend/append_only_file_storage_backend.h"
 
-namespace wal::log::storage
+namespace wal
 {
 
 template <TStorageBackendConcept TStorageBackend>
@@ -42,7 +41,7 @@ class persistent_log_storage_impl_t
     }
 
   public:
-    using entry_type = TEntry;
+    using entry_type_t = TEntry;
 
     persistent_log_storage_impl_t() = delete;
 
@@ -68,11 +67,11 @@ class persistent_log_storage_impl_t
 
     ~persistent_log_storage_impl_t() noexcept = default;
 
-    [[nodiscard]] auto append(entry_type entry) -> bool
+    [[nodiscard]] auto append(entry_type_t entry) -> bool
     {
-        std::stringstream ss;
-        ss << entry << '\n';
-        if (auto stringEntry = ss.str(); !m_backendStorage.write(
+        std::stringstream stream;
+        stream << entry << '\n';
+        if (auto stringEntry = stream.str(); !m_backendStorage.write(
                 static_cast<const char *>(stringEntry.data()),
                 m_backendStorage.size(),
                 stringEntry.size()
@@ -89,7 +88,7 @@ class persistent_log_storage_impl_t
         return true;
     }
 
-    [[nodiscard]] auto read(const size_t index) const -> std::optional<entry_type>
+    [[nodiscard]] auto read(const size_t index) const -> std::optional<entry_type_t>
     {
         if (index < m_inMemoryLog.size())
         {
@@ -121,6 +120,11 @@ class persistent_log_storage_impl_t
     // 3. Let the RAII handle the old one
     [[nodiscard]] auto reset_last_n(std::size_t n) -> bool
     {
+        if (n == 0)
+        {
+            return false;
+        }
+
         const auto inMemoryLogSize{m_inMemoryLog.size()};
         if (inMemoryLogSize < n)
         {
@@ -133,7 +137,7 @@ class persistent_log_storage_impl_t
             return false;
         }
 
-        if (m_backendStorage.reset_last_n(n))
+        if (!m_backendStorage.reset_last_n(n))
         {
             spdlog::error(
                 "persistent_log_storage_impl_t::reset_last_n: Failed to reset last {} entries", n
@@ -146,46 +150,36 @@ class persistent_log_storage_impl_t
         return true;
     }
 
-    friend class persistent_log_storage_builder_t<TBackendStorage, entry_type>;
+    friend class persistent_log_storage_builder_t<TBackendStorage, entry_type_t>;
 
   private:
     void recover() noexcept
     {
         const std::string raw = m_backendStorage.read(0, m_backendStorage.size());
-        if (!raw.empty())
-        {
-            std::istringstream stream(raw);
-            std::string        line;
-            std::size_t        lineNumber{0};
-            while (std::getline(stream, line))
-            {
-                if (absl::StripAsciiWhitespace(line).empty())
-                {
-                    spdlog::warn("persistent_log_storage_impl_t: Empty log line at {}", lineNumber);
-                    continue;
-                }
-
-                std::stringstream ss{line};
-
-                TEntry entry;
-                ss >> entry;
-
-                m_inMemoryLog.emplace_back(std::move(entry));
-
-                lineNumber++;
-            }
-        }
-        else
+        if (raw.empty())
         {
             spdlog::info("persistent_log_storage_impl_t: Nothing to recover");
+            return;
         }
 
-        // TODO(lnikon): 'recover()' will be called from a builder
-        // return true;
+        std::istringstream stream(raw);
+        std::string        line;
+        while (std::getline(stream, line))
+        {
+            if (absl::StripAsciiWhitespace(line).empty())
+            {
+                continue;
+            }
+
+            std::stringstream lineStream{std::move(line)};
+            TEntry            entry;
+            lineStream >> entry;
+            m_inMemoryLog.emplace_back(std::move(entry));
+        }
     }
 
-    TBackendStorage         m_backendStorage;
-    std::vector<entry_type> m_inMemoryLog;
+    TBackendStorage           m_backendStorage;
+    std::vector<entry_type_t> m_inMemoryLog;
 };
 
 template <TStorageBackendConcept TBackend, typename TEntry>
@@ -206,7 +200,7 @@ template <TStorageBackendConcept TBackendStorage, typename TEntry>
 class persistent_log_storage_builder_t
 {
   public:
-    explicit persistent_log_storage_builder_t(storage::backend::storage_backend_config_t config)
+    explicit persistent_log_storage_builder_t(backend::storage_backend_config_t config)
         : m_config(std::move(config))
     {
     }
@@ -256,4 +250,4 @@ class persistent_log_storage_builder_t
     backend::storage_backend_config_t m_config;
 };
 
-} // namespace wal::log::storage
+} // namespace wal

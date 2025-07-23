@@ -6,10 +6,10 @@
 #include <spdlog/spdlog.h>
 
 #include "backend.h"
-#include "../../concepts.h"
+#include "../concepts.h"
 #include "fs/append_only_file.h"
 
-namespace wal::log::storage::backend
+namespace wal::backend
 {
 
 class append_only_file_storage_backend_t
@@ -50,9 +50,8 @@ class append_only_file_storage_backend_t
     [[nodiscard]] auto write_impl(const char *data, ssize_t offset, std::size_t size) -> bool
     {
         (void)offset;
-        return m_file.append({data, size})
-            .transform([](ssize_t res) { return res >= 0; })
-            .value_or(false);
+        auto res{m_file.append({data, size})};
+        return res.has_value() ? res.value() >= 0 : false;
     }
 
     [[nodiscard]] auto read_impl(ssize_t offset, std::size_t size) -> std::string
@@ -196,4 +195,4 @@ static_assert(
     "file_storage_backend_t must satisfy TStorageBackendConcept"
 );
 
-} // namespace wal::log::storage::backend
+} // namespace wal::backend

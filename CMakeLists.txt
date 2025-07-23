@@ -9,20 +9,20 @@ set(CMAKE_CXX_EXTENSIONS Off)
 
 set(TINYKVPP_COMMON_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -pedantic-errors")
 set(TINYKVPP_COMMON_CXX_FLAGS
-    "${CMAKE_CXX_FLAGS} -Wall -Wextra -pedantic-errors"
-)
+    "${CMAKE_CXX_FLAGS} -Wall -Wextra -pedantic-errors")
 
 message("Using compiler: ${CMAKE_CXX_COMPILER_ID}")
 
 # CFLAGS="-fsanitize=thread -g -O1" CXXFLAGS="-fsanitize=thread -g -O1"
 # LDFLAGS="-fsanitize=thread"
 
+# Support thread annotations by Clang
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-    set(CMAKE_C_FLAGS "${TINYKVPP_COMMON_C_FLAGS} -Wthread-safety")
-    set(CMAKE_CXX_FLAGS "${TINYKVPP_COMMON_CXX_FLAGS} -Wthread-safety")
+  set(CMAKE_C_FLAGS "${TINYKVPP_COMMON_C_FLAGS} -Wthread-safety")
+  set(CMAKE_CXX_FLAGS "${TINYKVPP_COMMON_CXX_FLAGS} -Wthread-safety")
 else()
-    set(CMAKE_C_FLAGS "${TINYKVPP_COMMON_C_FLAGS}")
-    set(CMAKE_CXX_FLAGS "${TINYKVPP_COMMON_CXX_FLAGS}")
+  set(CMAKE_C_FLAGS "${TINYKVPP_COMMON_C_FLAGS}")
+  set(CMAKE_CXX_FLAGS "${TINYKVPP_COMMON_CXX_FLAGS}")
 endif()
 
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}")
@@ -46,6 +46,7 @@ find_package(GTest CONFIG REQUIRED)
 find_package(prometheus-cpp REQUIRED)
 find_package(libassert REQUIRED)
 find_package(magic_enum REQUIRED)
+find_package(liburing REQUIRED)
 
 include_directories(lib)
 
@@ -56,13 +57,11 @@ add_subdirectory(examples)
 
 # Custom targets to build docker images and run tests
 add_custom_target(
-    GCCReleaseDockerImage
-    COMMAND sh scripts/build_gcc_release_docker_image.sh
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-)
+  GCCReleaseDockerImage
+  COMMAND sh scripts/build_gcc_release_docker_image.sh
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 
 add_custom_target(
-    ClangReleaseDockerImage
-    COMMAND sh scripts/build_clang_release_docker_image.sh
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-)
+  ClangReleaseDockerImage
+  COMMAND sh scripts/build_clang_release_docker_image.sh
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})

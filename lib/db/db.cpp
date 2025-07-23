@@ -1,5 +1,4 @@
-#include <sstream>
-
+#include <absl/synchronization/mutex.h>
 #include <spdlog/spdlog.h>
 
 #include "db.h"
@@ -12,26 +11,22 @@ namespace db
 
 db_t::db_t(
     config::shared_ptr_t                      config,
-    wal_ptr_t                                 pWal,
     manifest::shared_ptr_t                    pManifest,
     lsmtree_ptr_t                             pLsmtree,
     std::shared_ptr<raft::consensus_module_t> pConsensusModule
 ) noexcept
     : m_config{std::move(config)},
-      m_pWal{std::move(pWal)},
       m_pManifest{std::move(pManifest)},
       m_pLSMtree{std::move(pLsmtree)},
       m_pConsensusModule{std::move(pConsensusModule)}
 {
     assert(m_config);
     assert(m_pManifest);
-    assert(m_pWal);
     assert(m_pLSMtree);
 }
 
 db_t::db_t(db_t &&other) noexcept
     : m_config{std::move(other.m_config)},
-      m_pWal{std::move(other.m_pWal)},
       m_pManifest{std::move(other.m_pManifest)},
       m_pLSMtree{std::move(other.m_pLSMtree)},
       m_pConsensusModule{std::move(other.m_pConsensusModule)}
@@ -48,158 +43,124 @@ auto db_t::operator=(db_t &&other) noexcept -> db_t &
     return *this;
 }
 
+auto db_t::start() -> bool
+{
+    spdlog::info("Starting the database");
+
+    if (!open())
+    {
+        spdlog::error("Unable to open the database");
+        return false;
+    }
+
+    m_requestProcessor = std::thread([this] { processRequests(); });
+    m_pendingMonitor = std::thread([this] { monitorPendingRequests(); });
+
+    m_isLeader.store(m_pConsensusModule->isLeader());
+
+    spdlog::info("Database successfully started");
+}
+
+void db_t::stop()
+{
+    spdlog::info("Shutting down the database");
+
+    m_shutdown.store(true);
+
+    // Stop accepting new requests
+    m_requestQueue.shutdown();
+
+    // Stop thread pool
+    m_requestPool.shutdown();
+
+    // Join threads
+    if (m_requestProcessor.joinable())
+    {
+        m_requestProcessor.join();
+    }
+
+    if (m_pendingMonitor.joinable())
+    {
+        m_pendingMonitor.join();
+    }
+
+    // Complete pending requests
+    {
+        absl::WriterMutexLock locker{&m_pendingMutex};
+        for (auto &[id, request] : m_pendingRequests)
+        {
+            request.promise.set_value(false);
+        }
+        m_pendingRequests.clear();
+    }
+
+    spdlog::info("Database stopped");
+}
+
 auto db_t::open() -> bool
 {
     return prepare_directory_structure();
 }
 
-// Notes(lnikon): Use the same serialized record both in WAL and Raft consensus module
-auto db_t::put(key_t key, value_t value, db_put_context_k context) noexcept -> bool
+[[nodiscard]] auto db_t::put(const PutRequest *pRequest, PutResponse *pResponse) noexcept
+    -> db_op_result_t
 {
-    return put(record_t{std::move(key), std::move(value)}, context);
-}
-
-[[nodiscard]] auto db_t::put(record_t record, db_put_context_k context) noexcept -> bool
-{
-    // TODO(lnikon): Should lock a WriteMutex here!
-
-    if (m_pConsensusModule)
+    if (m_shutdown.load())
     {
-        if (context == db_put_context_k::do_not_replicate_k)
+        spdlog::warn("Database is shutting down. Can not accept new request.");
+        return {.status = db_op_status_k::failure_k, .message = {}, .leaderAddress = {}};
+    }
+
+    if (!m_isLeader.load())
+    {
+        return forwardToLeader();
+    }
+
+    client_request_t request{
+        .type = client_request_type_k::put_k,
+        .key = {pRequest->key().data(), pRequest->key().size()},
+        .value = {pRequest->value().data(), pRequest->value().size()},
+        .promise = {},
+        .requestId = m_requestIdCounter.fetch_add(1)
+    };
+
+    auto future = request.promise.get_future();
+
+    // Enqueue request
+    if (!m_requestQueue.push(std::move(request)))
+    {
+        return {
+            .status = db_op_status_k::request_queue_full_k,
+            .message = std::string{"Request queue full"},
+            .leaderAddress = {},
+        };
+    }
+
+    if (future.wait_for(m_config->DatabaseConfig.requestTimeout) == std::future_status::ready)
+    {
+        if (!future.get())
         {
-            spdlog::info(
-                "db_t::put: Skipping replication for entry: {} {}",
-                record.m_key.m_key,
-                record.m_value.m_value
-            );
-        }
-        else if (context == db_put_context_k::replicate_k)
-        {
-            if (m_pConsensusModule->getStateSafe() == NodeState::FOLLOWER)
-            {
-                spdlog::info(
-                    "db_t::put: Forwarding entry: {} {}", record.m_key.m_key, record.m_value.m_value
-                );
-                std::stringstream sstream;
-                record.write(sstream);
-                if (m_pConsensusModule->forward(sstream.str()) !=
-                    raft::raft_operation_status_k::success_k)
-                {
-                    spdlog::error(
-                        "db_t::put: Failed to replicate entry: {} {}",
-                        record.m_key.m_key,
-                        record.m_value.m_value
-                    );
-                    return false;
-                }
-            }
-        }
-        else
-        {
-            spdlog::info(
-                "db_t::put: Not replicating entry: {} {}",
-                record.m_key.m_key,
-                record.m_value.m_value
-            );
+            return {
+                .status = db_op_status_k::failed_to_replicate_k,
+                .message = std::string{"Failed to replicate"},
+                .leaderAddress = {}
+            };
         }
     }
     else
     {
-        spdlog::info(
-            "db_t::put: Consensus module is not set, skipping replication for entry: {} {}",
-            record.m_key.m_key,
-            record.m_value.m_value
-        );
+        return {
+            .status = db_op_status_k::request_timeout_k,
+            .message = std::string{"Request timeout"},
+            .leaderAddress = {}
+        };
     }
 
-    spdlog::info(
-        "db_t::put: Adding entry into wal: {} {}", record.m_key.m_key, record.m_value.m_value
-    );
-
-    if (!m_pWal->add({.op = wal::operation_k::add_k, .kv = record}))
-    {
-        spdlog::error(
-            "db_t::put: Failed to put entry: {} {}", record.m_key.m_key, record.m_value.m_value
-        );
-        return false;
-    }
-
-    if (m_pConsensusModule)
-    {
-        if (context == db_put_context_k::do_not_replicate_k)
-        {
-            spdlog::debug(
-                "db_t::put: Skipping replication for entry: {} {}",
-                record.m_key.m_key,
-                record.m_value.m_value
-            );
-        }
-        else if (context == db_put_context_k::replicate_k)
-        {
-            if (m_pConsensusModule->getStateSafe() == NodeState::LEADER)
-            {
-                spdlog::debug(
-                    "db_t::put: Forwarding entry: {} {}", record.m_key.m_key, record.m_value.m_value
-                );
-                std::stringstream sstream;
-                record.write(sstream);
-                if (m_pConsensusModule->replicate(sstream.str()) !=
-                    raft::raft_operation_status_k::success_k)
-                {
-                    spdlog::error(
-                        "db_t::put: Failed to replicate entry: {} {}",
-                        record.m_key.m_key,
-                        record.m_value.m_value
-                    );
-                    return false;
-                }
-            }
-        }
-        else
-        {
-            spdlog::debug(
-                "db_t::put: Not replicating entry: {} {}",
-                record.m_key.m_key,
-                record.m_value.m_value
-            );
-        }
-    }
-
-    else
-    {
-        spdlog::debug(
-            "db_t::put: Consensus module is not set, skipping replication for entry: {} {}",
-            record.m_key.m_key,
-            record.m_value.m_value
-        );
-    }
-
-    spdlog::debug(
-        "db_t::put: Adding entry into lsm: {} {}", record.m_key.m_key, record.m_value.m_value
-    );
-
-    switch (m_pLSMtree->put(std::move(record)))
-    {
-    case structures::lsmtree::lsmtree_status_k::ok_k:
-    {
-        return true;
-    }
-    case structures::lsmtree::lsmtree_status_k::memtable_reset_k:
-    {
-        if (!m_pWal->reset())
-        {
-            spdlog::error("db_t::put: Failed to reset WAL after memtable reset");
-            return false;
-        }
-        return true;
-    }
-    default:
-    {
-        return false;
-    }
-    }
-
-    return true;
+    return {
+        .status = db_op_status_k::success_k,
+        .message = std::string{"Request success"},
+        .leaderAddress = {}
+    };
 }
 
 auto db_t::get(const key_t &key) -> std::optional<record_t>
@@ -256,9 +217,54 @@ void db_t::swap(db_t &other) noexcept
 
     swap(m_config, other.m_config);
     swap(m_pManifest, other.m_pManifest);
-    swap(m_pWal, other.m_pWal);
     swap(m_pLSMtree, other.m_pLSMtree);
     swap(m_pConsensusModule, other.m_pConsensusModule);
+}
+
+void db_t::processRequests()
+{
+}
+
+void db_t::handleClientRequest(client_request_t request)
+{
+}
+
+void db_t::monitorPendingRequests()
+{
+}
+
+auto db_t::onRaftCommit(const LogEntry &entry) -> bool
+{
+}
+
+void db_t::onLeaderChange(bool isLeader)
+{
+}
+
+auto db_t::serializeOperation(const client_request_t &request) -> std::string
+{
+}
+
+auto db_t::deserializeAndApply(const std::string &payload)
+{
+}
+
+auto db_t::forwardToLeader() -> db_op_result_t
+{
+    m_requestsForwarded.fetch_add(1);
+
+    auto leaderAddress = getLeaderAddress();
+    return leaderAddress.empty()
+               ? db_op_result_t{.status = db_op_status_k::leader_not_found_k, .message = "Leader not found", .leaderAddress = {}}
+               : db_op_result_t{
+                     .status = db_op_status_k::forward_to_leader_k,
+                     .message = fmt::format("Not leader. Leader is at {}", leaderAddress),
+                     .leaderAddress = std::move(leaderAddress)
+                 };
+}
+
+auto db_t::getLeaderAddress() -> std::string
+{
 }
 
 } // namespace db

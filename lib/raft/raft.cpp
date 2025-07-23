@@ -1,8 +1,10 @@
 #include <algorithm>
 #include <chrono>
+#include <exception>
 #include <filesystem>
 #include <fmt/core.h>
 #include <fstream>
+#include <magic_enum/magic_enum.hpp>
 #include <random>
 #include <ranges>
 #include <thread>
@@ -12,20 +14,21 @@
 #include <absl/time/time.h>
 #include <fmt/format.h>
 #include <spdlog/spdlog.h>
+#include <libassert/assert.hpp>
 
 #include "raft.h"
 #include "Raft.pb.h"
+#include "concurrency/thread_pool.h"
 #include "wal/wal.h"
 
 namespace
 {
 
 const std::string_view gRaftFilename = "RAFT_PERSISTENCE";
-const std::string_view gLogFilename = "RAFT_LOG";
 
 auto constructFilename(std::string_view filename, std::uint32_t peerId) -> std::string
 {
-    return fmt::format("var/tkvpp/{}_NODE_{}", filename, peerId);
+    return fmt::format("./var/tkvpp/{}_NODE_{}", filename, peerId);
 }
 
 auto generate_random_timeout(const int minTimeout, const int maxTimeout) -> int
@@ -59,8 +62,8 @@ raft_node_grpc_client_t::raft_node_grpc_client_t(
     : m_config{std::move(config)},
       m_stub{std::move(pRaftStub)}
 {
-    assert(m_config.m_id > 0);
-    assert(!m_config.m_ip.empty());
+    ASSERT(m_config.m_id != 0);
+    ASSERT(!m_config.m_ip.empty());
 }
 
 auto raft_node_grpc_client_t::appendEntries(
@@ -153,24 +156,22 @@ auto raft_node_grpc_client_t::ip() const -> ip_t
 // consensus_module_t
 // -------------------------------
 consensus_module_t::consensus_module_t(
-    node_config_t nodeConfig, std::vector<raft_node_grpc_client_t> replicas, wal_ptr_t pLog
+    node_config_t nodeConfig, std::vector<raft_node_grpc_client_t> replicas, wal_ptr_t pWal
 ) noexcept
-    : m_config{std::move(nodeConfig)},
+    : m_rpcThreadPool{std::make_unique<concurrency::thread_pool_t>(2, "raft_rpc")},
+      m_internalThreadPool{std::make_unique<concurrency::thread_pool_t>(2, "raft_internal")},
+      m_config{std::move(nodeConfig)},
       m_currentTerm{0},
       m_votedFor{0},
-      m_log{std::move(pLog)},
+      m_log{std::move(pWal)},
       m_commitIndex{0},
       m_lastApplied{0},
       m_state{NodeState::FOLLOWER},
       m_leaderHeartbeatReceived{false},
       m_voteCount{0}
 {
-    assert(m_config.m_id > 0);
-
-    // TODO(lnikon): This assertion is important, but also gets in the way of testing.
-    // assert(replicas.size() > 0);
-
-    assert(m_config.m_id <= replicas.size() + 1);
+    ASSERT(m_config.m_id != 0);
+    ASSERT(m_config.m_id <= replicas.size() + 1);
 
     for (auto &&nodeClient : replicas)
     {
@@ -178,6 +179,19 @@ consensus_module_t::consensus_module_t(
         m_nextIndex[nodeClient.id()] = 1;
         m_replicas[nodeClient.id()] = std::move(nodeClient);
     }
+}
+
+consensus_module_t::~consensus_module_t()
+{
+    {
+        absl::WriterMutexLock locker{&m_stateMutex};
+        if (m_shutdown)
+        {
+            return;
+        }
+    }
+
+    stop();
 }
 
 auto consensus_module_t::init() -> bool
@@ -188,6 +202,8 @@ auto consensus_module_t::init() -> bool
         spdlog::warn("Unable to initialize persistent state!");
         return false;
     }
+
+    m_replicationMonitor = std::thread([this] { monitorPendingReplications(); });
 
     return true;
 }
@@ -210,6 +226,38 @@ void consensus_module_t::stop()
     cleanupHeartbeatThread();
     cleanupElectionThread();
 
+    // Stop replication monitor
+    if (m_replicationMonitor.joinable())
+    {
+        m_replicationMonitor.join();
+    }
+
+    // Shutdown thread pools
+    if (m_rpcThreadPool)
+    {
+        spdlog::info("Shutting down RPC thread pool (queue size: {})", m_rpcThreadPool->size());
+        m_rpcThreadPool->shutdown();
+    }
+
+    if (m_internalThreadPool)
+    {
+        spdlog::info(
+            "Shutting down internal thread pool (queue size: {})", m_internalThreadPool->size()
+        );
+        m_internalThreadPool->shutdown();
+    }
+
+    // Complete any pending replications
+    {
+        absl::WriterMutexLock locker{&m_pendingMutex};
+        for (auto &[id, pending] : m_pendingReplications)
+        {
+            (void)id;
+            pending.promise.set_value(false);
+        }
+        m_pendingReplications.clear();
+    }
+
     spdlog::info("Consensus module stopped gracefully!");
 }
 
@@ -227,6 +275,30 @@ auto consensus_module_t::AppendEntries(
         pRequest->senderid(),
         pRequest->term()
     );
+
+    if (pRequest->term() >= currentTerm())
+    {
+        // Find the leader's IP from our replica list
+        std::string leaderIp;
+        for (const auto &[id, client] : m_replicas)
+        {
+            if (id == pRequest->senderid() && client.has_value())
+            {
+                leaderIp = client->ip();
+            }
+        }
+
+        if (leaderIp.empty() && pRequest->senderid() == m_config.m_id)
+        {
+            leaderIp = m_config.m_ip;
+        }
+
+        if (!leaderIp.empty())
+        {
+            absl::WriterMutexLock locker{&m_leaderMutex};
+            m_currentLeaderHint = leaderIp;
+        }
+    }
 
     absl::WriterMutexLock locker(&m_stateMutex);
 
@@ -345,28 +417,7 @@ auto consensus_module_t::AppendEntries(
     }
 
     // Apply committed entries to the state machine
-    while (m_lastApplied < m_commitIndex)
-    {
-        ++m_lastApplied;
-        const auto logEntry = m_log->read(m_lastApplied - 1);
-        if (logEntry.has_value())
-        {
-            spdlog::info(
-                "Follower Node={} applying logEntry->index()={} to state machine",
-                m_config.m_id,
-                logEntry->index()
-            );
-            m_onCommitCbk(logEntry.value());
-        }
-        else
-        {
-            spdlog::error(
-                "Node={} failed to read log entry={} for state machine update",
-                m_config.m_id,
-                m_lastApplied
-            );
-        }
-    }
+    applyCommittedEntries();
 
     pResponse->set_term(m_currentTerm);
     pResponse->set_success(true);
@@ -396,9 +447,7 @@ auto consensus_module_t::RequestVote(
 {
     (void)pContext;
 
-    {
-        m_leaderHeartbeatReceived.store(true);
-    }
+    m_leaderHeartbeatReceived.store(true);
 
     absl::WriterMutexLock locker(&m_stateMutex);
 
@@ -444,7 +493,7 @@ auto consensus_module_t::RequestVote(
                 spdlog::error("Node={} is unable to persist votedFor", m_config.m_id, m_votedFor);
             }
 
-            spdlog::debug("Node={} votedFor={}", m_config.m_id, pRequest->candidateid());
+            spdlog::info("Node={} votedFor={}", m_config.m_id, pRequest->candidateid());
 
             pResponse->set_term(m_currentTerm);
             pResponse->set_votegranted(1);
@@ -454,8 +503,52 @@ auto consensus_module_t::RequestVote(
     return grpc::Status::OK;
 }
 
+[[nodiscard]] auto consensus_module_t::Replicate(
+    grpc::ServerContext           *pContext,
+    const ReplicateEntriesRequest *pRequest,
+    ReplicateEntriesResponse      *pResponse
+) -> grpc::Status
+{
+    (void)pContext;
+
+    const auto &payloads{pRequest->payloads()};
+    for (const auto &payload : payloads)
+    {
+        const auto status{replicate(payload)};
+        if (status != raft_operation_status_k::success_k)
+        {
+            spdlog::error("Failed to replicate payload={}", payload);
+            pResponse->set_status("FAILED");
+            return grpc::Status::OK;
+        }
+    }
+
+    pResponse->set_status("OK");
+    return grpc::Status::OK;
+}
+
 auto consensus_module_t::replicate(std::string payload) -> raft_operation_status_k
 {
+    auto future = replicateAsync(std::move(payload));
+
+    // Wait for up to 5 seconds
+    if (future.wait_for(std::chrono::seconds(5)) == std::future_status::ready)
+    {
+        return future.get() ? raft_operation_status_k::success_k
+                            : raft_operation_status_k::replicate_failed_k;
+    }
+
+    return raft_operation_status_k::timeout_k;
+}
+
+[[nodiscard]] auto consensus_module_t::replicateAsync(std::string payload) -> std::future<bool>
+{
+    auto replicationId = m_replicationIdCounter.fetch_add(1);
+
+    pending_replication_t pending;
+    pending.deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    auto future = pending.promise.get_future();
+
     LogEntry logEntry;
 
     {
@@ -463,104 +556,58 @@ auto consensus_module_t::replicate(std::string payload) -> raft_operation_status
 
         if (m_state != NodeState::LEADER)
         {
-            spdlog::error("Non-leader node={} received a put request.");
-            return raft_operation_status_k::not_leader_k;
+            pending.promise.set_value(false);
+            return future;
         }
 
         logEntry.set_term(m_currentTerm);
         logEntry.set_index(getLastLogIndex() + 1);
         logEntry.set_payload(std::move(payload));
 
+        pending.logIndex = logEntry.index();
+
         if (!m_log->add(logEntry))
         {
-            spdlog::error("consensus_module_t::replicate: Unable to update the WAL");
-            return raft_operation_status_k::wal_add_failed_k;
+            spdlog::error("replicateAsync: Unable to update the WAL");
+            pending.promise.set_value(false);
+            return future;
+        }
+
+        if (m_replicas.empty())
+        {
+            // Single node - immediately commit and apply
+            if (!updatePersistentState(logEntry.index(), std::nullopt))
+            {
+                spdlog::error("replicateAsync: Unable to update commit index for single node");
+                pending.promise.set_value(false);
+                return future;
+            }
+
+            applyCommittedEntries();
+            pending.promise.set_value(true);
+            return future;
         }
     }
 
+    // Store pending replication
+    {
+        absl::WriterMutexLock lock{&m_pendingMutex};
+        m_pendingReplications[replicationId] = std::move(pending);
+    }
+
+    // Send to replicas using thread pool
     for (auto &[id, client] : m_replicas)
     {
-        sendAppendEntriesRPC(client.value(), {logEntry});
+        if (!client.has_value())
+        {
+            continue;
+        }
+
+        m_rpcThreadPool->enqueue([this, &client, logEntry]
+                                 { sendAppendEntriesAsync(client.value(), {logEntry}); });
     }
 
-    {
-        absl::WriterMutexLock locker{&m_stateMutex};
-        bool                  success = waitForMajorityReplication(logEntry.index());
-        if (success)
-        {
-            spdlog::info("Node={} majority agreed on logEntry={}", m_config.m_id, logEntry.index());
-        }
-        else
-        {
-            spdlog::info(
-                "Node={} majority failed to agree on logEntry={}", m_config.m_id, logEntry.index()
-            );
-            return raft_operation_status_k::replicate_failed_k;
-        }
-    }
-
-    return raft_operation_status_k::success_k;
-}
-
-[[nodiscard]] auto consensus_module_t::forward(std::string payload) -> raft_operation_status_k
-{
-    LogEntry logEntry;
-
-    {
-        absl::MutexLock locker{&m_stateMutex};
-
-        switch (m_state)
-        {
-        case NodeState::LEADER:
-        {
-            return replicate(std::move(payload));
-        }
-        case NodeState::FOLLOWER:
-        {
-            if (m_votedFor == gInvalidId)
-            {
-                spdlog::error(
-                    "Follower node={} received a put request, but has no leader to forward it to.",
-                    m_config.m_id
-                );
-                return raft_operation_status_k::leader_not_found_k;
-            }
-
-            ReplicateEntriesRequest request;
-            request.set_term(m_currentTerm);
-            request.set_senderid(m_config.m_id);
-            request.add_payloads(std::move(payload));
-
-            ReplicateEntriesResponse response;
-            if (!m_replicas[m_votedFor]->replicate(request, &response))
-            {
-                spdlog::error(
-                    "Non-leader node={} was unable to forward put RPC to leader={}",
-                    m_config.m_id,
-                    m_votedFor
-                );
-            }
-
-            return raft_operation_status_k::success_k;
-        }
-        case NodeState::CANDIDATE:
-        {
-            spdlog::error("Candidate node={} received a put request.", m_config.m_id);
-            return raft_operation_status_k::not_leader_k;
-        }
-        default:
-        {
-            spdlog::error(
-                "Node={} is in an unknown state={} and received a put request.",
-                m_config.m_id,
-                static_cast<int>(m_state)
-            );
-            return raft_operation_status_k::invalid_request_k;
-        }
-        }
-    }
-
-    return raft_operation_status_k::success_k;
+    return future;
 }
 
 auto consensus_module_t::currentTerm() const -> uint32_t
@@ -592,6 +639,11 @@ auto consensus_module_t::getState() const -> NodeState
     return m_state;
 }
 
+[[nodiscard]] auto consensus_module_t::isLeader() const -> bool
+{
+    return getStateSafe() == NodeState::LEADER;
+}
+
 void consensus_module_t::becomeFollower(uint32_t newTerm)
 {
     m_currentTerm = newTerm;
@@ -603,6 +655,12 @@ void consensus_module_t::becomeFollower(uint32_t newTerm)
     if (!updatePersistentState(std::nullopt, 0))
     {
         spdlog::error("Node={} is unable to persist votedFor={}", m_config.m_id, m_votedFor);
+    }
+
+    if (m_onLeaderChangeCbk)
+    {
+        auto callback = m_onLeaderChangeCbk;
+        m_internalThreadPool->enqueue([callback = std::move(callback)] { callback(false); });
     }
 }
 
@@ -617,10 +675,23 @@ void consensus_module_t::becomeLeader()
     m_state = NodeState::LEADER;
     m_voteCount = 0;
 
+    {
+        absl::WriterMutexLock locker{&m_leaderMutex};
+        m_currentLeaderHint = m_config.m_ip;
+    }
+
+    // TODO(lnikon): Should I reinit m_nextIndex and m_matchIndex here again?
+
     cleanupHeartbeatThread();
     m_heartbeatThread = std::jthread([this](std::stop_token token) { runHeartbeatThread(token); });
 
     spdlog::info("Node={} become a leader at term={}", m_config.m_id, m_currentTerm);
+
+    if (m_onLeaderChangeCbk)
+    {
+        auto callback = m_onLeaderChangeCbk;
+        m_internalThreadPool->enqueue([callback = std::move(callback)] { callback(true); });
+    }
 }
 
 void consensus_module_t::runHeartbeatThread(std::stop_token token)
@@ -629,14 +700,37 @@ void consensus_module_t::runHeartbeatThread(std::stop_token token)
 
     while (!token.stop_requested() && !m_shutdown)
     {
-        // TODO(lnikon): Make these calls async
+        // Check if still leader
+        {
+            absl::ReaderMutexLock locker{&m_stateMutex};
+            if (m_state != NodeState::LEADER)
+            {
+                break;
+            }
+        }
+
+        // Send heartbeats to all followers using thread pool
+        std::vector<std::future<void>> heartbeatFutures;
+        heartbeatFutures.reserve(m_replicas.size());
+
+        // TODO(lnikon): Use async gRPC instead
         for (auto &[id, client] : m_replicas)
         {
-            spdlog::debug(
-                "Node={} is creating a heartbeat thread for the peer={}", m_config.m_id, id
+            auto future = m_rpcThreadPool->enqueue(
+                [this, &client]
+                {
+                    spdlog::debug("Sending heartbeat to peer={}", client->id());
+                    sendAppendEntriesAsync(client.value(), {});
+                }
             );
-            sendAppendEntriesRPC(client.value(), {});
+            heartbeatFutures.emplace_back(std::move(future));
         }
+
+        for (auto &future : heartbeatFutures)
+        {
+            future.wait_for(std::chrono::milliseconds(50));
+        }
+
         std::this_thread::sleep_for(heartbeatInterval);
     }
 }
@@ -689,19 +783,25 @@ auto consensus_module_t::waitForHeartbeat(std::stop_token token) -> bool
     return false;
 }
 
-void consensus_module_t::sendAppendEntriesRPC(
+void consensus_module_t::sendAppendEntriesAsync(
     raft_node_grpc_client_t &client, std::vector<LogEntry> logEntries
 )
 {
-    // TODO(lnikon): Implement upper bound for the number of retries
-    // TODO(lnikon): Implement exponential backoff for retries
-    while (true)
+    constexpr std::size_t MAX_RETRIES = 3;
+    std::size_t           retryCount = 0;
+
+    while (retryCount < MAX_RETRIES && !m_shutdown.load())
     {
         AppendEntriesRequest request;
         uint32_t             nextIndex = 1; // Default for a fresh follower
 
         {
             absl::MutexLock locker{&m_stateMutex};
+
+            if (m_state != NodeState::LEADER)
+            {
+                return;
+            }
 
             request.set_term(m_currentTerm);
 
@@ -735,57 +835,42 @@ void consensus_module_t::sendAppendEntriesRPC(
             request.set_senderid(m_config.m_id);
 
             // Add log entries starting from nextIndex
-            for (size_t i = 0; i < logEntries.size(); ++i)
+            for (const auto &logEntrie : logEntries)
             {
-                if (logEntries[i].index() >= nextIndex)
+                if (logEntrie.index() >= nextIndex)
                 {
-                    request.add_entries()->CopyFrom(logEntries[i]);
+                    request.add_entries()->CopyFrom(logEntrie);
                 }
             }
         }
 
-        if (!logEntries.empty())
-        {
-            spdlog::info(
-                "Node={} is sending AppendEntries RPC to peer={} "
-                "at term={} with {} entries",
-                m_config.m_id,
-                client.id(),
-                m_currentTerm,
-                logEntries.size()
-            );
-        }
-
+        // Send request
         AppendEntriesResponse response;
-        auto                  status = client.appendEntries(request, &response);
-        if (!status)
+        bool                  rpcSuccess = false;
+
+        try
         {
-            absl::MutexLock locker{&m_stateMutex};
-            spdlog::error(
-                "Node={} failed to send AppendEntries RPC to peer={} "
-                "at term={}",
-                m_config.m_id,
-                client.id(),
-                m_currentTerm
-            );
-            return;
+            rpcSuccess = client.appendEntries(request, &response);
+        }
+        catch (const std::exception &e)
+        {
+            spdlog::error("AppendEntries RPC exception to peer={}: {}", client.id(), e.what());
         }
 
+        // Backoff
+        if (!rpcSuccess)
+        {
+            retryCount++;
+            if (retryCount < MAX_RETRIES)
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(100 * retryCount));
+            }
+            continue;
+        }
+
+        // Process response
         {
             absl::MutexLock locker{&m_stateMutex};
-
-            if (!logEntries.empty())
-            {
-                spdlog::info(
-                    "Node={} received AppendEntriesResponse from peer={} "
-                    "at term={} success={} match_index={}",
-                    m_config.m_id,
-                    client.id(),
-                    response.term(),
-                    response.success(),
-                    response.match_index()
-                );
-            }
 
             if (response.term() > m_currentTerm)
             {
@@ -794,27 +879,18 @@ void consensus_module_t::sendAppendEntriesRPC(
             }
         }
 
-        // The loop will continue its execution until onSendAppendEntriesRPC
-        // returns true
-        if (onSendAppendEntriesRPC(client, response, logEntries.empty()))
+        if (onSendAppendEntriesRPC(client, response))
         {
-            if (!logEntries.empty())
-            {
-                spdlog::info(
-                    "Node={} successfully sent AppendEntries RPC to peer={}",
-                    m_config.m_id,
-                    client.id()
-                );
-            }
             break;
         }
+
+        retryCount++;
     }
 }
 
 auto consensus_module_t::onSendAppendEntriesRPC(
-    raft_node_grpc_client_t     &client,
-    const AppendEntriesResponse &response,
-    bool                         heartbeat /* = false */
+    raft_node_grpc_client_t &client, const AppendEntriesResponse &response
+
 ) noexcept -> bool
 {
     if (response.success())
@@ -824,13 +900,6 @@ auto consensus_module_t::onSendAppendEntriesRPC(
         m_nextIndex[client.id()] = response.match_index() + 1;
 
         uint32_t majorityIndex = findMajorityIndexMatch();
-
-        // spdlog::info(
-        //     "MajorityIndex={}, m_commitIndex={}, m_log->size()={}",
-        //     majorityIndex,
-        //     m_commitIndex,
-        //     m_log->size()
-        // );
 
         if (m_log->size() >= majorityIndex && majorityIndex > m_commitIndex)
         {
@@ -842,6 +911,7 @@ auto consensus_module_t::onSendAppendEntriesRPC(
                     m_config.m_id,
                     majorityIndex
                 );
+
                 if (!updatePersistentState(majorityIndex, std::nullopt))
                 {
                     spdlog::error(
@@ -852,24 +922,7 @@ auto consensus_module_t::onSendAppendEntriesRPC(
                     return false;
                 }
 
-                while (m_lastApplied < m_commitIndex)
-                {
-                    ++m_lastApplied;
-                    spdlog::info("TODO(lnikon): Apply to state machine here");
-                }
-            }
-        }
-        else
-        {
-            if (!heartbeat)
-            {
-                spdlog::info(
-                    "Did not find majorityIndex={} for "
-                    "heartbeat from peer={} at term={}",
-                    majorityIndex,
-                    client.id(),
-                    m_currentTerm
-                );
+                applyCommittedEntries();
             }
         }
     }
@@ -922,19 +975,30 @@ void consensus_module_t::startElection()
 {
     std::uint32_t      newTerm{0};
     RequestVoteRequest request;
+
     {
         absl::WriterMutexLock locker(&m_stateMutex);
-        newTerm = ++m_currentTerm;
 
+        newTerm = ++m_currentTerm;
         m_state = NodeState::CANDIDATE;
 
-        spdlog::debug("Node={} starts election. New term={}", m_config.m_id, m_currentTerm);
+        spdlog::info("Node={} starts election. New term={}", m_config.m_id, m_currentTerm);
 
         // Node in a canditate state should vote for itself.
         m_voteCount++;
         if (!updatePersistentState(std::nullopt, m_config.m_id))
         {
             spdlog::error("Node={} is unable to persist votedFor={}", m_config.m_id, m_votedFor);
+        }
+
+        // Early majority check for a single node cluster
+        if (hasMajority(m_voteCount.load()))
+        {
+            spdlog::info(
+                "Node={} achieved majority (single node cluster), becoming leader", m_config.m_id
+            );
+            becomeLeader();
+            return;
         }
 
         request.set_term(m_currentTerm);
@@ -962,51 +1026,68 @@ void consensus_module_t::sendRequestVoteRPCs(
             newTerm
         );
 
-        requesterThreads.emplace_back(
-            [&client, request, this]()
-            {
-                RequestVoteResponse response;
-                if (!client->requestVote(request, &response))
-                {
-                    spdlog::error("RequestVote RPC failed in requester thread");
-                    return;
-                }
-
-                auto responseTerm = response.term();
-                auto voteGranted = response.votegranted();
-
-                spdlog::debug(
-                    "Received RequestVoteResponse in requester "
-                    "thread peerTerm={} "
-                    "voteGranted={} peer={}",
-                    responseTerm,
-                    voteGranted,
-                    response.responderid()
-                );
-
-                absl::WriterMutexLock locker(&m_stateMutex);
-                if (responseTerm > m_currentTerm)
-                {
-                    becomeFollower(responseTerm);
-                    return;
-                }
-
-                if (voteGranted != 0 && responseTerm == m_currentTerm)
-                {
-                    m_voteCount++;
-                    if (hasMajority(m_voteCount.load()))
-                    {
-                        becomeLeader();
-                    }
-                }
-            }
-        );
+        requesterThreads.emplace_back([&client, request, this]()
+                                      { sendRequestVoteAsync(request, client.value()); });
     }
 
     for (auto &thread : requesterThreads)
     {
         spdlog::debug("Node={} is joining RequestVoteRPC thread", m_config.m_id);
-        thread.join();
+        if (thread.joinable())
+        {
+            thread.join();
+        }
+    }
+}
+
+void consensus_module_t::sendRequestVoteAsync(
+    const RequestVoteRequest &request, raft_node_grpc_client_t &client
+)
+{
+    RequestVoteResponse response;
+    bool                rpcSuccess = false;
+    try
+    {
+        rpcSuccess = client.requestVote(request, &response);
+    }
+    catch (const std::exception &e)
+    {
+        spdlog::error("RequestVote RPC exception to peer={}: {}", client.id(), e.what());
+    }
+
+    if (!rpcSuccess)
+    {
+        spdlog::error("RequestVote RPC failed to peer={}", client.id());
+        return;
+    }
+
+    auto responseTerm = response.term();
+    auto voteGranted = response.votegranted();
+
+    spdlog::debug(
+        "Received RequestVoteResponse in requester "
+        "thread peerTerm={} "
+        "voteGranted={} peer={}",
+        responseTerm,
+        voteGranted,
+        response.responderid()
+    );
+
+    absl::WriterMutexLock locker(&m_stateMutex);
+
+    if (responseTerm > m_currentTerm)
+    {
+        becomeFollower(responseTerm);
+        return;
+    }
+
+    if (voteGranted != 0 && responseTerm == m_currentTerm)
+    {
+        m_voteCount++;
+        if (hasMajority(m_voteCount.load()))
+        {
+            becomeLeader();
+        }
     }
 }
 
@@ -1129,14 +1210,16 @@ auto consensus_module_t::flushPersistentState() -> bool
         return false;
     }
 
-    fsa << m_commitIndex << " " << m_votedFor << "\n";
+    // Save: currentTerm commitIndex votedFor
+    fsa << m_currentTerm << ' ' << m_commitIndex << ' ' << m_votedFor << '\n';
     if (fsa.fail())
     {
         spdlog::error(
             "Node={} is unable to write into {} the "
-            "commitIndex={} and votedFor={}",
+            "currentTerm={}, commitIndex={} and votedFor={}",
             m_config.m_id,
             path.c_str(),
+            m_currentTerm,
             m_commitIndex,
             m_votedFor
         );
@@ -1168,16 +1251,120 @@ auto consensus_module_t::restorePersistentState() -> bool
             return false;
         }
 
-        ifs >> m_commitIndex >> m_votedFor;
+        ifs >> m_currentTerm >> m_commitIndex >> m_votedFor;
         spdlog::info(
-            "Node={} restored commitIndex={} and votedFor={}",
+            "Node={} restored currentTerm={}, commitIndex={} and votedFor={}",
             m_config.m_id,
+            m_commitIndex,
             m_commitIndex,
             m_votedFor
         );
     }
 
     return true;
+}
+
+void consensus_module_t::monitorPendingReplications()
+{
+    while (!m_shutdown.load())
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+
+        std::vector<uint64_t> completedIds;
+        std::vector<uint64_t> timeoutIds;
+
+        {
+            absl::ReaderMutexLock stateLock{&m_stateMutex};
+            absl::WriterMutexLock pendingLock{&m_pendingMutex};
+
+            const auto now = std::chrono::steady_clock::now();
+
+            for (const auto &[id, pending] : m_pendingReplications)
+            {
+                uint32_t logIndex = pending.logIndex;
+
+                // Check if this entry has been commited
+                if (m_commitIndex >= logIndex)
+                {
+                    completedIds.emplace_back(id);
+                }
+                // Check if timed out
+                else if (now > pending.deadline)
+                {
+                    timeoutIds.emplace_back(id);
+                }
+            }
+        }
+
+        if (!completedIds.empty() || !timeoutIds.empty())
+        {
+            absl::WriterMutexLock pendingLock{&m_pendingMutex};
+
+            // Handle completed
+            for (uint64_t id : completedIds)
+            {
+                auto it = m_pendingReplications.find(id);
+                if (it != m_pendingReplications.end())
+                {
+                    it->second.promise.set_value(true);
+                    m_pendingReplications.erase(it);
+                }
+            }
+
+            // Handle timeouts
+            for (uint64_t id : timeoutIds)
+            {
+                auto it = m_pendingReplications.find(id);
+                if (it != m_pendingReplications.end())
+                {
+                    it->second.promise.set_value(false);
+                    m_pendingReplications.erase(it);
+                }
+            }
+        }
+    }
+}
+
+void consensus_module_t::applyCommittedEntries()
+{
+    while (m_lastApplied < m_commitIndex && !m_shutdown.load())
+    {
+        uint32_t applyIndex = m_lastApplied + 1;
+        auto     logEntry = m_log->read(applyIndex - 1);
+
+        if (logEntry.has_value())
+        {
+            m_internalThreadPool->enqueue(
+                [this, entry = std::move(logEntry.value()), applyIndex]
+                {
+                    spdlog::info("Applying log entry {} to state machine", applyIndex);
+
+                    try
+                    {
+                        if (m_onCommitCbk(entry))
+                        {
+                            m_lastApplied = applyIndex;
+                        }
+                        else
+                        {
+                            spdlog::error("Failed to apply log entry {}", applyIndex);
+                        }
+                    }
+                    catch (const std::exception &e)
+                    {
+                        spdlog::error("Exception applying log entry {}: {}", applyIndex, e.what());
+                    }
+                }
+            );
+
+            m_lastApplied++;
+        }
+        else
+        {
+            spdlog::error("Failed to read log entry {} for state machine update", applyIndex);
+            m_lastApplied++;
+        }
+    }
 }
 
 void consensus_module_t::cleanupHeartbeatThread()
@@ -1206,4 +1393,10 @@ void consensus_module_t::setOnCommitCallback(on_commit_cbk_t onCommitCbk)
 {
     m_onCommitCbk = std::move(onCommitCbk);
 }
+
+void consensus_module_t::setOnLeaderChangeCallback(on_leader_change_cbk_t onLeaderChangeCbk)
+{
+    m_onLeaderChangeCbk = std::move(onLeaderChangeCbk);
+}
+
 } // namespace raft

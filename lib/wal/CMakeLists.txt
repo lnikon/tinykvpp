@@ -1,27 +1,17 @@
 cmake_minimum_required(VERSION 3.25)
 project(frankie)
 
-add_library(WAL common.cpp)
+add_library(WAL wal.cpp common.cpp)
 
 set_target_properties(WAL PROPERTIES CXX_STANDARD 23)
 target_include_directories(WAL INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}
                                          ${CMAKE_SOURCE_DIR}/lib)
-target_link_libraries(
-  WAL
-  PUBLIC abseil::abseil
-         spdlog::spdlog
-         fmt::fmt
-         nlohmann_json::nlohmann_json
-         nlohmann_json_schema_validator
-         magic_enum::magic_enum
-         Config
-         FS
-         Raft
-         RaftProtoObjects)
 
-# add_executable(WALTest "wal_test.cpp") set_target_properties(WALTest
-# PROPERTIES CXX_STANDARD 23) target_link_libraries( WALTest
-# Catch2::Catch2WithMain spdlog::spdlog fmt::fmt LSMTree MemTable DB Config
-# HashIndex )
+target_link_libraries(WAL PUBLIC abseil::abseil spdlog::spdlog FS)
 
-# Register Catch2 tests with CTest include(Catch) catch_discover_tests(WALTest)
+add_executable(WALTest wal_test.cpp)
+set_target_properties(WALTest PROPERTIES CXX_STANDARD 23)
+target_link_libraries(WALTest GTest::gtest_main WAL)
+
+include(GoogleTest)
+gtest_discover_tests(WALTest)

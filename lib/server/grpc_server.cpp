@@ -29,12 +29,7 @@ auto tinykvpp_service_impl_t::Put(
 
     try
     {
-        const bool success = m_database->put(
-            db::db_t::key_t{pRequest->key()},
-            db::db_t::value_t{pRequest->value()},
-            db::db_put_context_k::replicate_k
-        );
-
+        const bool success = m_database->put(pRequest, pResponse);
         if (!success)
         {
             spdlog::warn("Put operation failed for key: {}", pRequest->key());

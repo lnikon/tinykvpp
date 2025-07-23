@@ -1,20 +1,57 @@
 #pragma once
 
-#include "config/config.h"
-#include "raft/raft.h"
-#include "wal/wal.h"
-#include "structures/lsmtree/lsmtree.h"
-#include "db/manifest/manifest.h"
+#include <future>
 #include <memory>
+
+#include <absl/base/thread_annotations.h>
+#include <absl/container/flat_hash_map.h>
+#include <grpcpp/server_context.h>
+
+#include "db/manifest/manifest.h"
+#include "config/config.h"
+#include "structures/lsmtree/lsmtree.h"
+#include "raft/raft.h"
+#include "concurrency/thread_safe_queue.h"
+#include "TinyKVPP.pb.h"
 
 namespace db
 {
 
-enum class db_put_context_k : int8_t
+enum class client_request_type_k : int8_t
 {
-    none_k,             // No context
-    do_not_replicate_k, // Do not replicate this put operation
-    replicate_k         // Replicate this put operation
+    undefined_k = -1,
+    put_k,
+    get_k,
+    delete_k,
+};
+
+enum class db_op_status_k : int8_t
+{
+    undefined_k = -1,
+    success_k,
+    failure_k,
+    request_timeout_k,
+    failed_to_replicate_k,
+    request_queue_full_k,
+    forward_to_leader_k,
+    leader_not_found_k,
+};
+
+struct db_op_result_t final
+{
+    db_op_status_k status{db_op_status_k::undefined_k};
+    std::string    message;
+    std::string    leaderAddress;
+};
+
+using request_id_t = uint64_t;
+struct client_request_t final
+{
+    client_request_type_k type{client_request_type_k::undefined_k};
+    std::string_view      key;
+    std::string_view      value;
+    std::promise<bool>    promise;
+    request_id_t          requestId;
 };
 
 class db_t final
@@ -23,12 +60,10 @@ class db_t final
     using record_t = structures::memtable::memtable_t::record_t;
     using key_t = record_t::key_t;
     using value_t = record_t::value_t;
-    using wal_ptr_t = std::shared_ptr<wal::wal_t<wal::wal_entry_t>>;
     using lsmtree_ptr_t = std::shared_ptr<structures::lsmtree::lsmtree_t>;
 
     explicit db_t(
         config::shared_ptr_t                      config,
-        wal_ptr_t                                 pWal,
         manifest::shared_ptr_t                    pManifest,
         lsmtree_ptr_t                             pLsmtree,
         std::shared_ptr<raft::consensus_module_t> pConsensusModule
@@ -42,10 +77,13 @@ class db_t final
 
     ~db_t() noexcept = default;
 
+    auto start() -> bool;
+    void stop();
+
     [[nodiscard]] auto open() -> bool;
 
-    [[nodiscard]] auto put(key_t key, value_t value, db_put_context_k context) noexcept -> bool;
-    [[nodiscard]] auto put(record_t record, db_put_context_k context) noexcept -> bool;
+    [[nodiscard]] auto put(const PutRequest *pRequest, PutResponse *pResponse) noexcept
+        -> db_op_result_t;
     [[nodiscard]] auto get(const key_t &key) -> std::optional<record_t>;
 
     [[nodiscard]] auto config() const noexcept -> config::shared_ptr_t;
@@ -55,11 +93,51 @@ class db_t final
 
     void swap(db_t &other) noexcept;
 
+    // Async request processing
+    void processRequests();
+    void handleClientRequest(client_request_t request);
+    void monitorPendingRequests();
+
+    // Raft commit callback
+    auto onRaftCommit(const LogEntry &entry) -> bool;
+    void onLeaderChange(bool isLeader);
+
+    // Helper methods
+    auto serializeOperation(const client_request_t &request) -> std::string;
+    auto deserializeAndApply(const std::string &payload);
+    auto forwardToLeader() -> db_op_result_t;
+    auto getLeaderAddress() -> std::string;
+
+    // Core components
     config::shared_ptr_t                      m_config;
-    wal_ptr_t                                 m_pWal;
     manifest::shared_ptr_t                    m_pManifest;
     lsmtree_ptr_t                             m_pLSMtree;
     std::shared_ptr<raft::consensus_module_t> m_pConsensusModule;
+
+    // Request handling
+    concurrency::thread_safe_queue_t<client_request_t> m_requestQueue;
+    concurrency::thread_pool_t                         m_requestPool;
+    std::thread                                        m_requestProcessor;
+    std::thread                                        m_pendingMonitor;
+
+    // Pending request tracking
+    mutable absl::Mutex m_pendingMutex;
+    absl::flat_hash_map<request_id_t, client_request_t>
+        m_pendingRequests     ABSL_GUARDED_BY(m_pendingMutex);
+    std::atomic<request_id_t> m_requestIdCounter{0};
+
+    // Leader tracking
+    std::atomic<bool>           m_isLeader{false};
+    mutable absl::Mutex         m_leaderMutex;
+    std::string m_leaderAddress ABSL_GUARDED_BY(m_leaderMutex);
+
+    // Shutdown flag
+    std::atomic<bool> m_shutdown{false};
+
+    // Metrics
+    std::atomic<request_id_t> m_requestsProcessed{0};
+    std::atomic<request_id_t> m_requestsFailed{0};
+    std::atomic<request_id_t> m_requestsForwarded{0};
 };
 
 using shared_ptr_t = std::shared_ptr<db_t>;
@@ -73,7 +151,6 @@ class db_builder_t
   public:
     [[nodiscard]] auto build(
         config::shared_ptr_t                      config,
-        db_t::wal_ptr_t                           pWal,
         manifest::shared_ptr_t                    pManifest,
         db_t::lsmtree_ptr_t                       pLSMTree,
         std::shared_ptr<raft::consensus_module_t> pConsensusModule
@@ -82,7 +159,6 @@ class db_builder_t
         return std::make_optional(
             db_t{
                 std::move(config),
-                std::move(pWal),
                 std::move(pManifest),
                 std::move(pLSMTree),
                 std::move(pConsensusModule)

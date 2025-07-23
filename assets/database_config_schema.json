@@ -164,8 +164,7 @@
             "type": "string",
             "enum": [
                 "inMemory",
-                "persistent",
-                "replicated"
+                "persistent"
             ]
         },
         "compaction": {

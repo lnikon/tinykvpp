@@ -80,15 +80,13 @@ using shared_ptr_t = std::shared_ptr<lsmtree_t>;
 
 struct lsmtree_builder_t final
 {
-    [[nodiscard]] auto build(
-        config::shared_ptr_t                pConfig,
-        db::manifest::shared_ptr_t          pManifest,
-        wal::shared_ptr_t<wal::wal_entry_t> pWal
-    ) const -> std::shared_ptr<lsmtree_t>;
+    using wal_t = wal::shared_ptr_t<LogEntry>;
+    [[nodiscard]] auto
+    build(config::shared_ptr_t pConfig, db::manifest::shared_ptr_t pManifest, wal_t pWal) const
+        -> std::shared_ptr<lsmtree_t>;
 
   private:
-    [[nodiscard]] auto
-    build_memtable_from_wal(wal::shared_ptr_t<wal::wal_entry_t> pWal) const noexcept
+    [[nodiscard]] auto build_memtable_from_wal(wal_t pWal) const noexcept
         -> std::optional<memtable::memtable_t>;
 
     [[nodiscard]] auto build_levels_from_manifest(

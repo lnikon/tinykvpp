@@ -2,10 +2,10 @@
 
 #include <expected>
 
-#include "../../concepts.h"
+#include "../concepts.h"
 #include "fs/types.h"
 
-namespace wal::log::storage::backend
+namespace wal::backend
 {
 
 enum class storage_backend_builder_error_t : std::uint8_t
@@ -109,4 +109,4 @@ storage_backend_builder_t<TBackendStorage>::storage_backend_builder_t(
 {
 }
 
-} // namespace wal::log::storage::backend
+} // namespace wal::backend

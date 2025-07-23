@@ -1,11 +1,11 @@
 [buildenv]
-CC=/usr/bin/clang-19
-CXX=/usr/bin/clang++-19
+CC=/usr/bin/clang-20
+CXX=/usr/bin/clang++-20
 
 [settings]
 arch=x86_64
 build_type=Release
 compiler=clang
 compiler.cppstd=23
-compiler.version=19
+compiler.version=20
 os=Linux
