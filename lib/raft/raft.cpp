@@ -644,6 +644,12 @@ auto consensus_module_t::getState() const -> NodeState
     return getStateSafe() == NodeState::LEADER;
 }
 
+[[nodiscard]] auto consensus_module_t::getLeaderHint() const -> std::string
+{
+    absl::WriterMutexLock locker{&m_leaderMutex};
+    return m_currentLeaderHint;
+}
+
 void consensus_module_t::becomeFollower(uint32_t newTerm)
 {
     m_currentTerm = newTerm;

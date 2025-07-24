@@ -28,3 +28,22 @@ message GetResponse
     bool   found = 1;
     string value = 2;
 }
+
+// For internal database use
+message DatabaseOperation
+{
+    enum Type
+    {
+        PUT = 0;
+        DELETE = 1;
+        BATCH = 2;
+    }
+
+    Type   type = 1;
+    string key = 2;
+    string value = 3;
+
+    // Reserve 4 for Batch operations
+
+    uint64 request_id = 5;
+}

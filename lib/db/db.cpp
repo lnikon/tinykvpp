@@ -1,8 +1,14 @@
+#include <chrono>
+#include <thread>
+
 #include <absl/synchronization/mutex.h>
 #include <spdlog/spdlog.h>
+#include <magic_enum/magic_enum.hpp>
 
 #include "db.h"
+#include "TinyKVPP.pb.h"
 #include "db/manifest/manifest.h"
+#include "lsmtree.h"
 #include "memtable.h"
 #include "raft/raft.h"
 
@@ -18,29 +24,12 @@ db_t::db_t(
     : m_config{std::move(config)},
       m_pManifest{std::move(pManifest)},
       m_pLSMtree{std::move(pLsmtree)},
-      m_pConsensusModule{std::move(pConsensusModule)}
+      m_pConsensusModule{std::move(pConsensusModule)},
+      m_requestPool{4, std::string{"db_request_pool"}}
 {
     assert(m_config);
     assert(m_pManifest);
     assert(m_pLSMtree);
-}
-
-db_t::db_t(db_t &&other) noexcept
-    : m_config{std::move(other.m_config)},
-      m_pManifest{std::move(other.m_pManifest)},
-      m_pLSMtree{std::move(other.m_pLSMtree)},
-      m_pConsensusModule{std::move(other.m_pConsensusModule)}
-{
-}
-
-auto db_t::operator=(db_t &&other) noexcept -> db_t &
-{
-    if (this != &other)
-    {
-        db_t temp{std::move(other)};
-        swap(temp);
-    }
-    return *this;
 }
 
 auto db_t::start() -> bool
@@ -53,8 +42,21 @@ auto db_t::start() -> bool
         return false;
     }
 
-    m_requestProcessor = std::thread([this] { processRequests(); });
-    m_pendingMonitor = std::thread([this] { monitorPendingRequests(); });
+    m_requestProcessor = std::thread(
+        [this]
+        {
+            pthread_setname_np(pthread_self(), "requests_processor");
+            processRequests();
+        }
+    );
+
+    m_pendingMonitor = std::thread(
+        [this]
+        {
+            pthread_setname_np(pthread_self(), "pending_requests_monitor");
+            monitorPendingRequests();
+        }
+    );
 
     m_isLeader.store(m_pConsensusModule->isLeader());
 
@@ -163,10 +165,32 @@ auto db_t::open() -> bool
     };
 }
 
-auto db_t::get(const key_t &key) -> std::optional<record_t>
+auto db_t::get(const GetRequest *pRequest, GetResponse *pResponse) -> db_op_result_t
 {
-    // TODO(lnikon): Should lock a ReadMutex here!
-    return m_pLSMtree->get(key);
+    if (m_shutdown.load())
+    {
+        spdlog::warn("Database is shutting down. Can not accept new request.");
+        return {.status = db_op_status_k::failure_k, .message = {}, .leaderAddress = {}};
+    }
+
+    // TODO(lnikon): Linearizable reads
+    // if (pRequest->linearizable() && !m_isLeader.load())
+    // {
+    //   return forwardToLeader();
+    // }
+
+    if (auto record =
+            m_pLSMtree->get(structures::memtable::memtable_t::record_t::key_t{pRequest->key()});
+        record.has_value())
+    {
+        pResponse->set_found(true);
+        pResponse->set_value(record.value());
+        return {.status = db_op_status_k::success_k, .message = {}, .leaderAddress = {}};
+    }
+
+    return {
+        .status = db_op_status_k::key_not_found_k, .message = {"Key not found"}, .leaderAddress = {}
+    };
 }
 
 auto db_t::config() const noexcept -> config::shared_ptr_t
@@ -223,30 +247,204 @@ void db_t::swap(db_t &other) noexcept
 
 void db_t::processRequests()
 {
+    while (!m_shutdown.load())
+    {
+        auto request = m_requestQueue.pop();
+        if (!request.has_value())
+        {
+            continue;
+        }
+
+        m_requestPool.enqueue([this, &request]
+                              { handleClientRequest(std::move(request.value())); });
+    }
 }
 
 void db_t::handleClientRequest(client_request_t request)
 {
+    // Check if still leader
+    if (!m_isLeader.load())
+    {
+        request.promise.set_value(false);
+        return;
+    }
+
+    // Serialize operation
+    std::string  payload = serializeOperation(request);
+    request_id_t requestId = request.requestId;
+    auto         deadline = request.deadline;
+
+    // Store pending request
+    {
+        absl::WriterMutexLock locker{&m_pendingMutex};
+        m_pendingRequests[request.requestId] = std::move(request);
+    }
+
+    // Submit to Raft
+    auto raftFuture = m_pConsensusModule->replicateAsync(std::move(payload));
+
+    // Handle Raft result asynchronously
+    m_requestPool.enqueue(
+        [this, requestId, deadline, raftFuture = std::move(raftFuture)] mutable
+        {
+            // Check if already timed out
+            auto timeout = deadline - std::chrono::steady_clock::now();
+            if (timeout <= std::chrono::milliseconds(0))
+            {
+                absl::WriterMutexLock locker{&m_pendingMutex};
+                requestFailed(requestId);
+                return;
+            }
+
+            // Wait with timeout
+            if (raftFuture.wait_for(timeout) == std::future_status::ready)
+            {
+                // Future completed,
+                bool replicated = raftFuture.get();
+                // but replication failed
+                if (!replicated)
+                {
+                    // Replication failed - complete request immediately
+                    absl::WriterMutexLock locker{&m_pendingMutex};
+                    requestFailed(requestId);
+                }
+                // If replicated=true, wait for commit callback to complete the request
+            }
+            else
+            {
+                // Timed out waiting for replication
+                absl::WriterMutexLock locker{&m_pendingMutex};
+                requestFailed(requestId);
+            }
+        }
+    );
 }
 
 void db_t::monitorPendingRequests()
 {
+    while (!m_shutdown.load())
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+        std::vector<request_id_t> timedOut;
+
+        {
+            absl::ReaderMutexLock locker{&m_pendingMutex};
+            auto                  now = std::chrono::steady_clock::now();
+            for (const auto &[id, request] : m_pendingRequests)
+            {
+                if (now > request.deadline)
+                {
+                    timedOut.push_back(id);
+                }
+            }
+        }
+
+        if (!timedOut.empty())
+        {
+            absl::ReaderMutexLock locker{&m_pendingMutex};
+            for (auto id : timedOut)
+            {
+                requestFailed(id);
+            }
+        }
+    }
 }
 
 auto db_t::onRaftCommit(const LogEntry &entry) -> bool
 {
+    DatabaseOperation op;
+    op.ParseFromString(entry.payload());
+
+    structures::memtable::memtable_t::record_t record;
+    record.m_key.m_key = op.key();
+    record.m_value.m_value = op.value();
+
+    switch (op.type())
+    {
+    case DatabaseOperation::PUT:
+    {
+        if (m_pLSMtree->put(std::move(record)) ==
+            structures::lsmtree::lsmtree_status_k::put_failed_k)
+        {
+            spdlog::error("Failed to update the lsmtree");
+            return false;
+        }
+        break;
+    }
+    case DatabaseOperation::DELETE:
+    {
+        spdlog::critical("DELETE is not implemented");
+        return true;
+        break;
+    }
+    case DatabaseOperation::BATCH:
+    {
+        spdlog::critical("BATCH is not implemented");
+        return true;
+        break;
+    }
+    default:
+    {
+        spdlog::critical("Unknown operation type: {}", magic_enum::enum_name(op.type()));
+        return false;
+    }
+    }
+
+    // Mark request as success and remove from pending requests
+    requestSuccess(op.request_id());
+
+    return true;
 }
 
 void db_t::onLeaderChange(bool isLeader)
 {
+    m_isLeader.store(isLeader);
+
+    if (!isLeader)
+    {
+        absl::WriterMutexLock locker{&m_pendingMutex};
+        for (auto &[id, request] : m_pendingRequests)
+        {
+            (void)id;
+            request.promise.set_value(false);
+        }
+        m_pendingRequests.clear();
+    }
 }
 
 auto db_t::serializeOperation(const client_request_t &request) -> std::string
 {
-}
+    DatabaseOperation op;
+    op.set_request_id(request.requestId);
 
-auto db_t::deserializeAndApply(const std::string &payload)
-{
+    switch (request.type)
+    {
+    case db::client_request_type_k::put_k:
+    {
+        op.set_type(DatabaseOperation::PUT);
+        op.set_key(request.key);
+        op.set_value(request.value);
+        break;
+    }
+    case db::client_request_type_k::delete_k:
+    {
+        spdlog::critical("DELETE is not implemented");
+        break;
+    }
+    case db::client_request_type_k::batch_k:
+    {
+        spdlog::critical("BATCH is not implemented");
+        break;
+    }
+    default:
+    {
+        spdlog::critical("Unknown operation type: {}", magic_enum::enum_name(request.type));
+        break;
+    }
+    }
+
+    return op.SerializeAsString();
 }
 
 auto db_t::forwardToLeader() -> db_op_result_t
@@ -265,6 +463,36 @@ auto db_t::forwardToLeader() -> db_op_result_t
 
 auto db_t::getLeaderAddress() -> std::string
 {
+    std::string hint = m_pConsensusModule->getLeaderHint();
+    if (!hint.empty())
+    {
+        absl::WriterMutexLock locker{&m_leaderMutex};
+        m_leaderAddress = std::move(hint);
+        return m_leaderAddress;
+    }
+
+    absl::ReaderMutexLock locker{&m_leaderMutex};
+    return m_leaderAddress;
+}
+
+void db_t::requestSuccess(request_id_t id)
+{
+    if (auto it = m_pendingRequests.find(id); it != m_pendingRequests.end())
+    {
+        it->second.promise.set_value(true);
+        m_pendingRequests.erase(it);
+        m_requestsProcessed.fetch_add(1);
+    }
+}
+
+void db_t::requestFailed(request_id_t id)
+{
+    if (auto it = m_pendingRequests.find(id); it != m_pendingRequests.end())
+    {
+        it->second.promise.set_value(false);
+        m_pendingRequests.erase(it);
+        m_requestsFailed.fetch_add(1);
+    }
 }
 
 } // namespace db

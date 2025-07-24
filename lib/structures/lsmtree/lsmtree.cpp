@@ -71,9 +71,10 @@ auto lsmtree_t::put(record_t record) noexcept -> lsmtree_status_k
     absl::WriterMutexLock lock{&m_mutex};
     assert(m_table);
 
+    // TODO(lnikon): Can memtable emplace fail?
     m_table->emplace(std::move(record));
 
-    // TODO: Most probably this 'if' block will causes periodic latencies during reads
+    // TODO(lnikon): Most probably this 'if' block will causes periodic latencies during reads
     if (m_table->size() >= m_pConfig->LSMTreeConfig.DiskFlushThresholdSize)
     {
         m_flushing_queue.push(std::move(m_table.value()));

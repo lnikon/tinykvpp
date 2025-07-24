@@ -172,6 +172,7 @@ class consensus_module_t final : public RaftService::Service
     [[nodiscard]] NodeState             getState() const ABSL_SHARED_LOCKS_REQUIRED(m_stateMutex);
     [[nodiscard]] NodeState             getStateSafe() const ABSL_LOCKS_EXCLUDED(m_stateMutex);
     [[nodiscard]] bool                  isLeader() const ABSL_LOCKS_EXCLUDED(m_stateMutex);
+    [[nodiscard]] std::string           getLeaderHint() const ABSL_LOCKS_EXCLUDED(m_stateMutex);
 
     void setOnCommitCallback(on_commit_cbk_t onCommitCbk);
     void setOnLeaderChangeCallback(on_leader_change_cbk_t onLeaderChangeCbk);

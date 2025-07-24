@@ -17,12 +17,13 @@
 namespace db
 {
 
+// This enum misses get_k because its processing flow is quite simple
 enum class client_request_type_k : int8_t
 {
     undefined_k = -1,
     put_k,
-    get_k,
     delete_k,
+    batch_k,
 };
 
 enum class db_op_status_k : int8_t
@@ -33,6 +34,7 @@ enum class db_op_status_k : int8_t
     request_timeout_k,
     failed_to_replicate_k,
     request_queue_full_k,
+    key_not_found_k,
     forward_to_leader_k,
     leader_not_found_k,
 };
@@ -47,11 +49,12 @@ struct db_op_result_t final
 using request_id_t = uint64_t;
 struct client_request_t final
 {
-    client_request_type_k type{client_request_type_k::undefined_k};
-    std::string_view      key;
-    std::string_view      value;
-    std::promise<bool>    promise;
-    request_id_t          requestId;
+    client_request_type_k                 type{client_request_type_k::undefined_k};
+    std::string_view                      key;
+    std::string_view                      value;
+    std::promise<bool>                    promise;
+    request_id_t                          requestId;
+    std::chrono::steady_clock::time_point deadline;
 };
 
 class db_t final
@@ -69,8 +72,8 @@ class db_t final
         std::shared_ptr<raft::consensus_module_t> pConsensusModule
     ) noexcept;
 
-    db_t(db_t &&other) noexcept;
-    auto operator=(db_t &&other) noexcept -> db_t &;
+    db_t(db_t &&other) = delete;
+    auto operator=(db_t &&other) -> db_t & = delete;
 
     db_t(const db_t &) = delete;
     auto operator=(const db_t &) -> db_t & = delete;
@@ -84,7 +87,7 @@ class db_t final
 
     [[nodiscard]] auto put(const PutRequest *pRequest, PutResponse *pResponse) noexcept
         -> db_op_result_t;
-    [[nodiscard]] auto get(const key_t &key) -> std::optional<record_t>;
+    [[nodiscard]] auto get(const GetRequest *pRequest, GetResponse *pResponse) -> db_op_result_t;
 
     [[nodiscard]] auto config() const noexcept -> config::shared_ptr_t;
 
@@ -104,9 +107,10 @@ class db_t final
 
     // Helper methods
     auto serializeOperation(const client_request_t &request) -> std::string;
-    auto deserializeAndApply(const std::string &payload);
     auto forwardToLeader() -> db_op_result_t;
     auto getLeaderAddress() -> std::string;
+    void requestSuccess(request_id_t id) ABSL_SHARED_LOCKS_REQUIRED(m_pendingMutex);
+    void requestFailed(request_id_t id) ABSL_SHARED_LOCKS_REQUIRED(m_pendingMutex);
 
     // Core components
     config::shared_ptr_t                      m_config;

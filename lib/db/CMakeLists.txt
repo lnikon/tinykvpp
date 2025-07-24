@@ -15,6 +15,7 @@ target_link_libraries(
          cxxopts::cxxopts
          gRPC::grpc
          libassert::assert
+         magic_enum::magic_enum
          TKVProtoObjects
          LSMTree
          MemTable
