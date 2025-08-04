@@ -50,6 +50,7 @@ find_package(liburing REQUIRED)
 
 include_directories(lib)
 
+add_subdirectory(proto)
 add_subdirectory(lib)
 add_subdirectory(src)
 add_subdirectory(bench)

@@ -16,8 +16,7 @@
 #include <spdlog/spdlog.h>
 #include <libassert/assert.hpp>
 
-#include "raft.h"
-#include "Raft.pb.h"
+#include "raft/raft.h"
 #include "concurrency/thread_pool.h"
 #include "wal/wal.h"
 
@@ -50,14 +49,14 @@ auto generate_raft_timeout()
 
 } // namespace
 
-namespace raft
+namespace consensus
 {
 
 // -------------------------------
 // raft_node_grpc_client_t
 // -------------------------------
 raft_node_grpc_client_t::raft_node_grpc_client_t(
-    node_config_t config, std::unique_ptr<RaftService::StubInterface> pRaftStub
+    node_config_t config, std::unique_ptr<raft::v1::RaftService::StubInterface> pRaftStub
 )
     : m_config{std::move(config)},
       m_stub{std::move(pRaftStub)}
@@ -67,7 +66,7 @@ raft_node_grpc_client_t::raft_node_grpc_client_t(
 }
 
 auto raft_node_grpc_client_t::appendEntries(
-    const AppendEntriesRequest &request, AppendEntriesResponse *response
+    const raft::v1::AppendEntriesRequest &request, raft::v1::AppendEntriesResponse *response
 ) -> bool
 {
     const auto          rpc_timeout_duration = std::chrono::milliseconds(generate_raft_timeout());
@@ -91,7 +90,7 @@ auto raft_node_grpc_client_t::appendEntries(
 }
 
 auto raft_node_grpc_client_t::requestVote(
-    const RequestVoteRequest &request, RequestVoteResponse *response
+    const raft::v1::RequestVoteRequest &request, raft::v1::RequestVoteResponse *response
 ) -> bool
 {
     const auto rpc_timeout_duration = std::chrono::milliseconds(generate_raft_timeout());
@@ -117,7 +116,7 @@ auto raft_node_grpc_client_t::requestVote(
 }
 
 [[nodiscard]] auto raft_node_grpc_client_t::replicate(
-    const ReplicateEntriesRequest &request, ReplicateEntriesResponse *response
+    const raft::v1::ReplicateRequest &request, raft::v1::ReplicateResponse *response
 ) -> bool
 {
     const auto rpc_timeout_duration = std::chrono::milliseconds(generate_raft_timeout());
@@ -166,7 +165,7 @@ consensus_module_t::consensus_module_t(
       m_log{std::move(pWal)},
       m_commitIndex{0},
       m_lastApplied{0},
-      m_state{NodeState::FOLLOWER},
+      m_state{raft::v1::NodeState::NODE_STATE_FOLLOWER},
       m_leaderHeartbeatReceived{false},
       m_voteCount{0}
 {
@@ -262,9 +261,9 @@ void consensus_module_t::stop()
 }
 
 auto consensus_module_t::AppendEntries(
-    grpc::ServerContext        *pContext,
-    const AppendEntriesRequest *pRequest,
-    AppendEntriesResponse      *pResponse
+    grpc::ServerContext                  *pContext,
+    const raft::v1::AppendEntriesRequest *pRequest,
+    raft::v1::AppendEntriesResponse      *pResponse
 ) -> grpc::Status
 {
     (void)pContext;
@@ -272,7 +271,7 @@ auto consensus_module_t::AppendEntries(
     spdlog::debug(
         "Node={} recevied AppendEntries RPC from leader={} during term={}",
         m_config.m_id,
-        pRequest->senderid(),
+        pRequest->sender_id(),
         pRequest->term()
     );
 
@@ -282,13 +281,13 @@ auto consensus_module_t::AppendEntries(
         std::string leaderIp;
         for (const auto &[id, client] : m_replicas)
         {
-            if (id == pRequest->senderid() && client.has_value())
+            if (id == pRequest->sender_id() && client.has_value())
             {
                 leaderIp = client->ip();
             }
         }
 
-        if (leaderIp.empty() && pRequest->senderid() == m_config.m_id)
+        if (leaderIp.empty() && pRequest->sender_id() == m_config.m_id)
         {
             leaderIp = m_config.m_ip;
         }
@@ -313,7 +312,7 @@ auto consensus_module_t::AppendEntries(
         );
         pResponse->set_term(m_currentTerm);
         pResponse->set_success(false);
-        pResponse->set_responderid(m_config.m_id);
+        pResponse->set_responder_id(m_config.m_id);
         return grpc::Status::OK;
     }
 
@@ -330,44 +329,44 @@ auto consensus_module_t::AppendEntries(
     }
 
     // 2. Log consistency check
-    if (pRequest->prevlogindex() > 0)
+    if (pRequest->prev_log_index() > 0)
     {
-        const auto &logEntry{m_log->read(pRequest->prevlogindex() - 1)};
+        const auto &logEntry{m_log->read(pRequest->prev_log_index() - 1)};
         if (!logEntry.has_value())
         {
             spdlog::error(
                 "Node={} received prevlogindex={} which does not exist. logSize={}",
                 m_config.m_id,
-                pRequest->prevlogindex(),
+                pRequest->prev_log_index(),
                 m_log->size()
             );
 
             pResponse->set_term(m_currentTerm);
             pResponse->set_success(false);
-            pResponse->set_responderid(m_config.m_id);
+            pResponse->set_responder_id(m_config.m_id);
             return grpc::Status::OK;
         }
 
-        if (logEntry->term() != pRequest->prevlogterm())
+        if (logEntry->term() != pRequest->prev_log_term())
         {
             spdlog::error(
                 "Node={} received prevlogindex={} with mismatched prevlogterm={}. Current log "
                 "term={}",
                 m_config.m_id,
-                pRequest->prevlogindex(),
-                pRequest->prevlogterm(),
+                pRequest->prev_log_index(),
+                pRequest->prev_log_term(),
                 logEntry->term()
             );
 
             pResponse->set_term(m_currentTerm);
             pResponse->set_success(false);
-            pResponse->set_responderid(m_config.m_id);
+            pResponse->set_responder_id(m_config.m_id);
             return grpc::Status::OK;
         }
     }
 
     // 3. Append new entries and remove conflicting ones
-    auto newEntryStart = pRequest->prevlogindex() + 1;
+    auto newEntryStart = pRequest->prev_log_index() + 1;
     for (auto idx{0}; idx < pRequest->entries().size(); ++idx)
     {
         const auto newIdx{newEntryStart + idx - 1};
@@ -388,20 +387,20 @@ auto consensus_module_t::AppendEntries(
 
     if (!pRequest->entries().empty())
     {
-        spdlog::info("leaderCommit={}, m_commitIndex={}", pRequest->leadercommit(), m_commitIndex);
+        spdlog::info("leaderCommit={}, m_commitIndex={}", pRequest->leader_commit(), m_commitIndex);
     }
 
-    if (pRequest->leadercommit() > m_commitIndex)
+    if (pRequest->leader_commit() > m_commitIndex)
     {
         // Update m_commitIndex
         if (!updatePersistentState(
-                std::min(pRequest->leadercommit(), (uint32_t)m_log->size()), std::nullopt
+                std::min(pRequest->leader_commit(), (uint32_t)m_log->size()), std::nullopt
             ))
         {
             spdlog::error("Node={} is unable to persist commitIndex", m_config.m_id, m_commitIndex);
             pResponse->set_term(m_currentTerm);
             pResponse->set_success(false);
-            pResponse->set_responderid(m_config.m_id);
+            pResponse->set_responder_id(m_config.m_id);
             return grpc::Status::OK;
         }
     }
@@ -421,11 +420,11 @@ auto consensus_module_t::AppendEntries(
 
     pResponse->set_term(m_currentTerm);
     pResponse->set_success(true);
-    pResponse->set_responderid(m_config.m_id);
+    pResponse->set_responder_id(m_config.m_id);
     pResponse->set_match_index(m_log->size());
 
     // Update @m_votedFor
-    if (!updatePersistentState(std::nullopt, pRequest->senderid()))
+    if (!updatePersistentState(std::nullopt, pRequest->sender_id()))
     {
         spdlog::error("Node={} is unable to persist votedFor", m_config.m_id, m_votedFor);
     }
@@ -440,9 +439,9 @@ auto consensus_module_t::AppendEntries(
 }
 
 auto consensus_module_t::RequestVote(
-    grpc::ServerContext      *pContext,
-    const RequestVoteRequest *pRequest,
-    RequestVoteResponse      *pResponse
+    grpc::ServerContext                *pContext,
+    const raft::v1::RequestVoteRequest *pRequest,
+    raft::v1::RequestVoteResponse      *pResponse
 ) -> grpc::Status
 {
     (void)pContext;
@@ -455,14 +454,14 @@ auto consensus_module_t::RequestVote(
         "Node={} received RequestVote RPC from candidate={} during "
         "term={} peerTerm={}",
         m_config.m_id,
-        pRequest->candidateid(),
+        pRequest->candidate_id(),
         m_currentTerm,
         pRequest->term()
     );
 
     pResponse->set_term(m_currentTerm);
-    pResponse->set_votegranted(0);
-    pResponse->set_responderid(m_config.m_id);
+    pResponse->set_vote_granted(0);
+    pResponse->set_responder_id(m_config.m_id);
 
     // Become follower if candidates has higher term
     if (pRequest->term() > m_currentTerm)
@@ -481,22 +480,22 @@ auto consensus_module_t::RequestVote(
 
     // Grant vote to the candidate if the node hasn't voted yet and
     // candidates log is at least as up-to-date as receiver's log
-    if (m_votedFor == 0 || m_votedFor == pRequest->candidateid())
+    if (m_votedFor == 0 || m_votedFor == pRequest->candidate_id())
     {
-        spdlog::debug("votedFor={} candidateid={}", m_votedFor, pRequest->candidateid());
-        if (pRequest->lastlogterm() > getLastLogTerm() ||
-            (pRequest->lastlogterm() == getLastLogTerm() &&
-             pRequest->lastlogindex() >= getLastLogIndex()))
+        spdlog::debug("votedFor={} candidateid={}", m_votedFor, pRequest->candidate_id());
+        if (pRequest->last_log_term() > getLastLogTerm() ||
+            (pRequest->last_log_term() == getLastLogTerm() &&
+             pRequest->last_log_index() >= getLastLogIndex()))
         {
-            if (!updatePersistentState(std::nullopt, pRequest->candidateid()))
+            if (!updatePersistentState(std::nullopt, pRequest->candidate_id()))
             {
                 spdlog::error("Node={} is unable to persist votedFor", m_config.m_id, m_votedFor);
             }
 
-            spdlog::info("Node={} votedFor={}", m_config.m_id, pRequest->candidateid());
+            spdlog::info("Node={} votedFor={}", m_config.m_id, pRequest->candidate_id());
 
             pResponse->set_term(m_currentTerm);
-            pResponse->set_votegranted(1);
+            pResponse->set_vote_granted(1);
         }
     }
 
@@ -504,9 +503,9 @@ auto consensus_module_t::RequestVote(
 }
 
 [[nodiscard]] auto consensus_module_t::Replicate(
-    grpc::ServerContext           *pContext,
-    const ReplicateEntriesRequest *pRequest,
-    ReplicateEntriesResponse      *pResponse
+    grpc::ServerContext              *pContext,
+    const raft::v1::ReplicateRequest *pRequest,
+    raft::v1::ReplicateResponse      *pResponse
 ) -> grpc::Status
 {
     (void)pContext;
@@ -549,12 +548,12 @@ auto consensus_module_t::replicate(std::string payload) -> raft_operation_status
     pending.deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
     auto future = pending.promise.get_future();
 
-    LogEntry logEntry;
+    raft::v1::LogEntry logEntry;
 
     {
         absl::MutexLock locker{&m_stateMutex};
 
-        if (m_state != NodeState::LEADER)
+        if (m_state != raft::v1::NodeState::NODE_STATE_LEADER)
         {
             pending.promise.set_value(false);
             return future;
@@ -622,18 +621,18 @@ auto consensus_module_t::votedFor() const -> uint32_t
     return m_votedFor;
 }
 
-auto consensus_module_t::log() const -> std::vector<LogEntry>
+auto consensus_module_t::log() const -> std::vector<raft::v1::LogEntry>
 {
     absl::ReaderMutexLock locker{&m_stateMutex};
     return m_log->records();
 }
 
-auto consensus_module_t::getState() const -> NodeState
+auto consensus_module_t::getState() const -> raft::v1::NodeState
 {
     return m_state;
 }
 
-[[nodiscard]] auto consensus_module_t::getStateSafe() const -> NodeState
+[[nodiscard]] auto consensus_module_t::getStateSafe() const -> raft::v1::NodeState
 {
     absl::ReaderMutexLock locker{&m_stateMutex};
     return m_state;
@@ -641,7 +640,7 @@ auto consensus_module_t::getState() const -> NodeState
 
 [[nodiscard]] auto consensus_module_t::isLeader() const -> bool
 {
-    return getStateSafe() == NodeState::LEADER;
+    return getStateSafe() == raft::v1::NodeState::NODE_STATE_LEADER;
 }
 
 [[nodiscard]] auto consensus_module_t::getLeaderHint() const -> std::string
@@ -653,7 +652,7 @@ auto consensus_module_t::getState() const -> NodeState
 void consensus_module_t::becomeFollower(uint32_t newTerm)
 {
     m_currentTerm = newTerm;
-    m_state = NodeState::FOLLOWER;
+    m_state = raft::v1::NodeState::NODE_STATE_LEADER;
     spdlog::info("Node={} reverted to follower state in term={}", m_config.m_id, m_currentTerm);
 
     cleanupHeartbeatThread();
@@ -672,13 +671,13 @@ void consensus_module_t::becomeFollower(uint32_t newTerm)
 
 void consensus_module_t::becomeLeader()
 {
-    if (m_state == NodeState::LEADER)
+    if (m_state == raft::v1::NodeState::NODE_STATE_LEADER)
     {
         spdlog::warn("Node={} is already a leader", m_config.m_id);
         return;
     }
 
-    m_state = NodeState::LEADER;
+    m_state = raft::v1::NodeState::NODE_STATE_LEADER;
     m_voteCount = 0;
 
     {
@@ -709,7 +708,7 @@ void consensus_module_t::runHeartbeatThread(std::stop_token token)
         // Check if still leader
         {
             absl::ReaderMutexLock locker{&m_stateMutex};
-            if (m_state != NodeState::LEADER)
+            if (m_state != raft::v1::NodeState::NODE_STATE_LEADER)
             {
                 break;
             }
@@ -790,7 +789,7 @@ auto consensus_module_t::waitForHeartbeat(std::stop_token token) -> bool
 }
 
 void consensus_module_t::sendAppendEntriesAsync(
-    raft_node_grpc_client_t &client, std::vector<LogEntry> logEntries
+    raft_node_grpc_client_t &client, std::vector<raft::v1::LogEntry> logEntries
 )
 {
     constexpr std::size_t MAX_RETRIES = 3;
@@ -798,13 +797,13 @@ void consensus_module_t::sendAppendEntriesAsync(
 
     while (retryCount < MAX_RETRIES && !m_shutdown.load())
     {
-        AppendEntriesRequest request;
-        uint32_t             nextIndex = 1; // Default for a fresh follower
+        raft::v1::AppendEntriesRequest request;
+        uint32_t                       nextIndex = 1; // Default for a fresh follower
 
         {
             absl::MutexLock locker{&m_stateMutex};
 
-            if (m_state != NodeState::LEADER)
+            if (m_state != raft::v1::NodeState::NODE_STATE_LEADER)
             {
                 return;
             }
@@ -828,17 +827,17 @@ void consensus_module_t::sendAppendEntriesAsync(
             if (nextIndex > 1)
             {
                 auto prevEntry = m_log->read(nextIndex - 2); // log is 0-based
-                request.set_prevlogindex(nextIndex - 1);
-                request.set_prevlogterm(prevEntry.has_value() ? prevEntry->term() : 0);
+                request.set_prev_log_index(nextIndex - 1);
+                request.set_prev_log_term(prevEntry.has_value() ? prevEntry->term() : 0);
             }
             else
             {
-                request.set_prevlogindex(0);
-                request.set_prevlogterm(0);
+                request.set_prev_log_index(0);
+                request.set_prev_log_term(0);
             }
 
-            request.set_leadercommit(m_commitIndex);
-            request.set_senderid(m_config.m_id);
+            request.set_leader_commit(m_commitIndex);
+            request.set_sender_id(m_config.m_id);
 
             // Add log entries starting from nextIndex
             for (const auto &logEntrie : logEntries)
@@ -851,8 +850,8 @@ void consensus_module_t::sendAppendEntriesAsync(
         }
 
         // Send request
-        AppendEntriesResponse response;
-        bool                  rpcSuccess = false;
+        raft::v1::AppendEntriesResponse response;
+        bool                            rpcSuccess = false;
 
         try
         {
@@ -895,7 +894,7 @@ void consensus_module_t::sendAppendEntriesAsync(
 }
 
 auto consensus_module_t::onSendAppendEntriesRPC(
-    raft_node_grpc_client_t &client, const AppendEntriesResponse &response
+    raft_node_grpc_client_t &client, const raft::v1::AppendEntriesResponse &response
 
 ) noexcept -> bool
 {
@@ -960,7 +959,7 @@ void consensus_module_t::runElectionThread(std::stop_token token) noexcept
     {
         {
             absl::ReaderMutexLock locker{&m_stateMutex};
-            if (getState() == NodeState::LEADER)
+            if (getState() == raft::v1::NodeState::NODE_STATE_LEADER)
             {
                 continue;
             }
@@ -979,14 +978,14 @@ void consensus_module_t::runElectionThread(std::stop_token token) noexcept
 
 void consensus_module_t::startElection()
 {
-    std::uint32_t      newTerm{0};
-    RequestVoteRequest request;
+    std::uint32_t                newTerm{0};
+    raft::v1::RequestVoteRequest request;
 
     {
         absl::WriterMutexLock locker(&m_stateMutex);
 
         newTerm = ++m_currentTerm;
-        m_state = NodeState::CANDIDATE;
+        m_state = raft::v1::NodeState::NODE_STATE_CANDIDATE;
 
         spdlog::info("Node={} starts election. New term={}", m_config.m_id, m_currentTerm);
 
@@ -1008,16 +1007,16 @@ void consensus_module_t::startElection()
         }
 
         request.set_term(m_currentTerm);
-        request.set_candidateid(m_config.m_id);
-        request.set_lastlogterm(getLastLogTerm());
-        request.set_lastlogindex(getLastLogIndex());
+        request.set_candidate_id(m_config.m_id);
+        request.set_last_log_term(getLastLogTerm());
+        request.set_last_log_index(getLastLogIndex());
     }
 
     sendRequestVoteRPCs(request, newTerm);
 }
 
 void consensus_module_t::sendRequestVoteRPCs(
-    const RequestVoteRequest &request, std::uint64_t newTerm
+    const raft::v1::RequestVoteRequest &request, std::uint64_t newTerm
 )
 {
     std::vector<std::jthread> requesterThreads;
@@ -1047,11 +1046,11 @@ void consensus_module_t::sendRequestVoteRPCs(
 }
 
 void consensus_module_t::sendRequestVoteAsync(
-    const RequestVoteRequest &request, raft_node_grpc_client_t &client
+    const raft::v1::RequestVoteRequest &request, raft_node_grpc_client_t &client
 )
 {
-    RequestVoteResponse response;
-    bool                rpcSuccess = false;
+    raft::v1::RequestVoteResponse response;
+    bool                          rpcSuccess = false;
     try
     {
         rpcSuccess = client.requestVote(request, &response);
@@ -1068,7 +1067,7 @@ void consensus_module_t::sendRequestVoteAsync(
     }
 
     auto responseTerm = response.term();
-    auto voteGranted = response.votegranted();
+    auto voteGranted = response.vote_granted();
 
     spdlog::debug(
         "Received RequestVoteResponse in requester "
@@ -1076,7 +1075,7 @@ void consensus_module_t::sendRequestVoteAsync(
         "voteGranted={} peer={}",
         responseTerm,
         voteGranted,
-        response.responderid()
+        response.responder_id()
     );
 
     absl::WriterMutexLock locker(&m_stateMutex);
@@ -1405,4 +1404,4 @@ void consensus_module_t::setOnLeaderChangeCallback(on_leader_change_cbk_t onLead
     m_onLeaderChangeCbk = std::move(onLeaderChangeCbk);
 }
 
-} // namespace raft
+} // namespace consensus

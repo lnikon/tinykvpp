@@ -21,11 +21,12 @@
 #include <grpcpp/support/status.h>
 #include <absl/base/thread_annotations.h>
 
-#include "Raft.grpc.pb.h"
-#include "Raft.pb.h"
+#include "raft/v1/raft_service.grpc.pb.h"
+#include "raft/v1/raft_service.pb.h"
 #include "concurrency/thread_pool.h"
 
-template <typename TStream> auto operator<<(TStream &stream, const LogEntry &record) -> TStream &
+template <typename TStream>
+auto operator<<(TStream &stream, const raft::v1::LogEntry &record) -> TStream &
 {
     stream << record.SerializeAsString();
 
@@ -36,7 +37,8 @@ template <typename TStream> auto operator<<(TStream &stream, const LogEntry &rec
     return stream;
 }
 
-template <typename TStream> auto operator>>(TStream &stream, LogEntry &record) -> TStream &
+template <typename TStream>
+auto operator>>(TStream &stream, raft::v1::LogEntry &record) -> TStream &
 {
     record.ParseFromString(stream.str());
 
@@ -52,7 +54,7 @@ namespace wal
 template <typename TEntry> class wal_t;
 };
 
-namespace raft
+namespace consensus
 {
 
 // NOLINTBEGIN(modernize-use-trailing-return-type)
@@ -90,7 +92,7 @@ class raft_node_grpc_client_t
 {
   public:
     raft_node_grpc_client_t(
-        node_config_t config, std::unique_ptr<RaftService::StubInterface> pRaftStub
+        node_config_t config, std::unique_ptr<raft::v1::RaftService::StubInterface> pRaftStub
     );
     virtual ~raft_node_grpc_client_t() noexcept = default;
 
@@ -100,29 +102,32 @@ class raft_node_grpc_client_t
     raft_node_grpc_client_t(raft_node_grpc_client_t &&) = default;
     auto operator=(raft_node_grpc_client_t &&) -> raft_node_grpc_client_t & = default;
 
-    [[nodiscard]] auto
-    appendEntries(const AppendEntriesRequest &request, AppendEntriesResponse *response) -> bool;
+    [[nodiscard]] auto appendEntries(
+        const raft::v1::AppendEntriesRequest &request, raft::v1::AppendEntriesResponse *response
+    ) -> bool;
 
-    [[nodiscard]] auto requestVote(const RequestVoteRequest &request, RequestVoteResponse *response)
+    [[nodiscard]] auto requestVote(
+        const raft::v1::RequestVoteRequest &request, raft::v1::RequestVoteResponse *response
+    ) -> bool;
+
+    [[nodiscard]] auto
+    replicate(const raft::v1::ReplicateRequest &request, raft::v1::ReplicateResponse *response)
         -> bool;
-
-    [[nodiscard]] auto
-    replicate(const ReplicateEntriesRequest &request, ReplicateEntriesResponse *response) -> bool;
 
     [[nodiscard]] auto id() const -> id_t;
     [[nodiscard]] auto ip() const -> ip_t;
 
   private:
-    node_config_t                               m_config{};
-    std::unique_ptr<RaftService::StubInterface> m_stub{nullptr};
+    node_config_t                                         m_config{};
+    std::unique_ptr<raft::v1::RaftService::StubInterface> m_stub{nullptr};
 };
 
-class consensus_module_t final : public RaftService::Service
+class consensus_module_t final : public raft::v1::RaftService::Service
 {
   public:
-    using wal_entry_t = LogEntry;
+    using wal_entry_t = raft::v1::LogEntry;
     using wal_ptr_t = std::shared_ptr<wal::wal_t<wal_entry_t>>;
-    using on_commit_cbk_t = std::function<bool(const LogEntry &)>;
+    using on_commit_cbk_t = std::function<bool(const raft::v1::LogEntry &)>;
     using on_leader_change_cbk_t = std::function<void(bool)>;
 
     consensus_module_t() = delete;
@@ -144,35 +149,35 @@ class consensus_module_t final : public RaftService::Service
 
     // Executed on the follower
     [[nodiscard]] grpc::Status AppendEntries(
-        grpc::ServerContext        *pContext,
-        const AppendEntriesRequest *pRequest,
-        AppendEntriesResponse      *pResponse
+        grpc::ServerContext                  *pContext,
+        const raft::v1::AppendEntriesRequest *pRequest,
+        raft::v1::AppendEntriesResponse      *pResponse
     ) override ABSL_LOCKS_EXCLUDED(m_stateMutex);
 
     // Executed on the follower
     [[nodiscard]] grpc::Status RequestVote(
-        grpc::ServerContext      *pContext,
-        const RequestVoteRequest *pRequest,
-        RequestVoteResponse      *pResponse
+        grpc::ServerContext                *pContext,
+        const raft::v1::RequestVoteRequest *pRequest,
+        raft::v1::RequestVoteResponse      *pResponse
     ) override ABSL_LOCKS_EXCLUDED(m_stateMutex);
 
     // Executed on the leader
     [[nodiscard]] grpc::Status Replicate(
-        grpc::ServerContext           *pContext,
-        const ReplicateEntriesRequest *pRequest,
-        ReplicateEntriesResponse      *pResponse
+        grpc::ServerContext              *pContext,
+        const raft::v1::ReplicateRequest *pRequest,
+        raft::v1::ReplicateResponse      *pResponse
     ) override ABSL_LOCKS_EXCLUDED(m_stateMutex);
 
     [[nodiscard]] [[deprecated]] auto replicate(std::string payload) -> raft_operation_status_k;
     [[nodiscard]] auto                replicateAsync(std::string payload) -> std::future<bool>;
 
-    [[nodiscard]] std::uint32_t         currentTerm() const;
-    [[nodiscard]] id_t                  votedFor() const;
-    [[nodiscard]] std::vector<LogEntry> log() const;
-    [[nodiscard]] NodeState             getState() const ABSL_SHARED_LOCKS_REQUIRED(m_stateMutex);
-    [[nodiscard]] NodeState             getStateSafe() const ABSL_LOCKS_EXCLUDED(m_stateMutex);
-    [[nodiscard]] bool                  isLeader() const ABSL_LOCKS_EXCLUDED(m_stateMutex);
-    [[nodiscard]] std::string           getLeaderHint() const ABSL_LOCKS_EXCLUDED(m_stateMutex);
+    [[nodiscard]] std::uint32_t                   currentTerm() const;
+    [[nodiscard]] id_t                            votedFor() const;
+    [[nodiscard]] std::vector<raft::v1::LogEntry> log() const;
+    [[nodiscard]] raft::v1::NodeState getState() const ABSL_SHARED_LOCKS_REQUIRED(m_stateMutex);
+    [[nodiscard]] raft::v1::NodeState getStateSafe() const ABSL_LOCKS_EXCLUDED(m_stateMutex);
+    [[nodiscard]] bool                isLeader() const ABSL_LOCKS_EXCLUDED(m_stateMutex);
+    [[nodiscard]] std::string         getLeaderHint() const ABSL_LOCKS_EXCLUDED(m_stateMutex);
 
     void setOnCommitCallback(on_commit_cbk_t onCommitCbk);
     void setOnLeaderChangeCallback(on_leader_change_cbk_t onLeaderChangeCbk);
@@ -186,17 +191,21 @@ class consensus_module_t final : public RaftService::Service
     // ---- Heartbeat ----
     void runHeartbeatThread(std::stop_token token);
     auto waitForHeartbeat(std::stop_token token) -> bool;
-    void sendAppendEntriesAsync(raft_node_grpc_client_t &client, std::vector<LogEntry> logEntries);
+    void sendAppendEntriesAsync(
+        raft_node_grpc_client_t &client, std::vector<raft::v1::LogEntry> logEntries
+    );
     auto onSendAppendEntriesRPC(
-        raft_node_grpc_client_t &client, const AppendEntriesResponse &response
+        raft_node_grpc_client_t &client, const raft::v1::AppendEntriesResponse &response
     ) noexcept -> bool;
     // --------
 
     // ---- Leader election ----
     void runElectionThread(std::stop_token token) noexcept;
     void startElection();
-    void sendRequestVoteRPCs(const RequestVoteRequest &request, std::uint64_t newTerm);
-    void sendRequestVoteAsync(const RequestVoteRequest &request, raft_node_grpc_client_t &client);
+    void sendRequestVoteRPCs(const raft::v1::RequestVoteRequest &request, std::uint64_t newTerm);
+    void sendRequestVoteAsync(
+        const raft::v1::RequestVoteRequest &request, raft_node_grpc_client_t &client
+    );
     // --------
 
     // ---- Constant utility methods ----
@@ -273,7 +282,7 @@ class consensus_module_t final : public RaftService::Service
     // Volatile state on all servers.
     uint32_t m_commitIndex              ABSL_GUARDED_BY(m_stateMutex);
     std::atomic<uint32_t> m_lastApplied ABSL_GUARDED_BY(m_stateMutex);
-    NodeState m_state                   ABSL_GUARDED_BY(m_stateMutex);
+    raft::v1::NodeState m_state         ABSL_GUARDED_BY(m_stateMutex);
 
     // Log replication related fields. Volatile state on leaders.
     std::unordered_map<id_t, uint32_t> m_matchIndex ABSL_GUARDED_BY(m_stateMutex);
@@ -293,4 +302,4 @@ class consensus_module_t final : public RaftService::Service
 
 // NOLINTEND(modernize-use-trailing-return-type)
 
-} // namespace raft
+} // namespace consensus
