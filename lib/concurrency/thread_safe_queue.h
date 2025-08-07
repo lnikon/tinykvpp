@@ -86,10 +86,7 @@ template <typename TItem> inline auto thread_safe_queue_t<TItem>::pop() -> std::
     absl::WriterMutexLock lock(&m_mutex);
     if (!m_mutex.AwaitWithTimeout(
             absl::Condition(
-                +[](queue_t *queue, std::atomic<bool> *shutdown)
-                { return !queue->empty() || shutdown->load(); },
-                &m_queue,
-                &m_shutdown
+                +[](queue_t *queue) { return !queue->empty(); }, &m_queue
             ),
             absl::Seconds(1)
         ))
@@ -97,7 +94,7 @@ template <typename TItem> inline auto thread_safe_queue_t<TItem>::pop() -> std::
         return std::nullopt;
     }
 
-    auto item = std::make_optional(m_queue.front());
+    auto item = std::make_optional(std::move(m_queue.front()));
     m_queue.pop_front();
     return item;
 }

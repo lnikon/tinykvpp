@@ -12,7 +12,8 @@
 #include "structures/lsmtree/lsmtree.h"
 #include "raft/raft.h"
 #include "concurrency/thread_safe_queue.h"
-#include "TinyKVPP.pb.h"
+#include "tinykvpp/v1/tinykvpp_service.grpc.pb.h"
+#include "tinykvpp/v1/tinykvpp_service.pb.h"
 
 namespace db
 {
@@ -66,10 +67,10 @@ class db_t final
     using lsmtree_ptr_t = std::shared_ptr<structures::lsmtree::lsmtree_t>;
 
     explicit db_t(
-        config::shared_ptr_t                      config,
-        manifest::shared_ptr_t                    pManifest,
-        lsmtree_ptr_t                             pLsmtree,
-        std::shared_ptr<raft::consensus_module_t> pConsensusModule
+        config::shared_ptr_t                           config,
+        manifest::shared_ptr_t                         pManifest,
+        lsmtree_ptr_t                                  pLsmtree,
+        std::shared_ptr<consensus::consensus_module_t> pConsensusModule
     ) noexcept;
 
     db_t(db_t &&other) = delete;
@@ -85,9 +86,12 @@ class db_t final
 
     [[nodiscard]] auto open() -> bool;
 
-    [[nodiscard]] auto put(const PutRequest *pRequest, PutResponse *pResponse) noexcept
+    [[nodiscard]] auto
+    put(const tinykvpp::v1::PutRequest *pRequest, tinykvpp::v1::PutResponse *pResponse) noexcept
         -> db_op_result_t;
-    [[nodiscard]] auto get(const GetRequest *pRequest, GetResponse *pResponse) -> db_op_result_t;
+    [[nodiscard]] auto
+    get(const tinykvpp::v1::GetRequest *pRequest, tinykvpp::v1::GetResponse *pResponse)
+        -> db_op_result_t;
 
     [[nodiscard]] auto config() const noexcept -> config::shared_ptr_t;
 
@@ -102,7 +106,7 @@ class db_t final
     void monitorPendingRequests();
 
     // Raft commit callback
-    auto onRaftCommit(const LogEntry &entry) -> bool;
+    auto onRaftCommit(const raft::v1::LogEntry &entry) -> bool;
     void onLeaderChange(bool isLeader);
 
     // Helper methods
@@ -113,10 +117,10 @@ class db_t final
     void requestFailed(request_id_t id) ABSL_SHARED_LOCKS_REQUIRED(m_pendingMutex);
 
     // Core components
-    config::shared_ptr_t                      m_config;
-    manifest::shared_ptr_t                    m_pManifest;
-    lsmtree_ptr_t                             m_pLSMtree;
-    std::shared_ptr<raft::consensus_module_t> m_pConsensusModule;
+    config::shared_ptr_t                           m_config;
+    manifest::shared_ptr_t                         m_pManifest;
+    lsmtree_ptr_t                                  m_pLSMtree;
+    std::shared_ptr<consensus::consensus_module_t> m_pConsensusModule;
 
     // Request handling
     concurrency::thread_safe_queue_t<client_request_t> m_requestQueue;
@@ -154,19 +158,17 @@ class db_builder_t
 {
   public:
     [[nodiscard]] auto build(
-        config::shared_ptr_t                      config,
-        manifest::shared_ptr_t                    pManifest,
-        db_t::lsmtree_ptr_t                       pLSMTree,
-        std::shared_ptr<raft::consensus_module_t> pConsensusModule
+        config::shared_ptr_t                           config,
+        manifest::shared_ptr_t                         pManifest,
+        db_t::lsmtree_ptr_t                            pLSMTree,
+        std::shared_ptr<consensus::consensus_module_t> pConsensusModule
     ) -> std::optional<db_t>
     {
-        return std::make_optional(
-            db_t{
-                std::move(config),
-                std::move(pManifest),
-                std::move(pLSMTree),
-                std::move(pConsensusModule)
-            }
+        return std::make_optional<db_t>(
+            std::move(config),
+            std::move(pManifest),
+            std::move(pLSMTree),
+            std::move(pConsensusModule)
         );
     }
 };

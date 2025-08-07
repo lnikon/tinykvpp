@@ -11,6 +11,8 @@
 #include "wal/wal.h"
 #include "structures/lsmtree/levels/levels.h"
 #include "concurrency/thread_safe_queue.h"
+#include "raft/v1/raft_service.grpc.pb.h"
+#include "raft/v1/raft_service.pb.h"
 
 namespace structures::lsmtree
 {
@@ -80,7 +82,7 @@ using shared_ptr_t = std::shared_ptr<lsmtree_t>;
 
 struct lsmtree_builder_t final
 {
-    using wal_t = wal::shared_ptr_t<LogEntry>;
+    using wal_t = wal::shared_ptr_t<raft::v1::LogEntry>;
     [[nodiscard]] auto
     build(config::shared_ptr_t pConfig, db::manifest::shared_ptr_t pManifest, wal_t pWal) const
         -> std::shared_ptr<lsmtree_t>;

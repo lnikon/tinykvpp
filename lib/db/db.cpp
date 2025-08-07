@@ -6,7 +6,6 @@
 #include <magic_enum/magic_enum.hpp>
 
 #include "db.h"
-#include "TinyKVPP.pb.h"
 #include "db/manifest/manifest.h"
 #include "lsmtree.h"
 #include "memtable.h"
@@ -16,10 +15,10 @@ namespace db
 {
 
 db_t::db_t(
-    config::shared_ptr_t                      config,
-    manifest::shared_ptr_t                    pManifest,
-    lsmtree_ptr_t                             pLsmtree,
-    std::shared_ptr<raft::consensus_module_t> pConsensusModule
+    config::shared_ptr_t                           config,
+    manifest::shared_ptr_t                         pManifest,
+    lsmtree_ptr_t                                  pLsmtree,
+    std::shared_ptr<consensus::consensus_module_t> pConsensusModule
 ) noexcept
     : m_config{std::move(config)},
       m_pManifest{std::move(pManifest)},
@@ -104,17 +103,20 @@ auto db_t::open() -> bool
     return prepare_directory_structure();
 }
 
-[[nodiscard]] auto db_t::put(const PutRequest *pRequest, PutResponse *pResponse) noexcept
+[[nodiscard]] auto
+db_t::put(const tinykvpp::v1::PutRequest *pRequest, tinykvpp::v1::PutResponse *pResponse) noexcept
     -> db_op_result_t
 {
     if (m_shutdown.load())
     {
         spdlog::warn("Database is shutting down. Can not accept new request.");
+        pResponse->set_success(false);
         return {.status = db_op_status_k::failure_k, .message = {}, .leaderAddress = {}};
     }
 
     if (!m_isLeader.load())
     {
+        pResponse->set_success(false);
         return forwardToLeader();
     }
 
@@ -131,6 +133,7 @@ auto db_t::open() -> bool
     // Enqueue request
     if (!m_requestQueue.push(std::move(request)))
     {
+        pResponse->set_success(false);
         return {
             .status = db_op_status_k::request_queue_full_k,
             .message = std::string{"Request queue full"},
@@ -142,6 +145,7 @@ auto db_t::open() -> bool
     {
         if (!future.get())
         {
+            pResponse->set_success(false);
             return {
                 .status = db_op_status_k::failed_to_replicate_k,
                 .message = std::string{"Failed to replicate"},
@@ -151,6 +155,7 @@ auto db_t::open() -> bool
     }
     else
     {
+        pResponse->set_success(false);
         return {
             .status = db_op_status_k::request_timeout_k,
             .message = std::string{"Request timeout"},
@@ -158,6 +163,7 @@ auto db_t::open() -> bool
         };
     }
 
+    pResponse->set_success(true);
     return {
         .status = db_op_status_k::success_k,
         .message = std::string{"Request success"},
@@ -165,7 +171,8 @@ auto db_t::open() -> bool
     };
 }
 
-auto db_t::get(const GetRequest *pRequest, GetResponse *pResponse) -> db_op_result_t
+auto db_t::get(const tinykvpp::v1::GetRequest *pRequest, tinykvpp::v1::GetResponse *pResponse)
+    -> db_op_result_t
 {
     if (m_shutdown.load())
     {
@@ -184,7 +191,7 @@ auto db_t::get(const GetRequest *pRequest, GetResponse *pResponse) -> db_op_resu
         record.has_value())
     {
         pResponse->set_found(true);
-        pResponse->set_value(record.value());
+        pResponse->set_value(record.value().m_value.m_value);
         return {.status = db_op_status_k::success_k, .message = {}, .leaderAddress = {}};
     }
 
@@ -351,9 +358,9 @@ void db_t::monitorPendingRequests()
     }
 }
 
-auto db_t::onRaftCommit(const LogEntry &entry) -> bool
+auto db_t::onRaftCommit(const raft::v1::LogEntry &entry) -> bool
 {
-    DatabaseOperation op;
+    tinykvpp::v1::DatabaseOperation op;
     op.ParseFromString(entry.payload());
 
     structures::memtable::memtable_t::record_t record;
@@ -362,7 +369,7 @@ auto db_t::onRaftCommit(const LogEntry &entry) -> bool
 
     switch (op.type())
     {
-    case DatabaseOperation::PUT:
+    case tinykvpp::v1::DatabaseOperation::TYPE_PUT:
     {
         if (m_pLSMtree->put(std::move(record)) ==
             structures::lsmtree::lsmtree_status_k::put_failed_k)
@@ -372,13 +379,13 @@ auto db_t::onRaftCommit(const LogEntry &entry) -> bool
         }
         break;
     }
-    case DatabaseOperation::DELETE:
+    case tinykvpp::v1::DatabaseOperation::TYPE_DELETE:
     {
         spdlog::critical("DELETE is not implemented");
         return true;
         break;
     }
-    case DatabaseOperation::BATCH:
+    case tinykvpp::v1::DatabaseOperation::TYPE_BATCH:
     {
         spdlog::critical("BATCH is not implemented");
         return true;
@@ -415,14 +422,14 @@ void db_t::onLeaderChange(bool isLeader)
 
 auto db_t::serializeOperation(const client_request_t &request) -> std::string
 {
-    DatabaseOperation op;
+    tinykvpp::v1::DatabaseOperation op;
     op.set_request_id(request.requestId);
 
     switch (request.type)
     {
     case db::client_request_type_k::put_k:
     {
-        op.set_type(DatabaseOperation::PUT);
+        op.set_type(tinykvpp::v1::DatabaseOperation::TYPE_PUT);
         op.set_key(request.key);
         op.set_value(request.value);
         break;

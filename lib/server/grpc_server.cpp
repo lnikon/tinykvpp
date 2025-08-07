@@ -22,52 +22,44 @@ tinykvpp_service_impl_t::tinykvpp_service_impl_t(db::shared_ptr_t db)
 }
 
 auto tinykvpp_service_impl_t::Put(
-    grpc::ServerContext *pContext, const PutRequest *pRequest, PutResponse *pResponse
+    grpc::ServerContext            *pContext,
+    const tinykvpp::v1::PutRequest *pRequest,
+    tinykvpp::v1::PutResponse      *pResponse
 ) -> grpc::Status
 {
     (void)pContext;
 
     try
     {
-        const bool success = m_database->put(pRequest, pResponse);
-        if (!success)
-        {
-            spdlog::warn("Put operation failed for key: {}", pRequest->key());
-            pResponse->set_status("FAILED");
-        }
-        else
-        {
-            pResponse->set_status("OK");
-        }
-        return grpc::Status::OK;
+        const auto result = m_database->put(pRequest, pResponse);
+        return result.status == db::db_op_status_k::success_k
+                   ? grpc::Status::OK
+                   : grpc::Status{grpc::StatusCode::INTERNAL, result.message};
     }
     catch (std::exception &e)
     {
-        auto msg{fmt::format("Failed to put key-value pair: {}", e.what())};
-        spdlog::error(msg);
-        return {grpc::StatusCode::INTERNAL, msg};
+        return grpc::Status::CANCELLED;
     }
 }
 
 auto tinykvpp_service_impl_t::Get(
-    grpc::ServerContext *pContext, const GetRequest *pRequest, GetResponse *pResponse
+    grpc::ServerContext            *pContext,
+    const tinykvpp::v1::GetRequest *pRequest,
+    tinykvpp::v1::GetResponse      *pResponse
 ) -> grpc::Status
 {
     (void)pContext;
+
     try
     {
-        const auto &record = m_database->get(db::db_t::key_t{pRequest->key()});
-        if (record)
-        {
-            pResponse->set_value(record.value().m_value.m_value);
-        }
-        return grpc::Status::OK;
+        const auto result = m_database->get(pRequest, pResponse);
+        return result.status == db::db_op_status_k::success_k
+                   ? grpc::Status::OK
+                   : grpc::Status{grpc::StatusCode::INTERNAL, result.message};
     }
     catch (std::exception &e)
     {
-        auto msg{fmt::format("Failed to get key-value pair: {}", e.what())};
-        spdlog::error(msg);
-        return {grpc::StatusCode::INTERNAL, msg};
+        return grpc::Status::CANCELLED;
     }
 }
 

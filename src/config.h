@@ -1,9 +1,9 @@
 #pragma once
 
-#include "config/config.h"
-
 #include <nlohmann/json.hpp>
 #include <nlohmann/json-schema.hpp>
+
+#include "config/config.h"
 
 using nlohmann::json;
 using nlohmann::json_schema::json_validator;

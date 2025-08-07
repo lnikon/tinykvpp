@@ -25,48 +25,12 @@
 using tk_key_t = structures::memtable::memtable_t::record_t::key_t;
 using tk_value_t = structures::memtable::memtable_t::record_t::value_t;
 
-template <typename TEntry>
-[[nodiscard]] auto maybe_create_file_persistent_wal(const fs::path_t &walPath)
-    -> std::optional<wal::wal_t<TEntry>>
-{
-    spdlog::info("Creating WAL path at {}", walPath.c_str());
-    auto logStorage{wal::log::storage::builder_t{}
-                        .set_file_path(walPath)
-                        .set_check_path_exists(false)
-                        .build<TEntry>(wal::log_storage_type_k::file_based_persistent_k)};
-    if (!logStorage.has_value())
-    {
-        spdlog::error(
-            "maybe_create_file_persistent_wal: Unable to build log stroage: path={}",
-            walPath.c_str()
-        );
-        return std::nullopt;
-    }
-
-    auto log = wal::log::log_builder_t{}.build(std::move(logStorage.value()));
-    if (!log.has_value())
-    {
-        spdlog::debug("maybe_create_file_persistent_wal: Unable to build a log");
-        return std::nullopt;
-    }
-
-    auto maybeWal = wal::wal_builder_t<TEntry>{}.build(std::move(log.value()));
-    if (maybeWal.has_value())
-    {
-        return std::make_optional(std::move(maybeWal.value()));
-    }
-
-    spdlog::error(
-        "maybe_create_consensus_module: Unable to build WAL. Error={}",
-        magic_enum::enum_name(maybeWal.error())
-    );
-    return std::nullopt;
-}
-
 [[nodiscard]] auto maybe_create_manifest(const fs::path_t &path)
     -> std::optional<db::manifest::manifest_t>
 {
-    auto maybeWal{maybe_create_file_persistent_wal<db::manifest::manifest_t::record_t>(path)};
+    auto maybeWal = wal::wal_builder_t{}.set_file_path(walPath).build<TEntry>(
+        wal::log_storage_type_k::file_based_persistent_k
+    );
     if (!maybeWal.has_value())
     {
         spdlog::error(
@@ -78,8 +42,10 @@ template <typename TEntry>
 }
 
 [[nodiscard]] auto maybe_create_consensus_module(
-    config::shared_ptr_t pConfig, raft::node_config_t nodeConfig, wal::shared_ptr_t<LogEntry> pWAL
-) noexcept -> std::optional<std::shared_ptr<raft::consensus_module_t>>
+    config::shared_ptr_t                  pConfig,
+    consensus::node_config_t              nodeConfig,
+    wal::shared_ptr_t<raft::v1::LogEntry> pWAL
+) noexcept -> std::optional<std::shared_ptr<consensus::consensus_module_t>>
 {
     if (pConfig->ServerConfig.id == 0)
     {
@@ -93,17 +59,17 @@ template <typename TEntry>
         return std::nullopt;
     }
 
-    std::vector<raft::raft_node_grpc_client_t> replicas;
-    for (raft::id_t replicaId{1}; const auto &replicaIp : pConfig->ServerConfig.peers)
+    std::vector<consensus::raft_node_grpc_client_t> replicas;
+    for (consensus::id_t replicaId{1}; const auto &replicaIp : pConfig->ServerConfig.peers)
     {
         if (replicaId != pConfig->ServerConfig.id)
         {
-            std::unique_ptr<RaftService::Stub> stub{RaftService::NewStub(
+            std::unique_ptr<raft::v1::RaftService::Stub> stub{raft::v1::RaftService::NewStub(
                 grpc::CreateChannel(replicaIp, grpc::InsecureChannelCredentials())
             )};
 
             replicas.emplace_back(
-                raft::node_config_t{.m_id = replicaId, .m_ip = replicaIp}, std::move(stub)
+                consensus::node_config_t{.m_id = replicaId, .m_ip = replicaIp}, std::move(stub)
             );
 
             spdlog::info(
@@ -117,7 +83,7 @@ template <typename TEntry>
     }
 
     auto pConsensusModule =
-        std::make_shared<raft::consensus_module_t>(nodeConfig, std::move(replicas), pWAL);
+        std::make_shared<consensus::consensus_module_t>(nodeConfig, std::move(replicas), pWAL);
     if (!pConsensusModule->init())
     {
         spdlog::error("maybe_create_consensus_module: Failed to initialize the consensus module");
@@ -182,36 +148,19 @@ auto main(int argc, char *argv[]) -> int
         // ==== Start: Build WAL ====
         // Build the log storage
         const auto walPath{pDbConfig->DatabaseConfig.DatabasePath / pDbConfig->WALConfig.path};
-        auto       logStorage{wal::log::storage::builder_t{}
-                            .set_file_path(walPath)
-                            .set_check_path_exists(false)
-                            .build<LogEntry>(pDbConfig->WALConfig.storageType)};
-        if (!logStorage.has_value())
-        {
-            spdlog::error("Main: Unable to build a log stroage. path={}", walPath.c_str());
-            return EXIT_FAILURE;
-        }
-
-        // Build the log
-        auto log = wal::log::log_builder_t{}.build(std::move(logStorage.value()));
-        if (!log.has_value())
-        {
-            spdlog::debug("Main: Unable to build simple log");
-            return EXIT_FAILURE;
-        }
-
-        // Build the WAL
-        auto maybeWal = wal::wal_builder_t<LogEntry>{}.build(std::move(log.value()));
+        auto       maybeWal = wal::wal_builder_t{}.set_file_path(walPath).build<raft::v1::LogEntry>(
+            pDbConfig->WALConfig.storageType
+        );
         if (!maybeWal.has_value())
         {
-            spdlog::error("Unable to build WAL. Error={}", magic_enum::enum_name(maybeWal.error()));
+            spdlog::error("Unable to build WAL");
             return EXIT_FAILURE;
         }
-        auto pWAL = wal::make_shared<LogEntry>(std::move(maybeWal.value()));
+        auto pWAL = wal::make_shared<raft::v1::LogEntry>(std::move(maybeWal.value()));
         // ==== End: Build WAL ====
 
         // ==== Start: Build consensus module
-        raft::node_config_t nodeConfig{
+        consensus::node_config_t nodeConfig{
             .m_id = pDbConfig->ServerConfig.id,
             .m_ip = fmt::format("{}:{}", pDbConfig->ServerConfig.host, pDbConfig->ServerConfig.port)
         };
@@ -223,13 +172,13 @@ auto main(int argc, char *argv[]) -> int
         // TODO(lnikon): Drop insecure creds
         grpcBuilder.AddListeningPort(nodeConfig.m_ip, grpc::InsecureServerCredentials());
 
-        std::shared_ptr<raft::consensus_module_t> pConsensusModule{nullptr};
+        std::shared_ptr<consensus::consensus_module_t> pConsensusModule{nullptr};
         if (auto maybeConsensusModule{maybe_create_consensus_module(pDbConfig, nodeConfig, pWAL)};
             maybeConsensusModule.has_value())
         {
             pConsensusModule = std::move(maybeConsensusModule.value());
             grpcBuilder.RegisterService(
-                dynamic_cast<RaftService::Service *>(pConsensusModule.get())
+                dynamic_cast<raft::v1::RaftService::Service *>(pConsensusModule.get())
             );
         }
         else

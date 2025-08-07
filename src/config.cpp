@@ -39,12 +39,8 @@ static const json database_config_schema = R"(
           "type": "string",
           "description": "Prefix for manifest files"
         },
-        "mode": {
-          "$ref": "#/$defs/mode",
-          "description": "Specifies wheter the database will be embedded, run in server-client mode, or replicated"
-        }
       },
-      "required": ["path", "manifestFilenamePrefix", "mode"]
+      "required": ["path", "manifestFilenamePrefix"]
     },
     "wal": {
       "type": "object",
@@ -121,10 +117,6 @@ static const json database_config_schema = R"(
   },
   "required": ["database", "wal", "lsm", "server"],
   "$defs": {
-    "mode": {
-      "type": "string",
-      "enum": ["embedded", "standalone", "replicated"]
-    },
     "serverTransport": {
       "type": "string",
       "enum": ["grpc", "tcp"]
@@ -226,12 +218,6 @@ auto loadDatabaseConfig(const json &configJson) -> config::shared_ptr_t
     {
         dbConfig->DatabaseConfig.ManifestFilenamePrefix =
             configJson["database"]["manifestFilenamePrefix"].get<std::string>();
-    }
-
-    if (configJson["database"].contains("mode"))
-    {
-        dbConfig->DatabaseConfig.mode =
-            db::from_string(configJson["database"]["mode"].get<std::string>());
     }
 
     return dbConfig;

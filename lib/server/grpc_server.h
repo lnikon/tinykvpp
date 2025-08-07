@@ -1,27 +1,29 @@
 #pragma once
 
+#include "server_concept.h"
+#include "grpcpp/server.h"
 #include "db/db.h"
-#include "server/server_concept.h"
 #include "server_kind.h"
-
-#include "TinyKVPP.grpc.pb.h"
-#include "TinyKVPP.pb.h"
-
-#include <grpcpp/server.h>
+#include "tinykvpp/v1/tinykvpp_service.grpc.pb.h"
+#include "tinykvpp/v1/tinykvpp_service.pb.h"
 
 namespace server::grpc_communication
 {
 
-class tinykvpp_service_impl_t final : public TinyKVPPService::Service
+class tinykvpp_service_impl_t final : public tinykvpp::v1::TinyKVPPService::Service
 {
   public:
     explicit tinykvpp_service_impl_t(db::shared_ptr_t db);
 
-    auto Put(grpc::ServerContext *pContext, const PutRequest *pRequest, PutResponse *pResponse)
-        -> grpc::Status override;
+    auto
+    Put(grpc::ServerContext            *pContext,
+        const tinykvpp::v1::PutRequest *pRequest,
+        tinykvpp::v1::PutResponse      *pResponse) -> grpc::Status override;
 
-    auto Get(grpc::ServerContext *pContext, const GetRequest *pRequest, GetResponse *pResponse)
-        -> grpc::Status override;
+    auto
+    Get(grpc::ServerContext            *pContext,
+        const tinykvpp::v1::GetRequest *pRequest,
+        tinykvpp::v1::GetResponse      *pResponse) -> grpc::Status override;
 
   private:
     db::shared_ptr_t m_database;
@@ -40,7 +42,9 @@ class grpc_communication_t final
     std::unique_ptr<tinykvpp_service_impl_t> m_service{nullptr};
 };
 
-static_assert(communication_strategy_t<grpc_communication_t>,
-              "GRPCCommunication must satisfy CommunicationStrategy concept");
+static_assert(
+    communication_strategy_t<grpc_communication_t>,
+    "GRPCCommunication must satisfy CommunicationStrategy concept"
+);
 
 } // namespace server::grpc_communication

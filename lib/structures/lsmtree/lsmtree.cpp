@@ -13,6 +13,8 @@
 #include "structures/lsmtree/lsmtree.h"
 #include "db/manifest/manifest.h"
 #include "wal/wal.h"
+#include "tinykvpp/v1/tinykvpp_service.grpc.pb.h"
+#include "tinykvpp/v1/tinykvpp_service.pb.h"
 
 namespace structures::lsmtree
 {
@@ -219,32 +221,34 @@ auto lsmtree_builder_t::build(
 auto lsmtree_builder_t::build_memtable_from_wal(wal_t pWal) const noexcept
     -> std::optional<memtable::memtable_t>
 {
-    auto stringify_record = [](const memtable_t::record_t &record)
-    {
-        std::stringstream strStream;
-        record.write(strStream);
-        return strStream.str();
-    };
-
     memtable::memtable_t table;
     for (const auto &records{pWal->records()}; const auto &record : records)
     {
-        switch (record.op)
+        tinykvpp::v1::DatabaseOperation op;
+        op.ParseFromString(record.payload());
+
+        switch (op.type())
         {
-        case wal::operation_k::add_k:
+        case tinykvpp::v1::DatabaseOperation::TYPE_PUT:
         {
-            spdlog::debug("Recovering record {} from WAL", stringify_record(record.kv));
-            table.emplace(record.kv);
+            structures::memtable::memtable_t::record_t item;
+            item.m_key.m_key = op.key();
+            item.m_value.m_value = op.value();
+
+            table.emplace(std::move(item));
+
+            spdlog::debug("Recovered record {} from WAL", record.payload());
+
             break;
         }
-        case wal::operation_k::delete_k:
+        case tinykvpp::v1::DatabaseOperation::TYPE_DELETE:
         {
             spdlog::debug("Recovery of delete records from WAL is not supported");
             break;
         }
         default:
         {
-            spdlog::error("Unkown WAL operation {}", std::to_underlying(record.op));
+            spdlog::error("Unkown WAL operation {}", std::to_underlying(op.type()));
             break;
         }
         };
