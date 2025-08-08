@@ -180,11 +180,8 @@ class file_storage_backend_builder_t final
         if (!file)
         {
             const auto &error{file.error()};
-            switch (error.code)
-            {
-            default:
-                return std::unexpected(storage_backend_builder_error_t::kUnableToOpenFile);
-            }
+            spdlog::critical(error.message);
+            return std::unexpected(storage_backend_builder_error_t::kUnableToOpenFile);
         }
         return append_only_file_storage_backend_t(std::move(file.value()));
     }

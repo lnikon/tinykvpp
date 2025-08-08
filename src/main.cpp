@@ -28,9 +28,10 @@ using tk_value_t = structures::memtable::memtable_t::record_t::value_t;
 [[nodiscard]] auto maybe_create_manifest(const fs::path_t &path)
     -> std::optional<db::manifest::manifest_t>
 {
-    auto maybeWal = wal::wal_builder_t{}.set_file_path(walPath).build<TEntry>(
-        wal::log_storage_type_k::file_based_persistent_k
-    );
+    auto maybeWal =
+        wal::wal_builder_t{}.set_file_path(path).build<db::manifest::manifest_t::record_t>(
+            wal::log_storage_type_k::file_based_persistent_k
+        );
     if (!maybeWal.has_value())
     {
         spdlog::error(
@@ -211,8 +212,7 @@ auto main(int argc, char *argv[]) -> int
         // ==== End: Build LSMTree
 
         // ==== Start: Build database
-        std::shared_ptr<db::db_t> pDatabase =
-            db::make_shared(pDbConfig, pWAL, pManifest, pLSMTree, pConsensusModule);
+        auto pDatabase = db::make_shared(pDbConfig, pManifest, pLSMTree, pConsensusModule);
         if (!pDatabase->open())
         {
             spdlog::error("Main: Unable to open the database");

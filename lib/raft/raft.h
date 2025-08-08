@@ -25,6 +25,15 @@
 #include "raft/v1/raft_service.pb.h"
 #include "concurrency/thread_pool.h"
 
+namespace raft::v1
+{
+template <typename TStream> auto operator>>(TStream &stream, LogEntry &record) -> TStream &
+{
+    record.ParseFromString(stream.str());
+    return stream;
+}
+} // namespace raft::v1
+
 template <typename TStream>
 auto operator<<(TStream &stream, const raft::v1::LogEntry &record) -> TStream &
 {
@@ -33,18 +42,6 @@ auto operator<<(TStream &stream, const raft::v1::LogEntry &record) -> TStream &
     // TODO(lnikon): Uncomment when protobuf serialization is implemented. Protobuf serializes into
     // binary format by default.
     // record.SerializeToOstream(&stream);
-
-    return stream;
-}
-
-template <typename TStream>
-auto operator>>(TStream &stream, raft::v1::LogEntry &record) -> TStream &
-{
-    record.ParseFromString(stream.str());
-
-    // TODO(lnikon): Uncomment when protobuf serialization is implemented. Protobuf serializes into
-    // binary format by default.
-    // record.ParseFromIstream(&stream);
 
     return stream;
 }

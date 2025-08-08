@@ -38,7 +38,7 @@ static const json database_config_schema = R"(
         "manifestFilenamePrefix": {
           "type": "string",
           "description": "Prefix for manifest files"
-        },
+        }
       },
       "required": ["path", "manifestFilenamePrefix"]
     },

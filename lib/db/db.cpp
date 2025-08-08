@@ -11,6 +11,45 @@
 #include "memtable.h"
 #include "raft/raft.h"
 
+namespace
+{
+
+auto serializeOperation(const db::client_request_t &request) -> std::string
+{
+    tinykvpp::v1::DatabaseOperation op;
+    op.set_request_id(request.requestId);
+
+    switch (request.type)
+    {
+    case db::client_request_type_k::put_k:
+    {
+        op.set_type(tinykvpp::v1::DatabaseOperation::TYPE_PUT);
+        op.set_key(request.key);
+        op.set_value(request.value);
+        break;
+    }
+    case db::client_request_type_k::delete_k:
+    {
+        spdlog::critical("DELETE is not implemented");
+        break;
+    }
+    case db::client_request_type_k::batch_k:
+    {
+        spdlog::critical("BATCH is not implemented");
+        break;
+    }
+    default:
+    {
+        spdlog::critical("Unknown operation type: {}", magic_enum::enum_name(request.type));
+        break;
+    }
+    }
+
+    return op.SerializeAsString();
+}
+
+} // namespace
+
 namespace db
 {
 
@@ -60,6 +99,8 @@ auto db_t::start() -> bool
     m_isLeader.store(m_pConsensusModule->isLeader());
 
     spdlog::info("Database successfully started");
+
+    return true;
 }
 
 void db_t::stop()
@@ -125,7 +166,8 @@ db_t::put(const tinykvpp::v1::PutRequest *pRequest, tinykvpp::v1::PutResponse *p
         .key = {pRequest->key().data(), pRequest->key().size()},
         .value = {pRequest->value().data(), pRequest->value().size()},
         .promise = {},
-        .requestId = m_requestIdCounter.fetch_add(1)
+        .requestId = m_requestIdCounter.fetch_add(1),
+        .deadline = std::chrono::steady_clock::now()
     };
 
     auto future = request.promise.get_future();
@@ -399,6 +441,7 @@ auto db_t::onRaftCommit(const raft::v1::LogEntry &entry) -> bool
     }
 
     // Mark request as success and remove from pending requests
+    absl::WriterMutexLock locker{&m_pendingMutex};
     requestSuccess(op.request_id());
 
     return true;
@@ -418,40 +461,6 @@ void db_t::onLeaderChange(bool isLeader)
         }
         m_pendingRequests.clear();
     }
-}
-
-auto db_t::serializeOperation(const client_request_t &request) -> std::string
-{
-    tinykvpp::v1::DatabaseOperation op;
-    op.set_request_id(request.requestId);
-
-    switch (request.type)
-    {
-    case db::client_request_type_k::put_k:
-    {
-        op.set_type(tinykvpp::v1::DatabaseOperation::TYPE_PUT);
-        op.set_key(request.key);
-        op.set_value(request.value);
-        break;
-    }
-    case db::client_request_type_k::delete_k:
-    {
-        spdlog::critical("DELETE is not implemented");
-        break;
-    }
-    case db::client_request_type_k::batch_k:
-    {
-        spdlog::critical("BATCH is not implemented");
-        break;
-    }
-    default:
-    {
-        spdlog::critical("Unknown operation type: {}", magic_enum::enum_name(request.type));
-        break;
-    }
-    }
-
-    return op.SerializeAsString();
 }
 
 auto db_t::forwardToLeader() -> db_op_result_t

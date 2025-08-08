@@ -7,7 +7,7 @@ set_target_properties(WAL PROPERTIES CXX_STANDARD 23)
 target_include_directories(WAL INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}
                                          ${CMAKE_SOURCE_DIR}/lib)
 
-target_link_libraries(WAL PUBLIC abseil::abseil spdlog::spdlog FS)
+target_link_libraries(WAL PUBLIC abseil::abseil spdlog::spdlog FS RaftProtoObjects)
 
 add_executable(WALTest wal_test.cpp)
 set_target_properties(WALTest PROPERTIES CXX_STANDARD 23)

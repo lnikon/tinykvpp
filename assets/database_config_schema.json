@@ -1,7 +1,7 @@
 {
     "$id": "https://json-schema.hyperjump.io/schema",
     "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$title": "Schema for tinykvpp's JSON config",
+    "$title": "Schema for frankie's JSON config",
     "type": "object",
     "properties": {
         "logging": {
@@ -26,17 +26,11 @@
                 "manifestFilenamePrefix": {
                     "type": "string",
                     "description": "Prefix for manifest files"
-                },
-                "mode": {
-                    "$ref": "#/$defs/mode",
-                    "description":
-                        "Specifies whether the database will be embedded, run in server-client mode, or replicated"
                 }
             },
             "required": [
                 "path",
-                "manifestFilenamePrefix",
-                "mode"
+                "manifestFilenamePrefix"
             ]
         },
         "wal": {
@@ -129,14 +123,6 @@
         "server"
     ],
     "$defs": {
-        "mode": {
-            "type": "string",
-            "enum": [
-                "embedded",
-                "standalone",
-                "replicated"
-            ]
-        },
         "serverTransport": {
             "type": "string",
             "enum": [
@@ -164,7 +150,8 @@
             "type": "string",
             "enum": [
                 "inMemory",
-                "persistent"
+                "persistent",
+                "replicated"
             ]
         },
         "compaction": {

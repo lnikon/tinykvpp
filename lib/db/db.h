@@ -12,7 +12,6 @@
 #include "structures/lsmtree/lsmtree.h"
 #include "raft/raft.h"
 #include "concurrency/thread_safe_queue.h"
-#include "tinykvpp/v1/tinykvpp_service.grpc.pb.h"
 #include "tinykvpp/v1/tinykvpp_service.pb.h"
 
 namespace db
@@ -110,7 +109,6 @@ class db_t final
     void onLeaderChange(bool isLeader);
 
     // Helper methods
-    auto serializeOperation(const client_request_t &request) -> std::string;
     auto forwardToLeader() -> db_op_result_t;
     auto getLeaderAddress() -> std::string;
     void requestSuccess(request_id_t id) ABSL_SHARED_LOCKS_REQUIRED(m_pendingMutex);
@@ -153,24 +151,5 @@ template <typename... Args> auto make_shared(Args &&...args)
 {
     return std::make_shared<db_t>(std::forward<Args>(args)...);
 }
-
-class db_builder_t
-{
-  public:
-    [[nodiscard]] auto build(
-        config::shared_ptr_t                           config,
-        manifest::shared_ptr_t                         pManifest,
-        db_t::lsmtree_ptr_t                            pLSMTree,
-        std::shared_ptr<consensus::consensus_module_t> pConsensusModule
-    ) -> std::optional<db_t>
-    {
-        return std::make_optional<db_t>(
-            std::move(config),
-            std::move(pManifest),
-            std::move(pLSMTree),
-            std::move(pConsensusModule)
-        );
-    }
-};
 
 } // namespace db
