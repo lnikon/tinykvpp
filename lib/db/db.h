@@ -80,8 +80,8 @@ class db_t final
 
     ~db_t() noexcept = default;
 
-    auto start() -> bool;
-    void stop();
+    [[nodiscard]] auto start() -> bool;
+    void               stop();
 
     [[nodiscard]] auto open() -> bool;
 

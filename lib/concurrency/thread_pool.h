@@ -62,8 +62,8 @@ class thread_pool_t final
 
     std::string m_name;
 
-    std::vector<std::thread>          m_workers;
-    std::queue<std::function<void()>> m_tasks;
+    std::vector<std::thread>                    m_workers;
+    std::queue<std::move_only_function<void()>> m_tasks;
 
     mutable std::mutex      m_queueMutex;
     std::condition_variable m_cv;

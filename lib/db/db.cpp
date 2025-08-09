@@ -68,6 +68,13 @@ db_t::db_t(
     assert(m_config);
     assert(m_pManifest);
     assert(m_pLSMtree);
+
+    // Setup Raft callbacks
+    m_pConsensusModule->setOnCommitCallback([this](const raft::v1::LogEntry &entry)
+                                            { return onRaftCommit(entry); });
+
+    m_pConsensusModule->setOnLeaderChangeCallback([this](bool isLeader)
+                                                  { onLeaderChange(isLeader); });
 }
 
 auto db_t::start() -> bool
@@ -167,7 +174,7 @@ db_t::put(const tinykvpp::v1::PutRequest *pRequest, tinykvpp::v1::PutResponse *p
         .value = {pRequest->value().data(), pRequest->value().size()},
         .promise = {},
         .requestId = m_requestIdCounter.fetch_add(1),
-        .deadline = std::chrono::steady_clock::now()
+        .deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5)
     };
 
     auto future = request.promise.get_future();
@@ -183,7 +190,9 @@ db_t::put(const tinykvpp::v1::PutRequest *pRequest, tinykvpp::v1::PutResponse *p
         };
     }
 
-    if (future.wait_for(m_config->DatabaseConfig.requestTimeout) == std::future_status::ready)
+    auto waitStatus = future.wait_for(m_config->DatabaseConfig.requestTimeout);
+    spdlog::info("waitStatus={}", magic_enum::enum_name(waitStatus));
+    if (waitStatus == std::future_status::ready)
     {
         if (!future.get())
         {
@@ -298,14 +307,17 @@ void db_t::processRequests()
 {
     while (!m_shutdown.load())
     {
+        spdlog::info("Popping request");
         auto request = m_requestQueue.pop();
         if (!request.has_value())
         {
             continue;
         }
 
-        m_requestPool.enqueue([this, &request]
-                              { handleClientRequest(std::move(request.value())); });
+        spdlog::info("Processing request: {}", request->requestId);
+
+        m_requestPool.enqueue([this, request = std::move(request.value())] mutable
+                              { handleClientRequest(std::move(request)); });
     }
 }
 

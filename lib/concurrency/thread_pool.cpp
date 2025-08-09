@@ -55,7 +55,7 @@ void thread_pool_t::workerLoop()
 {
     while (true)
     {
-        std::function<void()> task;
+        std::move_only_function<void()> task;
 
         {
             std::unique_lock<std::mutex> lock{m_queueMutex};

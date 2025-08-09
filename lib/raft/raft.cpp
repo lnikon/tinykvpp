@@ -694,6 +694,7 @@ void consensus_module_t::becomeLeader()
 
     if (m_onLeaderChangeCbk)
     {
+        spdlog::info("Executing onLeaderChangeCbk");
         auto callback = m_onLeaderChangeCbk;
         m_internalThreadPool->enqueue([callback = std::move(callback)] { callback(true); });
     }

@@ -218,6 +218,12 @@ auto main(int argc, char *argv[]) -> int
             spdlog::error("Main: Unable to open the database");
             return EXIT_FAILURE;
         }
+
+        if (!pDatabase->start())
+        {
+            spdlog::error("Main: Unable to start the database");
+            return EXIT_FAILURE;
+        }
         // ==== End: Build database
 
         // ==== Start: Create and start services
@@ -260,6 +266,8 @@ auto main(int argc, char *argv[]) -> int
         {
             pConsensusModule->stop();
         }
+
+        pDatabase->stop();
         // ==== End: Shutdown services and servers
 
         return EXIT_SUCCESS;
