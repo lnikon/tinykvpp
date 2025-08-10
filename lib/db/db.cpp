@@ -307,7 +307,6 @@ void db_t::processRequests()
 {
     while (!m_shutdown.load())
     {
-        spdlog::info("Popping request");
         auto request = m_requestQueue.pop();
         if (!request.has_value())
         {
