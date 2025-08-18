@@ -12,3 +12,6 @@ compiler=clang
 compiler.cppstd=23
 compiler.version=19
 os=Linux
+
+[conf]
+tools.cmake.cmaketoolchain:generator=Ninja
