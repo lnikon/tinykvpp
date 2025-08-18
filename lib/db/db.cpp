@@ -81,12 +81,6 @@ auto db_t::start() -> bool
 {
     spdlog::info("Starting the database");
 
-    if (!open())
-    {
-        spdlog::error("Unable to open the database");
-        return false;
-    }
-
     m_requestProcessor = std::thread(
         [this]
         {
@@ -144,11 +138,6 @@ void db_t::stop()
     }
 
     spdlog::info("Database stopped");
-}
-
-auto db_t::open() -> bool
-{
-    return prepare_directory_structure();
 }
 
 [[nodiscard]] auto
@@ -254,43 +243,6 @@ auto db_t::get(const tinykvpp::v1::GetRequest *pRequest, tinykvpp::v1::GetRespon
 auto db_t::config() const noexcept -> config::shared_ptr_t
 {
     return m_config;
-}
-
-auto db_t::prepare_directory_structure() -> bool
-{
-    // Create database directory
-    if (!std::filesystem::exists(m_config->DatabaseConfig.DatabasePath))
-    {
-        spdlog::info(
-            "Creating database directory at {}", m_config->DatabaseConfig.DatabasePath.c_str()
-        );
-        if (!std::filesystem::create_directory(m_config->DatabaseConfig.DatabasePath))
-        {
-            spdlog::error(
-                "Failed to create database directory at {}",
-                m_config->DatabaseConfig.DatabasePath.c_str()
-            );
-            return false;
-        }
-    }
-    else
-    {
-        spdlog::info("Opening database at {}", m_config->DatabaseConfig.DatabasePath.c_str());
-    }
-
-    // Create segments directory inside database directory
-    const auto &segmentsPath{m_config->datadir_path()};
-    if (!std::filesystem::exists(segmentsPath))
-    {
-        spdlog::info("Creating segments directory at {}", segmentsPath.c_str());
-        if (!std::filesystem::create_directory(segmentsPath))
-        {
-            spdlog::error("Failed to create segments directory at {}", segmentsPath.c_str());
-            return false;
-        }
-    }
-
-    return true;
 }
 
 void db_t::swap(db_t &other) noexcept

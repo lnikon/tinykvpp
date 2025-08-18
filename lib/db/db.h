@@ -83,8 +83,6 @@ class db_t final
     [[nodiscard]] auto start() -> bool;
     void               stop();
 
-    [[nodiscard]] auto open() -> bool;
-
     [[nodiscard]] auto
     put(const tinykvpp::v1::PutRequest *pRequest, tinykvpp::v1::PutResponse *pResponse) noexcept
         -> db_op_result_t;
@@ -95,8 +93,6 @@ class db_t final
     [[nodiscard]] auto config() const noexcept -> config::shared_ptr_t;
 
   private:
-    [[nodiscard]] auto prepare_directory_structure() -> bool;
-
     void swap(db_t &other) noexcept;
 
     // Async request processing
