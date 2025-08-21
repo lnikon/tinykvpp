@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.25)
-project(zkv)
+project(frankie)
 
 add_library(SortedVector "sorted_vector.cpp")
 target_compile_features(SortedVector PUBLIC cxx_std_23)

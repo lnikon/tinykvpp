@@ -1,13 +1,13 @@
 #pragma once
 
-#include "structures/lsmtree/segments/lsmtree_regular_segment.h"
+#include <memory>
+#include <unordered_map>
 #include <functional>
-#include <structures/sorted_vector/sorted_vector.h>
 
 #include <absl/synchronization/mutex.h>
 
-#include <memory>
-#include <unordered_map>
+#include "structures/lsmtree/segments/lsmtree_regular_segment.h"
+#include "structures/sorted_vector/sorted_vector.h"
 
 namespace structures::lsmtree::segments::storage
 {
@@ -17,45 +17,47 @@ namespace types = lsmtree::segments::types;
 /**
  * @class last_write_time_comparator_t
  * @brief Use to insert a segment into level0
- *
  */
 struct last_write_time_comparator_t
 {
-    auto operator()(const regular_segment::shared_ptr_t &lhs, const regular_segment::shared_ptr_t &rhs) -> bool
+    auto operator()(const regular_segment::shared_ptr_t &lhs,
+                    const regular_segment::shared_ptr_t &rhs) -> bool
     {
         return lhs->last_write_time() <= rhs->last_write_time();
     }
 };
 
-/**
- * @class key_range_comparator_t
- * @brief
- *
- */
 struct key_range_comparator_t
 {
-    auto operator()(const regular_segment::shared_ptr_t &lhs, const regular_segment::shared_ptr_t &rhs) -> bool
+    auto operator()(const regular_segment::shared_ptr_t &lhs,
+                    const regular_segment::shared_ptr_t &rhs) -> bool
     {
         return lhs->max() < rhs->min();
     }
 };
 
-/**
- * @class segment_storage_t
- * @brief
- *
- */
 class segment_storage_t : public std::enable_shared_from_this<segment_storage_t>
 {
   public:
     using name_t = types::name_t;
+    using regular_segment_ptr_t = regular_segment::shared_ptr_t;
     using segment_map_t = std::unordered_map<name_t, regular_segment::shared_ptr_t>;
-    using segment_comp_t = std::function<bool(regular_segment::shared_ptr_t, regular_segment::shared_ptr_t)>;
-    using storage_t = structures::sorted_vector::sorted_vector_t<regular_segment::shared_ptr_t, segment_comp_t>;
+    using segment_comp_t = std::function<bool(regular_segment_ptr_t, regular_segment_ptr_t)>;
+    using storage_t = sorted_vector::sorted_vector_t<regular_segment::shared_ptr_t, segment_comp_t>;
     using iterator = storage_t::iterator;
     using const_iterator = storage_t::const_iterator;
     using reverse_iterator = storage_t::reverse_iterator;
     using size_type = storage_t::size_type;
+
+    segment_storage_t() noexcept = default;
+
+    segment_storage_t(const segment_storage_t &) = delete;
+    auto operator=(const segment_storage_t &) -> segment_storage_t & = delete;
+
+    segment_storage_t(segment_storage_t &&) = delete;
+    auto operator=(segment_storage_t &&) -> segment_storage_t & = delete;
+
+    ~segment_storage_t() noexcept = default;
 
     [[nodiscard]] auto size() const noexcept -> size_type;
 

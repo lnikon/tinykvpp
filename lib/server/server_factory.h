@@ -13,7 +13,8 @@ using namespace tcp_communication;
 using namespace grpc_communication;
 
 template <communication_strategy_kind_k Type>
-    requires communication_strategy_t<tcp_communication_t> || communication_strategy_t<grpc_communication_t>
+    requires communication_strategy_t<tcp_communication_t> ||
+             communication_strategy_t<grpc_communication_t>
 struct CommunicationFactory;
 
 template <> struct CommunicationFactory<tcp_communication_t::kind>

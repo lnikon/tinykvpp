@@ -1,20 +1,13 @@
-//
-// Created by nikon on 2/6/22.
-//
-
-#ifndef ZKV_LSMTREESEGMENTFACTORY_H
-#define ZKV_LSMTREESEGMENTFACTORY_H
+#pragma once
 
 #include "structures/lsmtree/segments/lsmtree_regular_segment.h"
+#include "types.h"
 #include <structures/lsmtree/lsmtree_types.h>
 
 namespace structures::lsmtree::segments::factories
 {
 
-auto lsmtree_segment_factory(types::name_t        name,
-                             types::path_t        path,
-                             memtable::memtable_t memtable) -> lsmtree::segments::regular_segment::shared_ptr_t;
+auto lsmtree_segment_factory(types::name_t name, fs::path_t path, memtable::memtable_t memtable)
+    -> lsmtree::segments::regular_segment::shared_ptr_t;
 
 } // namespace structures::lsmtree::segments::factories
-
-#endif // ZKV_LSMTREESEGMENTFACTORY_H

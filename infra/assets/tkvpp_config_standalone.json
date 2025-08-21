@@ -1,0 +1,37 @@
+{
+    "logging": {
+        "loggingLevel": "debug"
+    },
+    "database": {
+        "path": "./var/tkvpp",
+        "walFilename": "wal",
+        "manifestFilenamePrefix": "manifest_",
+        "mode": "standalone"
+    },
+    "wal": {
+        "enable": true,
+        "filename": "wal",
+        "storageType": "persistent"
+    },
+    "lsm": {
+        "flushThreshold": 1024,
+        "maximumLevels": 12,
+        "levelZeroCompaction": {
+            "compactionStrategy": "levelled",
+            "compactionThreshold": 1024
+        },
+        "levelNonZeroCompaction": {
+            "compactionStrategy": "tiered",
+            "compactionThreshold": 1024
+        }
+    },
+    "server": {
+        "transport": "grpc",
+        "host": "0.0.0.0",
+        "port": 8081,
+        "id": 1,
+        "peers": [
+            "0.0.0.0:8081"
+        ]
+    }
+}

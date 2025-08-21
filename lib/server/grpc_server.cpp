@@ -1,4 +1,5 @@
 #include "server/grpc_server.h"
+#include "db.h"
 
 #include <cstdlib>
 #include <fmt/core.h>
@@ -16,49 +17,49 @@ namespace server::grpc_communication
 {
 
 tinykvpp_service_impl_t::tinykvpp_service_impl_t(db::shared_ptr_t db)
-    : m_database(db)
+    : m_database(std::move(db))
 {
 }
 
-auto tinykvpp_service_impl_t::Put(grpc::ServerContext *pContext,
-                                  const PutRequest    *pRequest,
-                                  PutResponse         *pResponse) -> grpc::Status
+auto tinykvpp_service_impl_t::Put(
+    grpc::ServerContext            *pContext,
+    const tinykvpp::v1::PutRequest *pRequest,
+    tinykvpp::v1::PutResponse      *pResponse
+) -> grpc::Status
 {
     (void)pContext;
 
     try
     {
-        m_database->put(structures::lsmtree::key_t{pRequest->key()}, structures::lsmtree::value_t{pRequest->value()});
-        pResponse->set_status(std::string("OK"));
-        return grpc::Status::OK;
+        const auto result = m_database->put(pRequest, pResponse);
+        return result.status == db::db_op_status_k::success_k
+                   ? grpc::Status::OK
+                   : grpc::Status{grpc::StatusCode::INTERNAL, result.message};
     }
     catch (std::exception &e)
     {
-        auto msg{fmt::format("Failed to put key-value pair: {}", e.what())};
-        spdlog::error(msg);
-        return {grpc::StatusCode::INTERNAL, msg};
+        return grpc::Status::CANCELLED;
     }
 }
 
-auto tinykvpp_service_impl_t::Get(grpc::ServerContext *pContext,
-                                  const GetRequest    *pRequest,
-                                  GetResponse         *pResponse) -> grpc::Status
+auto tinykvpp_service_impl_t::Get(
+    grpc::ServerContext            *pContext,
+    const tinykvpp::v1::GetRequest *pRequest,
+    tinykvpp::v1::GetResponse      *pResponse
+) -> grpc::Status
 {
     (void)pContext;
+
     try
     {
-        const auto &record = m_database->get(structures::lsmtree::key_t{pRequest->key()});
-        if (record)
-        {
-            pResponse->set_value(record.value().m_value.m_value);
-        }
-        return grpc::Status::OK;
+        const auto result = m_database->get(pRequest, pResponse);
+        return result.status == db::db_op_status_k::success_k
+                   ? grpc::Status::OK
+                   : grpc::Status{grpc::StatusCode::INTERNAL, result.message};
     }
     catch (std::exception &e)
     {
-        auto msg{fmt::format("Failed to get key-value pair: {}", e.what())};
-        spdlog::error(msg);
-        return {grpc::StatusCode::INTERNAL, msg};
+        return grpc::Status::CANCELLED;
     }
 }
 
@@ -90,8 +91,9 @@ void grpc_communication_t::start(db::shared_ptr_t database) noexcept
 
     spdlog::info("Starting gRPC communication...");
 
-    const auto serverAddress{
-        fmt::format("{}:{}", database->config()->ServerConfig.host, database->config()->ServerConfig.port)};
+    const auto serverAddress{fmt::format(
+        "{}:{}", database->config()->ServerConfig.host, database->config()->ServerConfig.port
+    )};
 
     try
     {

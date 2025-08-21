@@ -1,439 +1,308 @@
-#include "config.h"
-#include "db.h"
-#include "memtable.h"
-#include "server/server.h"
-#include "server/server_kind.h"
-
-#include <cstdint>
-#include <cstdio>
-#include <cstdlib>
+#include <thread>
 #include <exception>
-#include <fstream>
+#include <memory>
+#include <optional>
 #include <string>
-
-#include <nlohmann/json.hpp>
-#include <nlohmann/json-schema.hpp>
-
-#include <cxxopts.hpp>
-
-#include <fmt/format.h>
+#include <csignal>
+#include <cstdlib>
 
 #include <spdlog/common.h>
 #include <spdlog/spdlog.h>
-#include <variant>
+#include <fmt/format.h>
+#include <cxxopts.hpp>
+#include <magic_enum/magic_enum.hpp>
+
+#include "config.h"
+#include "db.h"
+#include "db_config.h"
+#include "lsmtree.h"
+#include "manifest/manifest.h"
+#include "wal/common.h"
+#include "memtable.h"
+#include "raft/raft.h"
+#include "server/grpc_server.h"
 
 using tk_key_t = structures::memtable::memtable_t::record_t::key_t;
 using tk_value_t = structures::memtable::memtable_t::record_t::value_t;
 
-using nlohmann::json;
-using nlohmann::json_schema::json_validator;
-
-// JSON schema for the configuration file
-static json database_config_schema = R"(
+namespace
 {
-    "$id": "https://json-schema.hyperjump.io/schema",
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$title": "Schema for tinykvpp's JSON config",
-    "type": "object",
-    "properties": {
-        "logging": {
-            "type": "object",
-            "properties": {
-                "loggingLevel": {
-                    "$ref": "#/$defs/loggingLevel"
-                }
-            },
-            "required": [
-                "loggingLevel"
-            ]
-        },
-        "database": {
-            "type": "object",
-            "description": "Core database configuration settings",
-            "properties": {
-                "path": {
-                    "type": "string",
-                    "description": "Database storage directory path"
-                },
-                "walFilename": {
-                    "type": "string",
-                    "description": "Write-ahead log filename"
-                },
-                "manifestFilenamePrefix": {
-                    "type": "string",
-                    "description": "Prefix for manifest files"
-                }
-            },
-            "required": [
-                "path",
-                "walFilename",
-                "manifestFilenamePrefix"
-            ]
-        },
-        "lsmtree": {
-            "type": "object",
-            "properties": {
-                "memtableFlushThreshold": {
-                    "type": "number",
-                    "description": "The threshold of bytes at which the memtable should be flushed",
-                    "default": 1024
-                },
-                "levelZeroCompaction": {
-                    "$ref": "#/$defs/compaction"
-                },
-                "levelNonZeroCompaction": {
-                    "$ref": "#/$defs/compaction"
-                }
-            },
-            "required": [
-                "memtableFlushThreshold",
-                "maximumLevels",
-                "levelZeroCompaction",
-                "levelNonZeroCompaction"
-            ]
-        },
-        "server": {
-            "type": "object",
-            "description": "Server configuration settings",
-            "properties": {
-                "transport": {
-                    "$ref": "#/$defs/serverTransport"
-                },
-                "host": {
-                    "type": "string",
-                    "description": "Server host address"
-                },
-                "port": {
-                    "type": "number",
-                    "description": "Server port number",
-                    "minimum": 1024,
-                    "maximum": 65535
-                }
-            },
-            "required": [
-                "transport",
-                "host",
-                "port"
-            ]
-        }
-    },
-    "required": [
-        "database",
-        "lsmtree",
-        "server"
-    ],
-    "$defs": {
-        "serverTransport": {
-            "type": "string",
-            "enum": [
-                "grpc",
-                "tcp"
-            ]
-        },
-        "loggingLevel": {
-            "type": "string",
-            "enum": [
-                "info",
-                "debug",
-                "trace",
-                "off"
-            ]
-        },
-        "compactionStrategy": {
-            "type": "string",
-            "enum": [
-                "levelled",
-                "tiered"
-            ]
-        },
-        "compaction": {
-            "type": "object",
-            "properties": {
-                "compactionStrategy": {
-                    "$ref": "#/$defs/compactionStrategy"
-                },
-                "compactionThreshold": {
-                    "type": "number",
-                    "description": "Number of files that trigger compaction",
-                    "minimum": 1
-                }
-            },
-            "required": [
-                "compactionStrategy",
-                "compactionThreshold"
-            ]
-        }
-    }
-}
-)"_json;
 
-using json = nlohmann::json;
-
-auto loadConfigJson(const std::string &configPath) -> json
+[[nodiscard]] auto maybe_create_manifest(const fs::path_t &path)
+    -> std::optional<db::manifest::manifest_t>
 {
-    std::fstream configStream(configPath, std::fstream::in);
-    if (!configStream.is_open())
+    auto maybeWal =
+        wal::wal_builder_t{}.set_file_path(path).build<db::manifest::manifest_t::record_t>(
+            wal::log_storage_type_k::file_based_persistent_k
+        );
+    if (!maybeWal.has_value())
     {
-        throw std::runtime_error(fmt::format("Unable to open config file: %s", configPath));
+        spdlog::error(
+            "maybe_create_manifest: Unable to create a WAL for the manifest. path={}", path.c_str()
+        );
+        return std::nullopt;
     }
-    return json::parse(configStream);
+    return db::manifest::manifest_builder_t{}.build(path, std::move(maybeWal.value()));
 }
 
-void validateConfigJson(const json &configJson, json_validator &validator)
+[[nodiscard]] auto maybe_create_consensus_module(
+    config::shared_ptr_t                  pConfig,
+    consensus::node_config_t              nodeConfig,
+    wal::shared_ptr_t<raft::v1::LogEntry> pWAL
+) noexcept -> std::optional<std::shared_ptr<consensus::consensus_module_t>>
 {
-    try
+    if (pConfig->ServerConfig.id == 0)
     {
-        validator.validate(configJson);
+        spdlog::error("maybe_create_consensus_module: ID of the node should be positve integer");
+        return std::nullopt;
     }
-    catch (const std::exception &e)
+
+    if (pConfig->ServerConfig.peers.empty())
     {
-        throw std::runtime_error(fmt::format("Config validation failed: {}", e.what()));
+        spdlog::error("maybe_create_consensus_module: List of node IPs can't be empty");
+        return std::nullopt;
     }
+
+    std::vector<consensus::raft_node_grpc_client_t> replicas;
+    for (consensus::id_t replicaId{1}; const auto &replicaIp : pConfig->ServerConfig.peers)
+    {
+        if (replicaId != pConfig->ServerConfig.id)
+        {
+            std::unique_ptr<raft::v1::RaftService::Stub> stub{raft::v1::RaftService::NewStub(
+                grpc::CreateChannel(replicaIp, grpc::InsecureChannelCredentials())
+            )};
+
+            replicas.emplace_back(
+                consensus::node_config_t{.m_id = replicaId, .m_ip = replicaIp}, std::move(stub)
+            );
+
+            spdlog::info(
+                "maybe_create_consensus_module: Emplacing replica into replicas "
+                "vector. replicaId={} replicaIp={}",
+                replicaId,
+                replicaIp
+            );
+        }
+        ++replicaId;
+    }
+
+    auto pConsensusModule =
+        std::make_shared<consensus::consensus_module_t>(nodeConfig, std::move(replicas), pWAL);
+    if (!pConsensusModule->init())
+    {
+        spdlog::error("maybe_create_consensus_module: Failed to initialize the consensus module");
+        return std::nullopt;
+    }
+
+    return std::make_optional(std::move(pConsensusModule));
 }
 
-void configureLogging(const std::string &loggingLevel)
+auto prepare_directory_structure(config::shared_ptr_t pConfig) -> bool
 {
-    // spdlog::set_pattern("*** [%H:%M:%S %z] [thread %t] %v ***");
-    if (loggingLevel == SPDLOG_LEVEL_NAME_INFO)
+    // Create database directory
+    if (!std::filesystem::exists(pConfig->DatabaseConfig.DatabasePath))
     {
-        spdlog::set_level(spdlog::level::info);
-    }
-    else if (loggingLevel == SPDLOG_LEVEL_NAME_DEBUG)
-    {
-        spdlog::set_level(spdlog::level::debug);
-    }
-    else if (loggingLevel == SPDLOG_LEVEL_NAME_TRACE)
-    {
-        spdlog::set_level(spdlog::level::trace);
-    }
-    else if (loggingLevel == SPDLOG_LEVEL_NAME_OFF)
-    {
-        spdlog::set_level(spdlog::level::off);
+        spdlog::info(
+            "Creating database directory at {}", pConfig->DatabaseConfig.DatabasePath.c_str()
+        );
+        if (!std::filesystem::create_directory(pConfig->DatabaseConfig.DatabasePath))
+        {
+            spdlog::error(
+                "Failed to create database directory at {}",
+                pConfig->DatabaseConfig.DatabasePath.c_str()
+            );
+            return false;
+        }
     }
     else
     {
-        throw std::runtime_error(fmt::format("Unknown logging level: %s", loggingLevel));
+        spdlog::info("Opening database at {}", pConfig->DatabaseConfig.DatabasePath.c_str());
     }
+
+    // Create segments directory inside database directory
+    const auto &segmentsPath{pConfig->datadir_path()};
+    if (!std::filesystem::exists(segmentsPath))
+    {
+        spdlog::info("Creating segments directory at {}", segmentsPath.c_str());
+        if (!std::filesystem::create_directory(segmentsPath))
+        {
+            spdlog::error("Failed to create segments directory at {}", segmentsPath.c_str());
+            return false;
+        }
+    }
+
+    return true;
 }
 
-auto loadDatabaseConfig(const json &configJson) -> config::shared_ptr_t
+} // namespace
+
+std::atomic<bool> gShutdown{false};
+static void       signalHandler(int sig) noexcept
 {
-    auto dbConfig = config::make_shared();
-
-    if (configJson["database"].contains("path"))
+    if (sig == SIGTERM || sig == SIGINT)
     {
-        dbConfig->DatabaseConfig.DatabasePath = configJson["database"]["path"].get<std::string>();
+        gShutdown.store(true);
     }
-
-    if (configJson["database"].contains("walFilename"))
-    {
-        dbConfig->DatabaseConfig.WalFilename = configJson["database"]["walFilename"].get<std::string>();
-    }
-
-    if (configJson["database"].contains("manifestFilenamePrefix"))
-    {
-        dbConfig->DatabaseConfig.ManifestFilenamePrefix =
-            configJson["database"]["manifestFilenamePrefix"].get<std::string>();
-    }
-
-    return dbConfig;
-}
-
-void loadLSMTreeConfig(const json &lsmtreeConfig, config::shared_ptr_t dbConfig, const std::string &configPath)
-{
-    if (lsmtreeConfig.contains("memtableFlushThreshold"))
-    {
-        dbConfig->LSMTreeConfig.DiskFlushThresholdSize = lsmtreeConfig["memtableFlushThreshold"].get<uint64_t>();
-    }
-    else
-    {
-        throw std::runtime_error("\"memtableFlushThreshold\" is not specified in config: " + configPath);
-    }
-
-    if (lsmtreeConfig.contains("levelZeroCompaction"))
-    {
-        const auto &levelZeroCompaction = lsmtreeConfig["levelZeroCompaction"];
-        if (levelZeroCompaction.contains("compactionStrategy"))
-        {
-            dbConfig->LSMTreeConfig.LevelZeroCompactionStrategy =
-                levelZeroCompaction["compactionStrategy"].get<std::string>();
-        }
-        else
-        {
-            throw std::runtime_error("\"levelZeroCompaction.compactionStrategy\" is not specified "
-                                     "in config: " +
-                                     configPath);
-        }
-
-        if (levelZeroCompaction.contains("compactionThreshold"))
-        {
-            dbConfig->LSMTreeConfig.LevelZeroCompactionThreshold =
-                levelZeroCompaction["compactionThreshold"].get<std::uint64_t>();
-        }
-        else
-        {
-            throw std::runtime_error("\"levelZeroCompaction.compactionThreshold\" is not specified "
-                                     "in config: " +
-                                     configPath);
-        }
-    }
-    else
-    {
-        throw std::runtime_error("\"levelZeroCompaction\" is not specified in config: " + configPath);
-    }
-
-    if (lsmtreeConfig.contains("levelNonZeroCompaction"))
-    {
-        const auto &levelNonZeroCompaction = lsmtreeConfig["levelNonZeroCompaction"];
-        if (levelNonZeroCompaction.contains("compactionStrategy"))
-        {
-            dbConfig->LSMTreeConfig.LevelNonZeroCompactionStrategy =
-                levelNonZeroCompaction["compactionStrategy"].get<std::string>();
-        }
-        else
-        {
-            throw std::runtime_error("\"levelNonZeroCompaction.compactionStrategy\" is not "
-                                     "specified in config: " +
-                                     configPath);
-        }
-
-        if (levelNonZeroCompaction.contains("compactionThreshold"))
-        {
-            dbConfig->LSMTreeConfig.LevelNonZeroCompactionThreshold =
-                levelNonZeroCompaction["compactionThreshold"].get<std::uint64_t>();
-        }
-        else
-        {
-            throw std::runtime_error("\"levelNonZeroCompaction.compactionThreshold\" is not "
-                                     "specified in config: " +
-                                     configPath);
-        }
-    }
-    else
-    {
-        throw std::runtime_error("\"levelNonZeroCompaction\" is not specified in config: " + configPath);
-    }
-}
-
-auto loadServerConfig(const json &configJson, config::shared_ptr_t dbConfig)
-{
-    if (configJson.contains("host"))
-    {
-        dbConfig->ServerConfig.host = configJson["host"].get<std::string>();
-    }
-    else
-    {
-        throw std::runtime_error("\"host\" is not specified in the config");
-    }
-
-    if (configJson.contains("port"))
-    {
-        dbConfig->ServerConfig.port = configJson["port"].get<uint32_t>();
-    }
-    else
-    {
-        throw std::runtime_error("\"port\" is not specified in the config");
-    }
-
-    if (configJson.contains("transport"))
-    {
-        dbConfig->ServerConfig.transport = configJson["transport"].get<std::string>();
-    }
-    else
-    {
-        throw std::runtime_error("\"transport\" is not specified in the config");
-    }
-}
-
-auto initializeDatabaseConfig(const json &configJson, const std::string &configPath) -> config::shared_ptr_t
-{
-    auto dbConfig = loadDatabaseConfig(configJson);
-
-    if (configJson.contains("lsmtree"))
-    {
-        loadLSMTreeConfig(configJson["lsmtree"], dbConfig, configPath);
-    }
-    else
-    {
-        throw std::runtime_error("\"lsmtree\" is not specified in config: " + configPath);
-    }
-
-    if (configJson.contains("server"))
-    {
-        loadServerConfig(configJson["server"], dbConfig);
-    }
-    else
-    {
-        throw std::runtime_error("\"server\" is not specified in config: " + configPath);
-    }
-
-    return dbConfig;
 }
 
 auto main(int argc, char *argv[]) -> int
 {
     try
     {
-        cxxopts::Options options("tinykvpp", "A tiny database, powering big ideas");
-        options.add_options()("c,config", "Path to JSON configuration of database", cxxopts::value<std::string>())(
-            "help", "Print help");
-
-        auto parsedOptions = options.parse(argc, argv);
-        if ((parsedOptions.count("help") != 0U) || (parsedOptions.count("config") == 0U))
+        // Setup signal handlers
+        if (std::signal(SIGTERM, signalHandler) == SIG_ERR)
         {
-            spdlog::info("{}", options.help());
-            return EXIT_SUCCESS;
-        }
-
-        const auto configPath = parsedOptions["config"].as<std::string>();
-        auto       configJson = loadConfigJson(configPath);
-
-        json_validator validator;
-        validator.set_root_schema(database_config_schema);
-        validateConfigJson(configJson, validator);
-
-        configureLogging(configJson["logging"]["loggingLevel"].get<std::string>());
-
-        auto dbConfig = initializeDatabaseConfig(configJson, configPath);
-        auto database = db::make_shared(dbConfig);
-        if (!database->open())
-        {
-            spdlog::error("Unable to open the database");
+            spdlog::error("Unable to set signal handler for SIGTERM");
             return EXIT_FAILURE;
         }
 
-        const auto kind{server::from_string(dbConfig->ServerConfig.transport)};
-        if (!kind.has_value())
+        if (std::signal(SIGINT, signalHandler) == SIG_ERR)
         {
-            spdlog::info("\"transport\" is not determined. Exiting");
+            spdlog::error("Unable to set signal handler for SIGINT");
+            return EXIT_FAILURE;
+        }
+
+        // Setup options
+        cxxopts::Options options("tinykvpp", "A tiny database, powering big ideas");
+        options
+            .add_options()("c,config", "Path to JSON configuration of database", cxxopts::value<std::string>())(
+                "help", "Print help"
+            );
+
+        const auto &parsedOptions{options.parse(argc, argv)};
+        if ((parsedOptions.count("help") != 0U) || (parsedOptions.count("config") == 0U))
+        {
+            spdlog::info(options.help());
             return EXIT_SUCCESS;
         }
 
-        std::variant<std::monostate, server::server_t<server::grpc_communication_t>> server;
-        if (kind == server::communication_strategy_kind_k::grpc_k)
+        // Load the config
+        const auto &configPath = parsedOptions["config"].as<std::string>();
+        const auto &configJson = loadConfigJson(configPath);
+        validateConfigJson(configJson);
+
+        // Setup the logging
+        configureLogging(configJson["logging"]["loggingLevel"].get<std::string>());
+
+        // Setup database config
+        auto pDbConfig = initializeDatabaseConfig(configJson, configPath);
+        if (pDbConfig->WALConfig.storageType == wal::log_storage_type_k::undefined_k)
         {
-            server = server::main_server<server::communication_strategy_kind_k::grpc_k>(database);
-        }
-        else if (kind == server::communication_strategy_kind_k::tcp_k)
-        {
-            spdlog::warn("{} server is not supported. Exiting", server::to_string(kind.value()).value());
-            return EXIT_SUCCESS;
+            spdlog::error("Undefined WAL storage type");
+            return EXIT_FAILURE;
         }
 
-        std::visit(
-            [](auto &server)
-            {
-                using T = std::decay_t<decltype(server)>;
-                if constexpr (std::is_same_v<T, std::monostate>)
-                {
-                    return;
-                }
-                else
-                {
-                    server.shutdown();
-                }
-            },
-            server);
+        // Setup directory structure for the database
+        prepare_directory_structure(pDbConfig);
+
+        // Build WAL
+        const auto walPath{pDbConfig->DatabaseConfig.DatabasePath / pDbConfig->WALConfig.path};
+        auto       maybeWal = wal::wal_builder_t{}.set_file_path(walPath).build<raft::v1::LogEntry>(
+            pDbConfig->WALConfig.storageType
+        );
+        if (!maybeWal.has_value())
+        {
+            spdlog::error("Unable to build WAL");
+            return EXIT_FAILURE;
+        }
+        auto pWAL = wal::make_shared<raft::v1::LogEntry>(std::move(maybeWal.value()));
+
+        // Build consensus module
+        consensus::node_config_t nodeConfig{
+            .m_id = pDbConfig->ServerConfig.id,
+            .m_ip = fmt::format("{}:{}", pDbConfig->ServerConfig.host, pDbConfig->ServerConfig.port)
+        };
+
+        // Listen on the current nodes host:port
+        // TODO(lnikon): Drop insecure creds
+        grpc::ServerBuilder grpcBuilder;
+        grpcBuilder.AddListeningPort(nodeConfig.m_ip, grpc::InsecureServerCredentials());
+
+        std::shared_ptr<consensus::consensus_module_t> pConsensusModule{nullptr};
+        if (auto maybeConsensusModule{maybe_create_consensus_module(pDbConfig, nodeConfig, pWAL)};
+            maybeConsensusModule.has_value())
+        {
+            pConsensusModule = std::move(maybeConsensusModule.value());
+            grpcBuilder.RegisterService(
+                dynamic_cast<raft::v1::RaftService::Service *>(pConsensusModule.get())
+            );
+        }
+        else
+        {
+            spdlog::debug("Main: Failed to create a consensus module. Exiting.");
+            return EXIT_FAILURE;
+        }
+
+        // Build Manifest
+        auto maybe_manifest = maybe_create_manifest(pDbConfig->manifest_path());
+        if (!maybe_manifest.has_value())
+        {
+            spdlog::error("Main: Unable to create Manifest");
+            return EXIT_FAILURE;
+        }
+        auto pManifest{
+            std::make_shared<db::manifest::manifest_t>(std::move(maybe_manifest.value()))
+        };
+
+        // Build LSMTree
+        auto pLSMTree = structures::lsmtree::lsmtree_builder_t{}.build(pDbConfig, pManifest, pWAL);
+        if (!pLSMTree)
+        {
+            spdlog::error("Main: Unable to build LSMTree");
+            return EXIT_FAILURE;
+        }
+
+        // Build the database
+        auto pDatabase = db::make_shared(pDbConfig, pManifest, pLSMTree, pConsensusModule);
+        if (!pDatabase->start())
+        {
+            spdlog::error("Main: Unable to start the database");
+            return EXIT_FAILURE;
+        }
+
+        // Create KV service and connect it to the gRPC server
+        auto kvService =
+            std::make_unique<server::grpc_communication::tinykvpp_service_impl_t>(pDatabase);
+        grpcBuilder.RegisterService(kvService.get());
+
+        // Create gRPC server
+        std::unique_ptr<grpc::Server> pServer{
+            std::unique_ptr<grpc::Server>(grpcBuilder.BuildAndStart())
+        };
+
+        // Start consensus module and gRPC server
+        auto serverThread = std::jthread([&pServer] { pServer->Wait(); });
+
+        // Start consensus module
+        if (pConsensusModule)
+        {
+            pConsensusModule->start();
+        }
+
+        // SIGTERM/SIGINT received, shutdown services and servers
+        while (!gShutdown)
+        {
+            std::this_thread::yield();
+        }
+
+        spdlog::debug("Node={} is requesting server shutdown", nodeConfig.m_id);
+        pServer->Shutdown();
+
+        spdlog::debug("Node={} is joining the server thread", nodeConfig.m_id);
+        if (serverThread.joinable())
+        {
+            serverThread.join();
+            spdlog::debug("Node={} joined the server thread", nodeConfig.m_id);
+        }
+
+        if (pConsensusModule)
+        {
+            pConsensusModule->stop();
+        }
+
+        pDatabase->stop();
+
+        return EXIT_SUCCESS;
     }
     catch (const std::exception &e)
     {

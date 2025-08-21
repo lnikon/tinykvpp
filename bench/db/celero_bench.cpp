@@ -37,7 +37,8 @@ class DBPutGet_CeleroFixture : public celero::TestFixture
         }
     }
 
-    auto getExperimentValues() const -> std::vector<std::shared_ptr<celero::TestFixture::ExperimentValue>> override
+    auto getExperimentValues() const
+        -> std::vector<std::shared_ptr<celero::TestFixture::ExperimentValue>> override
     {
         constexpr const std::size_t                                        totalNumberOfTests = 12;
         std::vector<std::shared_ptr<celero::TestFixture::ExperimentValue>> problemSpaceValues;
@@ -64,7 +65,8 @@ class DBPutGet_CeleroFixture : public celero::TestFixture
     {
         for (std::size_t idx{0}; idx < m_records.capacity(); idx++)
         {
-            m_records.emplace_back(bench::generateRandomString(keySize), bench::generateRandomString(valueSize));
+            m_records.emplace_back(bench::generateRandomString(keySize),
+                                   bench::generateRandomString(valueSize));
         }
     }
 

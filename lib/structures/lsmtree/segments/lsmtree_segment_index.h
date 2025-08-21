@@ -1,5 +1,4 @@
-#ifndef LSM_TREE_SEGMENT_INDEX
-#define LSM_TREE_SEGMENT_INDEX
+#pragma once
 
 #include <unordered_map>
 
@@ -36,5 +35,3 @@ class lsmtree_segment_index_t
 };
 
 } // namespace structures::lsmtree
-
-#endif // LSM_TREE_SEGMENT_INDEX

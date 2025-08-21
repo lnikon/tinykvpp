@@ -1,29 +1,32 @@
-#include "fs/append_only_file.h"
-#include <iostream>
-#include <spdlog/spdlog.h>
-#include <structures/lsmtree/lsmtree_types.h>
-#include <structures/lsmtree/segments/lsmtree_regular_segment.h>
-
 #include <cassert>
 #include <fstream>
 #include <optional>
 #include <ios>
 #include <stdexcept>
 #include <string>
+#include <iostream>
+
+#include <spdlog/spdlog.h>
+
+#include "structures/lsmtree/lsmtree_types.h"
+#include "structures/lsmtree/segments/lsmtree_regular_segment.h"
 
 namespace structures::lsmtree::segments::regular_segment
 {
 
 const auto footerSize{128}; // bytes
 
-regular_segment_t::regular_segment_t(fs::path_t path, types::name_t name, memtable::memtable_t memtable)
+regular_segment_t::regular_segment_t(
+    fs::path_t path, types::name_t name, memtable::memtable_t memtable
+) noexcept
     : m_path{std::move(path)},
       m_name{std::move(name)},
       m_memtable{std::make_optional<memtable_t>(std::move(memtable))}
 {
 }
 
-[[nodiscard]] auto regular_segment_t::record(const lsmtree::key_t &key) -> std::vector<std::optional<record_t>>
+[[nodiscard]] auto regular_segment_t::record(const key_t &key)
+    -> std::vector<std::optional<record_t>>
 {
     if (m_hashIndex.empty())
     {
@@ -48,7 +51,8 @@ regular_segment_t::regular_segment_t(fs::path_t path, types::name_t name, memtab
     return result;
 }
 
-auto regular_segment_t::record(const hashindex::hashindex_t::offset_t &offset) -> std::optional<record_t>
+auto regular_segment_t::record(const hashindex::hashindex_t::offset_t &offset)
+    -> std::optional<record_t>
 {
     std::fstream ss{get_path(), std::ios::in};
     ss.seekg(offset);
@@ -162,7 +166,7 @@ types::name_t regular_segment_t::get_name() const
     return m_name;
 }
 
-auto regular_segment_t::get_path() const -> types::path_t
+auto regular_segment_t::get_path() const -> fs::path_t
 {
     return m_path;
 }
@@ -185,7 +189,7 @@ void regular_segment_t::restore()
         return;
     }
 
-    // Recover hashindex if its empty
+    // Recover hashindex if it is empty
     if (m_hashIndex.empty())
     {
         restore_index();

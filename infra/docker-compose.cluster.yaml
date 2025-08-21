@@ -1,0 +1,59 @@
+---
+services:
+  tkvpp-node-1:
+    image: tinykvpp-clang:latest
+    security_opt:
+      - seccomp:unconfined
+    container_name: tkvpp-node-1
+    command: ["/app/tkvpp", "-c", "/app/config.json"]
+    ports:
+      - "9890:9890"
+    volumes:
+      - ./assets/tkvpp_config_1.json:/app/config.json
+      - node1-data:/var/tkvpp
+    networks:
+      tkvpp-net:
+        aliases:
+          - node1
+    restart: unless-stopped
+  tkvpp-node-2:
+    image: tinykvpp-clang:latest
+    security_opt:
+      - seccomp:unconfined
+    container_name: tkvpp-node-2
+    command: ["/app/tkvpp", "-c", "/app/config.json"]
+    ports:
+      - "9891:9891"
+    volumes:
+      - ./assets/tkvpp_config_2.json:/app/config.json
+      - node2-data:/var/tkvpp
+    networks:
+      tkvpp-net:
+        aliases:
+          - node2
+    restart: unless-stopped
+  tkvpp-node-3:
+    image: tinykvpp-clang:latest
+    security_opt:
+      - seccomp:unconfined
+    container_name: tkvpp-node-3
+    command: ["/app/tkvpp", "-c", "/app/config.json"]
+    ports:
+      - "9892:9892"
+    volumes:
+      - ./assets/tkvpp_config_3.json:/app/config.json
+      - node3-data:/var/tkvpp
+    networks:
+      tkvpp-net:
+        aliases:
+          - node3
+    restart: unless-stopped
+
+networks:
+  tkvpp-net:
+    driver: bridge
+
+volumes:
+  node1-data:
+  node2-data:
+  node3-data:

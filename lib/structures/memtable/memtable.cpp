@@ -48,7 +48,8 @@ auto memtable_t::record_t::value_t::size() const -> std::size_t
     return m_value.size();
 }
 
-auto memtable_t::record_t::value_t::operator==(const memtable_t::record_t::value_t &other) const -> bool
+auto memtable_t::record_t::value_t::operator==(const memtable_t::record_t::value_t &other) const
+    -> bool
 {
     return m_value == other.m_value;
 }
@@ -113,7 +114,8 @@ void memtable_t::emplace(memtable_t::record_t record)
     m_data.emplace(std::move(record));
 }
 
-auto memtable_t::find(const memtable_t::record_t::key_t &key) const noexcept -> std::optional<memtable_t::record_t>
+auto memtable_t::find(const memtable_t::record_t::key_t &key) const noexcept
+    -> std::optional<memtable_t::record_t>
 {
     return m_data.find(key);
 }

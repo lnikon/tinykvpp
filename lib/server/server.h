@@ -1,8 +1,8 @@
 #pragma once
 
-#include "server_factory.h"
-
 #include <utility>
+
+#include "server_factory.h"
 
 namespace server
 {

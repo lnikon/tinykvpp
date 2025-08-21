@@ -1,13 +1,7 @@
-//
-// Created by nikon on 2/6/22.
-//
-
-#ifndef ZKV_LSMTREECONFIG_H
-#define ZKV_LSMTREECONFIG_H
-
-#include <structures/lsmtree/lsmtree_types.h>
+#pragma once
 
 #include <cstdint>
+#include <string>
 
 namespace structures::lsmtree
 {
@@ -21,30 +15,28 @@ struct lsmtree_config_t
     uint64_t DiskFlushThresholdSize{8 * 1024 * 1024};
 
     /**
-     * Determines number of segments after whicqh compaction process should
-     * start.
+     * Determines number of segments after which compaction process should
+     * start for level 0.
      */
     uint64_t LevelZeroCompactionThreshold{0};
 
     /**
-     * Determines strategy used by compaction process
+     * Determines strategy used by compaction process  for level 0.
      * TODO(lnikon): Switch to enum
      */
     std::string LevelZeroCompactionStrategy;
 
     /**
-     * Determines number of segments after whicqh compaction process should
-     * start.
+     * Determines number of segments after which compaction process should
+     * start for level 1 and below.
      */
     uint64_t LevelNonZeroCompactionThreshold{0};
 
     /**
-     * Determines strategy used by compaction process
+     * Determines strategy used by compaction process for level 1 and below.
      * TODO(lnikon): Switch to enum
      */
     std::string LevelNonZeroCompactionStrategy;
 };
 
 } // namespace structures::lsmtree
-
-#endif // ZKV_LSMTREECONFIG_H

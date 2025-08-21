@@ -1,0 +1,7 @@
+---
+version: '3.8'
+services:
+  app:
+    image: tinykvpp-clang:latest
+    container_name: tkvpp-node-1
+    command: ["/app/tkvpp", "-c", "/app/config.json"]

@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.25)
-project(zkv)
+project(frankie)
 
 add_library(
-	HashIndex
+  HashIndex
   "hashindex.cpp")
 
 set_target_properties(HashIndex PROPERTIES CXX_STANDARD 23)

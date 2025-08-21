@@ -1,24 +1,22 @@
 #pragma once
 
-#include "config/config.h"
-#include "fs/types.h"
-#include <fs/append_only_file.h>
-
-#include <spdlog/spdlog.h>
-
+#include <optional>
 #include <sstream>
 #include <string>
+#include <type_traits>
+#include <utility>
 #include <vector>
 #include <variant>
 #include <cstdint>
 
+#include <spdlog/spdlog.h>
+
+#include "fs/types.h"
+#include "wal.h"
+
 namespace db::manifest
 {
 
-/**
- * @class manifest_t
- * @brief Manipulate disk-level manifest file
- */
 struct manifest_t
 {
     using level_index_t = std::size_t;
@@ -30,18 +28,13 @@ struct manifest_t
         level_k,
     };
 
-    /**
-     * @class segment_record_t
-     * @brief Represents an operation applicable to segment
-     *
-     */
     struct segment_record_t
     {
         enum class operation_k : int8_t
         {
             undefined_k = -1,
             add_segment_k = 0,
-            remove_segment_k,
+            remove_segment_k = 1,
         };
 
         [[nodiscard]] static auto ToString(operation_k operation) -> std::string
@@ -66,15 +59,15 @@ struct manifest_t
 
         template <typename stream_gt> void write(stream_gt &outStream) const
         {
-            outStream << static_cast<std::int32_t>(type) << ' ' << static_cast<std::int32_t>(op) << ' ' << name << ' '
-                      << level << std::endl;
+            outStream << static_cast<std::int32_t>(type) << ' ' << static_cast<std::int32_t>(op)
+                      << ' ' << name << ' ' << level << std::endl;
         }
 
         /**
          * @brief Serialize manifest segment record into stream.
          *        Format:
          * <operation-type><whitespace><segment-name><whitespace><level-index>
-         *                |int        |char         |string     |char        |int
+         *                |int        |char         |string     |char |int
          *
          * @tparam stream_gt
          * @param os
@@ -99,11 +92,6 @@ struct manifest_t
         level_index_t  level{};
     };
 
-    /**
-     * @class level_record_t
-     * @brief Represents an operation applicable to level
-     *
-     */
     struct level_record_t
     {
         enum class operation_k : int8_t
@@ -146,7 +134,8 @@ struct manifest_t
          */
         template <typename stream_gt> void write(stream_gt &outStream) const
         {
-            outStream << static_cast<std::int32_t>(type) << ' ' << static_cast<std::int32_t>(op) << ' ' << level;
+            outStream << static_cast<std::int32_t>(type) << ' ' << static_cast<std::int32_t>(op)
+                      << ' ' << level;
         }
 
         template <typename stream_gt> void read(stream_gt &outStream)
@@ -165,79 +154,23 @@ struct manifest_t
         level_index_t level{};
     };
 
-    using record_t = std::variant<segment_record_t, level_record_t>;
+    using record_t = std::variant<std::monostate, segment_record_t, level_record_t>;
     using storage_t = std::vector<record_t>;
 
-    /**
-     * @brief Construct a new manifest t object
-     *
-     * @param config
-     */
-    explicit manifest_t(config::shared_ptr_t config);
+    manifest_t(fs::path_t path, wal::wal_t<manifest_t::record_t> wal) noexcept;
 
-    /**
-     * @brief
-     *
-     * @return true
-     * @return false
-     */
-    auto open() -> bool;
+    [[nodiscard]] auto path() const noexcept -> fs::path_t;
 
-    /**
-     * @brief
-     *
-     * @return fs::path_t
-     */
-    auto path() -> fs::path_t;
+    [[nodiscard]] auto add(record_t info) -> bool;
+    [[nodiscard]] auto records() const noexcept -> storage_t;
 
-    /**
-     * @brief
-     *
-     * @param info
-     */
-    void add(record_t info);
-
-    /**
-     * @brief
-     *
-     * @return true
-     * @return false
-     */
-    auto recover() -> bool;
-
-    /**
-     * @brief
-     *
-     * @return fs::path_t
-     */
-    auto path() const noexcept -> fs::path_t;
-
-    /**
-     * @brief
-     *
-     * @return std::vector<record_t>
-     */
-    auto records() const noexcept -> storage_t;
-
-    /**
-     * @brief
-     *
-     */
     void enable();
-
-    /**
-     * @brief
-     *
-     */
     void disable();
 
   private:
-    config::shared_ptr_t   m_config;
-    std::string            m_name;
-    fs::path_t             m_path;
-    storage_t              m_records;
-    fs::append_only_file_t m_log;
-    bool                   m_enabled{false};
+    bool                             m_enabled{false};
+    fs::path_t                       m_path;
+    wal::wal_t<manifest_t::record_t> m_wal;
 };
 
 using shared_ptr_t = std::shared_ptr<manifest_t>;
@@ -246,5 +179,62 @@ template <typename... Args> auto make_shared(Args... args)
 {
     return std::make_shared<manifest_t>(std::forward<Args>(args)...);
 }
+
+template <typename TStream>
+auto operator<<(TStream &stream, const manifest_t::record_t &crRecord) -> TStream &
+{
+    std::visit(
+        [&stream](const auto &record)
+        {
+            if constexpr (std::is_same_v<std::monostate, std::decay_t<decltype(record)>>)
+            {
+                spdlog::error("manifest_t::record_t: Attempt to write uninitialized record.");
+            }
+            else
+            {
+                record.write(stream);
+            }
+        },
+        crRecord
+    );
+    return stream;
+}
+
+template <typename TStream>
+auto operator>>(TStream &stream, manifest_t::record_t &rRecord) -> TStream &
+{
+    int record_type_int{0};
+    stream >> record_type_int;
+
+    switch (static_cast<manifest_t::record_type_k>(record_type_int))
+    {
+    case manifest_t::record_type_k::segment_k:
+    {
+        manifest_t::segment_record_t record;
+        record.read(stream);
+        rRecord.emplace<1>(std::move(record));
+        break;
+    }
+    case manifest_t::record_type_k::level_k:
+    {
+        manifest_t::level_record_t record;
+        record.read(stream);
+        rRecord.emplace<2>(record);
+        break;
+    }
+    default:
+    {
+        spdlog::error("unhandled record_type_int={}. Skipping record.", record_type_int);
+        break;
+    }
+    }
+    return stream;
+}
+
+struct manifest_builder_t final
+{
+    [[nodiscard]] auto build(fs::path_t path, wal::wal_t<manifest_t::record_t> wal)
+        -> std::optional<manifest_t>;
+};
 
 } // namespace db::manifest

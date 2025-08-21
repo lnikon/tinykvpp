@@ -1,7 +1,7 @@
 {
     "$id": "https://json-schema.hyperjump.io/schema",
     "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$title": "Schema for tinykvpp's JSON config",
+    "$title": "Schema for frankie's JSON config",
     "type": "object",
     "properties": {
         "logging": {
@@ -23,10 +23,6 @@
                     "type": "string",
                     "description": "Database storage directory path"
                 },
-                "walFilename": {
-                    "type": "string",
-                    "description": "Write-ahead log filename"
-                },
                 "manifestFilenamePrefix": {
                     "type": "string",
                     "description": "Prefix for manifest files"
@@ -34,18 +30,38 @@
             },
             "required": [
                 "path",
-                "walFilename",
                 "manifestFilenamePrefix"
             ]
         },
-        "lsmtree": {
+        "wal": {
+            "type": "object",
+            "description": "WAL configuration",
+            "properties": {
+                "enable": {
+                    "type": "boolean",
+                    "description": "Enable/disable the WAL"
+                },
+                "storageType": {
+                    "$ref": "#/$defs/walStorageType"
+                },
+                "filename": {
+                    "type": "string",
+                    "description": "Write-Ahead Log filename"
+                }
+            },
+            "required": [
+                "enable",
+                "storageType",
+                "filename"
+            ]
+        },
+        "lsm": {
             "type": "object",
             "properties": {
-                "memtableFlushThreshold": {
+                "flushThreshold": {
                     "type": "integer",
                     "description": "The threshold of bytes at which the memtable should be flushed",
-                    "minimum": 1,
-                    "default": 1024
+                    "minimum": 1
                 },
                 "levelZeroCompaction": {
                     "$ref": "#/$defs/compaction"
@@ -55,7 +71,7 @@
                 }
             },
             "required": [
-                "memtableFlushThreshold",
+                "flushThreshold",
                 "maximumLevels",
                 "levelZeroCompaction",
                 "levelNonZeroCompaction"
@@ -77,18 +93,33 @@
                     "description": "Server port number",
                     "minimum": 1024,
                     "maximum": 65535
+                },
+                "id": {
+                    "type": "integer",
+                    "description": "ID of the node",
+                    "minimum": 1
+                },
+                "peers": {
+                    "type": "array",
+                    "description": "Array of IPv4 addresses of peers",
+                    "items": {
+                        "type": "string"
+                    }
                 }
             },
             "required": [
                 "transport",
                 "host",
-                "port"
+                "port",
+                "id",
+                "peers"
             ]
         }
     },
     "required": [
         "database",
-        "lsmtree",
+        "wal",
+        "lsm",
         "server"
     ],
     "$defs": {
@@ -113,6 +144,14 @@
             "enum": [
                 "levelled",
                 "tiered"
+            ]
+        },
+        "walStorageType": {
+            "type": "string",
+            "enum": [
+                "inMemory",
+                "persistent",
+                "replicated"
             ]
         },
         "compaction": {

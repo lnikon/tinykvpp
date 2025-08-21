@@ -1,5 +1,5 @@
 ﻿BasedOnStyle: LLVM
-ColumnLimit: 120
+ColumnLimit: 100
 IndentWidth: 4
 TabWidth: 4
 UseTab: Never
@@ -10,7 +10,7 @@ BreakBeforeBraces: Allman
 AllowShortFunctionsOnASingleLine: None
 AllowShortIfStatementsOnASingleLine: false
 AllowShortLoopsOnASingleLine: false
-AlignAfterOpenBracket: Align
+AlignAfterOpenBracket: BlockIndent
 PackConstructorInitializers: Never
 ExperimentalAutoDetectBinPacking: false
 AllowAllParametersOfDeclarationOnNextLine: true

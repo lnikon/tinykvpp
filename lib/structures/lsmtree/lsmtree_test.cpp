@@ -46,7 +46,8 @@ namespace
 {
 template <typename TNumber>
 auto generateRandomNumber(const TNumber min = std::numeric_limits<TNumber>::min(),
-                          const TNumber max = std::numeric_limits<TNumber>::max()) noexcept -> TNumber
+                          const TNumber max = std::numeric_limits<TNumber>::max()) noexcept
+    -> TNumber
 {
     std::mt19937 rng{std::random_device{}()};
     if constexpr (std::is_same_v<int, TNumber>)
@@ -119,7 +120,7 @@ TEST_CASE("Flush regular segment", std::string(componentName))
         pConfig->LSMTreeConfig.DiskFlushThresholdSize = 1; // 64mb = 64000000
 
         auto               manifest{db::manifest::make_shared(pConfig)};
-        auto               wal{db::wal::make_shared("wal")};
+        auto               wal{wal::make_shared("wal")};
         auto               lsmTree{structures::lsmtree::lsmtree_t{pConfig, manifest, wal}};
         lsmtree::lsmtree_t lsmt(pConfig, manifest, wal);
         for (const auto &kv : randomKeys)
@@ -130,7 +131,8 @@ TEST_CASE("Flush regular segment", std::string(componentName))
         for (const auto &kv : randomKeys)
         {
             REQUIRE(lsmt.get(lsmtree::key_t{kv.first}).value().m_key == lsmtree::key_t{kv.first});
-            REQUIRE(lsmt.get(lsmtree::key_t{kv.first}).value().m_value == lsmtree::value_t{kv.second});
+            REQUIRE(lsmt.get(lsmtree::key_t{kv.first}).value().m_value ==
+                    lsmtree::value_t{kv.second});
         }
     }
 
@@ -140,7 +142,7 @@ TEST_CASE("Flush regular segment", std::string(componentName))
     //     pConfig->LSMTreeConfig.DiskFlushThresholdSize = 128;
     //
     //     auto manifest{db::manifest::make_shared(pConfig)};
-    //     auto wal{db::wal::make_shared("wal")};
+    //     auto wal{wal::make_shared("wal")};
     //     lsmtree::lsmtree_t lsmt(pConfig, manifest, wal);
     //     for (const auto &kv : randomKeys)
     //     {

@@ -1,9 +1,4 @@
-//
-// Created by nikon on 1/26/22.
-//
-
-#ifndef ZKV_LSMTREEREADERWRITER_H
-#define ZKV_LSMTREEREADERWRITER_H
+#pragma once
 
 #include <structures/lsmtree/lsmtree.h>
 
@@ -53,5 +48,3 @@ struct lsmtree_segment_reader_t : generic_writer_t<lsmtree_segment_reader_t>
 };
 
 } // namespace structures::lsmtree
-
-#endif // ZKV_LSMTREEREADERWRITER_H
