@@ -16,4 +16,7 @@
     "C_Cpp.default.cStandard": "c23",
     "clangd.checkUpdates": true,
     "clangd.path": "/usr/bin/clangd"
+        "stoken"
+    ],
+    "sonarlint.pathToCompileCommands": "${workspaceFolder}/build/compile_commands.json"
 }
