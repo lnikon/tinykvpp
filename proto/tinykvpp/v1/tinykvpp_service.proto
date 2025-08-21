@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package tinykvpp.v1;
 
+option go_package = "github.com/lnikon/tinykvpp/protos/tinykvpp/v1";
+
 service TinyKVPPService {
   rpc Put(PutRequest) returns (PutResponse);
   rpc Get(GetRequest) returns (GetResponse);
