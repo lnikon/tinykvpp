@@ -155,7 +155,7 @@ auto loadConfigJson(const std::string &configPath) -> json
     std::fstream configStream(configPath, std::fstream::in);
     if (!configStream.is_open())
     {
-        throw std::runtime_error(fmt::format("Unable to open config file: %s", configPath));
+        throw std::runtime_error(fmt::format("Unable to open config file: {}", configPath));
     }
     return json::parse(configStream);
 }

@@ -1,7 +1,15 @@
 ---
-version: '3.8'
 services:
-  app:
+  tkvpp-node-standalone:
     image: tinykvpp-clang:latest
-    container_name: tkvpp-node-1
+    security_opt:
+      - seccomp:unconfined
+    container_name: tkvpp-node-standalone
     command: ["/app/tkvpp", "-c", "/app/config.json"]
+    ports:
+      - "9891:9891"
+    volumes:
+      - ./assets/tkvpp_config_standalone.json:/app/config.json
+      - tkvpp-node-standalone:/var/tkvpp
+volumes:
+  tkvpp-node-standalone:

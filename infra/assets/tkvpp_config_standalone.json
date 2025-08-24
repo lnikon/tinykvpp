@@ -3,7 +3,7 @@
         "loggingLevel": "debug"
     },
     "database": {
-        "path": "./var/tkvpp",
+        "path": "/var/tkvpp",
         "walFilename": "wal",
         "manifestFilenamePrefix": "manifest_",
         "mode": "standalone"
@@ -28,10 +28,10 @@
     "server": {
         "transport": "grpc",
         "host": "0.0.0.0",
-        "port": 8081,
+        "port": 9891,
         "id": 1,
         "peers": [
-            "0.0.0.0:8081"
+            "0.0.0.0:9891"
         ]
     }
 }

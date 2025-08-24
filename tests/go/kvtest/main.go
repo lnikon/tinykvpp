@@ -1,10 +1,11 @@
-package kvtest
+/*
+Copyright © 2025 NAME HERE <EMAIL ADDRESS>
 
-import (
-	v1 "github.com/lnikon/tinykvpp/tests/go/kvtest/proto"
-	"google.golang.org/grpc"
-)
+*/
+package main
+
+import "github.com/lnikon/tinykvpp/tests/go/kvtest/cmd"
 
 func main() {
-	let req := v1.GetRequest{}
+	cmd.Execute()
 }
