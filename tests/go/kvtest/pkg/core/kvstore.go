@@ -4,7 +4,7 @@ import (
 	"context"
 )
 
-// Configuration for KVStore adapters
+// Config for KVStore adapters
 type Config interface{}
 
 type KVStoreInterface interface {
@@ -21,7 +21,7 @@ type KVStoreInterface interface {
 	Name() string
 }
 
-// Common errors
+// KVError represents kvtest specific error
 type KVError struct {
 	Op  string
 	Err error

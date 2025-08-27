@@ -56,7 +56,7 @@ type ScenarioConfig struct {
 	Parameters map[string]interface{} `yaml:"parameters"`
 }
 
-// DefaultConfig() returns a default configuration
+// DefaultConfig returns a default configuration
 func DefaultConfig() *TestConfig {
 	return &TestConfig{
 		Timeout:  30 * time.Second,
