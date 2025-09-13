@@ -31,6 +31,7 @@
 *.out
 *.app
 ./tests/go/kvtest/cmd/kvtest/kvtest
+./tests/go/kvtest/kvtest
 
 # Project-specific
 *.bak
