@@ -183,6 +183,7 @@ auto levels_t::size() const noexcept -> levels_t::levels_storage_t::size_type
 [[nodiscard]] auto levels_t::flush_to_level0(memtable::memtable_t memtable) const noexcept
     -> segments::regular_segment::shared_ptr_t
 {
+
     absl::MutexLock lock{&m_mutex};
 
     assert(m_levels[0]);

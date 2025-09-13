@@ -30,6 +30,7 @@
 *.exe
 *.out
 *.app
+./tests/go/kvtest/cmd/kvtest/kvtest
 
 # Project-specific
 *.bak
@@ -46,3 +47,6 @@ build
 var
 tmp
 current
+
+# Compiled Protobufs
+*.pb.*

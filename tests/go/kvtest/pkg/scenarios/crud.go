@@ -3,7 +3,9 @@ package scenarios
 import (
 	"bytes"
 	"fmt"
+	"log"
 	"math/rand"
+
 	// "time"
 
 	"github.com/lnikon/tinykvpp/tests/go/kvtest/pkg/core"
@@ -107,6 +109,8 @@ func (s *CRUDScenario) selectOperation() string {
 
 func (s *CRUDScenario) executeRead(ctx *core.TestContext) error {
 	key := ctx.GetRandomExistingKey()
+
+	log.Printf("requesting existing key: %s", key)
 
 	value, err := ctx.KV.Get(ctx.Context(), []byte(key))
 	if err != nil {

@@ -53,7 +53,7 @@ namespace
 {
     if (pConfig->ServerConfig.id == 0)
     {
-        spdlog::error("maybe_create_consensus_module: ID of the node should be positve integer");
+        spdlog::error("maybe_create_consensus_module: ID of the node should be a positive integer");
         return std::nullopt;
     }
 
@@ -75,13 +75,7 @@ namespace
             replicas.emplace_back(
                 consensus::node_config_t{.m_id = replicaId, .m_ip = replicaIp}, std::move(stub)
             );
-
             spdlog::info(
-                "maybe_create_consensus_module: Emplacing replica into replicas "
-                "vector. replicaId={} replicaIp={}",
-                replicaId,
-                replicaIp
-            );
         }
         ++replicaId;
     }

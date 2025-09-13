@@ -40,7 +40,9 @@ auto serializeOperation(const db::client_request_t &request) -> std::string
     }
     default:
     {
-        spdlog::critical("Unknown operation type: {}", magic_enum::enum_name(request.type));
+        spdlog::critical(
+            "(serializeOperation): Unknown operation type: {}", magic_enum::enum_name(request.type)
+        );
         break;
     }
     }
@@ -398,7 +400,9 @@ auto db_t::onRaftCommit(const raft::v1::LogEntry &entry) -> bool
     }
     default:
     {
-        spdlog::critical("Unknown operation type: {}", magic_enum::enum_name(op.type()));
+        spdlog::critical(
+            "(onRaftCommit): Unknown operation type: {}", magic_enum::enum_name(op.type())
+        );
         return false;
     }
     }

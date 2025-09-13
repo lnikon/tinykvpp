@@ -27,7 +27,7 @@ type TinyKVPPAdapter struct {
 
 var _ core.KVStoreInterface = (*TinyKVPPAdapter)(nil)
 
-func NewTinyKVPPAdapter(config core.Config) *TinyKVPPAdapter {
+func NewTinyKVPPAdapter() *TinyKVPPAdapter {
 	return &TinyKVPPAdapter{}
 }
 
@@ -92,7 +92,7 @@ func (a *TinyKVPPAdapter) Put(ctx context.Context, key, value []byte) error {
 	req := &pb.PutRequest{Key: string(key), Value: string(value)}
 	resp, err := a.client.Put(ctx, req)
 	if err != nil {
-		return fmt.Errorf("grpc put failed for key %s: %v\n", key, err)
+		return fmt.Errorf("grpc put failed for key %s: %v", key, err)
 	}
 
 	if len(resp.Error) > 0 {

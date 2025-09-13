@@ -88,12 +88,12 @@ struct lsmtree_builder_t final
         -> std::shared_ptr<lsmtree_t>;
 
   private:
-    [[nodiscard]] auto build_memtable_from_wal(wal_t pWal) const noexcept
+    [[nodiscard]] static auto build_memtable_from_wal(wal_t pWal) noexcept
         -> std::optional<memtable::memtable_t>;
 
-    [[nodiscard]] auto build_levels_from_manifest(
+    [[nodiscard]] static auto build_levels_from_manifest(
         config::shared_ptr_t pConfig, db::manifest::shared_ptr_t pManifest
-    ) const noexcept -> std::optional<std::unique_ptr<levels::levels_t>>;
+    ) noexcept -> std::optional<std::unique_ptr<levels::levels_t>>;
 };
 
 } // namespace structures::lsmtree

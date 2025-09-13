@@ -127,9 +127,9 @@ void lsmtree_t::memtable_flush_task(std::stop_token stoken) noexcept
     // TODO: Is it possible to do the flushing async?
     while (true)
     {
+        // Flush the remaining memtables on stop request and return
         if (stoken.stop_requested())
         {
-            // Flush the remaining memtables on stop request
             spdlog::debug(
                 "Flushing remaining memtables on stop "
                 "request. queue.size={}",
@@ -144,7 +144,9 @@ void lsmtree_t::memtable_flush_task(std::stop_token stoken) noexcept
 
                 // TODO: Assert will crash the program, maybe we
                 // should return an error code?
-                assert(m_pLevels->flush_to_level0(std::move(memtable)));
+                absl::WriterMutexLock lock{&m_mutex};
+                bool                  ok{m_pLevels->flush_to_level0(std::move(memtable))};
+                assert(ok);
             }
             return;
         }
@@ -162,7 +164,8 @@ void lsmtree_t::memtable_flush_task(std::stop_token stoken) noexcept
             // TODO: Assert will crash the program, maybe we should
             // return an error code?
             absl::WriterMutexLock lock{&m_mutex};
-            assert(m_pLevels->flush_to_level0(std::move(memtable.value())));
+            bool                  ok{m_pLevels->flush_to_level0(std::move(memtable.value()))};
+            assert(ok);
         }
     }
 }
@@ -218,7 +221,7 @@ auto lsmtree_builder_t::build(
     );
 }
 
-auto lsmtree_builder_t::build_memtable_from_wal(wal_t pWal) const noexcept
+auto lsmtree_builder_t::build_memtable_from_wal(wal_t pWal) noexcept
     -> std::optional<memtable::memtable_t>
 {
     memtable::memtable_t table;
@@ -248,7 +251,7 @@ auto lsmtree_builder_t::build_memtable_from_wal(wal_t pWal) const noexcept
         }
         default:
         {
-            spdlog::error("Unkown WAL operation {}", std::to_underlying(op.type()));
+            spdlog::error("Unknown WAL operation {}", std::to_underlying(op.type()));
             break;
         }
         };
@@ -259,7 +262,7 @@ auto lsmtree_builder_t::build_memtable_from_wal(wal_t pWal) const noexcept
 
 auto lsmtree_builder_t::build_levels_from_manifest(
     config::shared_ptr_t pConfig, db::manifest::shared_ptr_t pManifest
-) const noexcept -> std::optional<std::unique_ptr<levels::levels_t>>
+) noexcept -> std::optional<std::unique_ptr<levels::levels_t>>
 {
     assert(pManifest);
 

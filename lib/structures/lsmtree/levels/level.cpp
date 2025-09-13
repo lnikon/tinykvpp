@@ -119,11 +119,17 @@ auto level_t::compact() const noexcept -> segments::regular_segment::shared_ptr_
     const auto            bytesUsedForLevel{bytes_used()};
 
     // If level size hasn't reached the size limit then skip the compaction
-    if ((index() == 0 &&
-         bytesUsedForLevel < m_pConfig->LSMTreeConfig.LevelZeroCompactionThreshold) ||
-        (index() != 0 &&
-         bytesUsedForLevel <
-             m_pConfig->LSMTreeConfig.LevelNonZeroCompactionThreshold * std::pow(10, index())))
+    const bool isZeroLevel{index() == 0};
+    const auto zeroLevelThreshold{m_pConfig->LSMTreeConfig.LevelZeroCompactionThreshold};
+    if (isZeroLevel && bytesUsedForLevel < zeroLevelThreshold)
+    {
+        return nullptr;
+    }
+
+    const auto nonZeroLevelThreshold{
+        m_pConfig->LSMTreeConfig.LevelNonZeroCompactionThreshold * std::pow(10, index())
+    };
+    if (!isZeroLevel && bytesUsedForLevel < nonZeroLevelThreshold)
     {
         return nullptr;
     }
@@ -135,13 +141,13 @@ auto level_t::compact() const noexcept -> segments::regular_segment::shared_ptr_
         std::vector<std::pair<
             typename memtable::memtable_t::const_iterator,
             typename memtable::memtable_t::const_iterator>>,
-        IteratorCompare<memtable_t, memtable_t>>
+        IteratorCompare<memtable_t>>
         minHeap;
 
     for (const auto &segment : m_storage)
     {
-        // TODO(lnikon): reset memtable inside regular_segment_t at the of the
-        // flush() and recover it here e.g. segment->recover_memtable();
+        // TODO(lnikon): reset memtable inside regular_segment_t at the of the flush() and recover
+        // it here e.g. segment->recover_memtable();
         const auto &currentMemtable = segment->memtable().value();
         minHeap.emplace(currentMemtable.begin(), currentMemtable.end());
     }
@@ -154,8 +160,7 @@ auto level_t::compact() const noexcept -> segments::regular_segment::shared_ptr_
         minHeap.pop();
 
         // Add the smallest element to the merged sequence.
-        // If two elements have the same key, then choose the one with the
-        // greatest timestamp
+        // If two elements have the same key, then choose the one with the greatest timestamp
         if (mergedMemtable.empty() || lastKey != current.first->m_key)
         {
             mergedMemtable.emplace(*current.first);
@@ -171,8 +176,7 @@ auto level_t::compact() const noexcept -> segments::regular_segment::shared_ptr_
     }
 
     // Create a new segment from the compacted segment.
-    // The postfix "_compacted" signals that the segment is an intermediate
-    // result
+    // The postfix "_compacted" signals that the segment is an intermediate result
     auto name{fmt::format("{}_{}_compacted", helpers::segment_name(), index())};
     return segments::factories::lsmtree_segment_factory(
         name, helpers::segment_path(m_pConfig->datadir_path(), name), mergedMemtable

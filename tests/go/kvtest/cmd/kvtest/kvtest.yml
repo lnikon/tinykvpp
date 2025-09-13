@@ -1,0 +1,23 @@
+timeout: 30s
+log_level: info
+
+adapter:
+  type: tinykvpp
+  address: localhost:9891
+  connection_timeout: 5s
+  request_timeout: 1s
+  max_retries: 3
+
+integration:
+  enabled: true
+  validations:
+    - consistency
+
+scenarios:
+  - name: basic_crud
+    type: crud
+    enabled: true
+    parameters:
+      read_ratio: 0.7
+      write_ratio: 0.3
+      value_size: 5

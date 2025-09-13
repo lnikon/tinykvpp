@@ -49,7 +49,7 @@ func (e *IntegrationTestExecutor) Execute() (*IntegrationTestResult, error) {
 
 		// Execute phase
 		if err := scenario.Execute(ctx); err != nil {
-			scenarioResult.Error = fmt.Errorf("setup failed: %w", err)
+			scenarioResult.Error = fmt.Errorf("execute failed: %w", err)
 			result.Results[scenario.Name()] = scenarioResult
 			result.Failed++
 			continue
