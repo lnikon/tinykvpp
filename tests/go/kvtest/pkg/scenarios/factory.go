@@ -13,6 +13,8 @@ func (f *ScenarioFactory) Create(config core.ScenarioConfig) (core.Scenario, err
 	switch config.Type {
 	case "crud":
 		return NewCRUDScenario(config.Parameters), nil
+	case "write_read":
+		return NewWriteReadScenario(config.Parameters), nil
 	default:
 		return NewCRUDScenario(config.Parameters), nil
 	}

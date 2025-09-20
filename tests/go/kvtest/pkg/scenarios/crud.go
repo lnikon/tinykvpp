@@ -42,10 +42,12 @@ func NewCRUDScenario(params map[string]interface{}) *CRUDScenario {
 	return scenario
 }
 
+// Execute method runs the test scenario
 func (s *CRUDScenario) Execute(ctx *core.TestContext) error {
 	// startTime := time.Now()
 
 	operation := s.selectOperation()
+	log.Printf("executing %v", operation)
 
 	var err error
 	switch operation {

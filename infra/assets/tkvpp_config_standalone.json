@@ -14,7 +14,7 @@
         "storageType": "persistent"
     },
     "lsm": {
-        "flushThreshold": 1024,
+        "flushThreshold": 128,
         "maximumLevels": 12,
         "levelZeroCompaction": {
             "compactionStrategy": "levelled",

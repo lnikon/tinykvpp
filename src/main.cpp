@@ -75,7 +75,6 @@ namespace
             replicas.emplace_back(
                 consensus::node_config_t{.m_id = replicaId, .m_ip = replicaIp}, std::move(stub)
             );
-            spdlog::info(
         }
         ++replicaId;
     }
