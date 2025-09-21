@@ -1,6 +1,6 @@
 package scenarios
 
-import "github.com/lnikon/tinykvpp/tests/go/kvtest/pkg/core"
+import "github.com/lnikon/kvtest/pkg/core"
 
 // ScenarioFactory creates scenarios based on configuration
 type ScenarioFactory struct{}

@@ -16,8 +16,15 @@ integration:
 scenarios:
   - name: basic_crud
     type: crud
-    enabled: true
+    enabled: false 
     parameters:
       read_ratio: 0.7
       write_ratio: 0.3
       value_size: 5
+  - name: read_your_writes
+    type: write_read
+    enabled: true 
+    parameters:
+      value_size: 256
+      num_operations: 16
+      delay: "1ms"

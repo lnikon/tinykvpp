@@ -8,7 +8,7 @@ import (
 
 	// "time"
 
-	"github.com/lnikon/tinykvpp/tests/go/kvtest/pkg/core"
+	"github.com/lnikon/kvtest/pkg/core"
 )
 
 // CRUDScenario implements basic CRUD operations

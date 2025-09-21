@@ -8,8 +8,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	"github.com/lnikon/tinykvpp/tests/go/kvtest/pkg/core"
-	pb "github.com/lnikon/tinykvpp/tests/go/kvtest/proto/tinykvpp/v1"
+	"github.com/lnikon/kvtest/pkg/core"
+	pb "github.com/lnikon/kvtest/proto/tinykvpp/v1"
 )
 
 type TinyKVPPConfig struct {

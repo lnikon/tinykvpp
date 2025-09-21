@@ -27,7 +27,7 @@ const std::string_view gRaftFilename = "RAFT_PERSISTENCE";
 
 auto constructFilename(std::string_view filename, std::uint32_t peerId) -> std::string
 {
-    return fmt::format("./var/tkvpp/{}_NODE_{}", filename, peerId);
+    return fmt::format("/var/tkvpp/{}_NODE_{}", filename, peerId);
 }
 
 auto generate_random_timeout(const int minTimeout, const int maxTimeout) -> int

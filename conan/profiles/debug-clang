@@ -1,6 +1,6 @@
 [buildenv]
-CC=/usr/bin/clang-20
-CXX=/usr/bin/clang++-20
+CC=/usr/bin/clang
+CXX=/usr/bin/clang++
 
 [settings]
 arch=x86_64

@@ -6,7 +6,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/lnikon/tinykvpp/tests/go/kvtest/pkg/core"
+	"github.com/lnikon/kvtest/pkg/core"
 )
 
 // LoadFromFile loads configuration from a YAML file

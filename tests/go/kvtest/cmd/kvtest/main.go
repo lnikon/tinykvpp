@@ -5,10 +5,10 @@ import (
 	"log"
 	"os"
 
-	"github.com/lnikon/tinykvpp/tests/go/kvtest/pkg/adapters"
-	"github.com/lnikon/tinykvpp/tests/go/kvtest/pkg/config"
-	"github.com/lnikon/tinykvpp/tests/go/kvtest/pkg/core"
-	"github.com/lnikon/tinykvpp/tests/go/kvtest/pkg/scenarios"
+	"github.com/lnikon/kvtest/pkg/adapters"
+	"github.com/lnikon/kvtest/pkg/config"
+	"github.com/lnikon/kvtest/pkg/core"
+	"github.com/lnikon/kvtest/pkg/scenarios"
 	"github.com/spf13/cobra"
 )
 

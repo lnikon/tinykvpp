@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/lnikon/tinykvpp/tests/go/kvtest/pkg/core"
-	"github.com/lnikon/tinykvpp/tests/go/kvtest/pkg/scenarios"
+	"github.com/lnikon/kvtest/pkg/core"
+	"github.com/lnikon/kvtest/pkg/scenarios"
 )
 
 type TestOrchestrator struct {
