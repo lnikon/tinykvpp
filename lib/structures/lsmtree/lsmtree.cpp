@@ -12,8 +12,6 @@
 #include "structures/lsmtree/lsmtree_types.h"
 #include "structures/lsmtree/lsmtree.h"
 #include "db/manifest/manifest.h"
-#include "wal/wal.h"
-#include "tinykvpp/v1/tinykvpp_service.grpc.pb.h"
 #include "tinykvpp/v1/tinykvpp_service.pb.h"
 
 namespace structures::lsmtree

@@ -14,15 +14,15 @@
         "storageType": "persistent"
     },
     "lsm": {
-        "flushThreshold": 128,
+        "flushThreshold": 64000000,
         "maximumLevels": 12,
         "levelZeroCompaction": {
             "compactionStrategy": "levelled",
-            "compactionThreshold": 1024
+            "compactionThreshold": 256000000
         },
         "levelNonZeroCompaction": {
             "compactionStrategy": "tiered",
-            "compactionThreshold": 1024
+            "compactionThreshold": 256000000
         }
     },
     "server": {

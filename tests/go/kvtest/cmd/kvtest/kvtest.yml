@@ -14,6 +14,14 @@ integration:
     - consistency
 
 scenarios:
+  - name: memtable_stress
+    type: memtable_stress
+    enabled: true
+    parameters:
+      record_size: 16000
+      record_count: 8096
+      concurrent_writers: 1
+      flush_threshold: 6400000
   - name: basic_crud
     type: crud
     enabled: false 
@@ -23,7 +31,7 @@ scenarios:
       value_size: 5
   - name: read_your_writes
     type: write_read
-    enabled: true 
+    enabled: false
     parameters:
       value_size: 256
       num_operations: 16

@@ -1,6 +1,11 @@
 package scenarios
 
-import "github.com/lnikon/kvtest/pkg/core"
+import (
+	"fmt"
+
+	"github.com/lnikon/kvtest/pkg/core"
+	"github.com/lnikon/kvtest/pkg/scenarios/storage"
+)
 
 // ScenarioFactory creates scenarios based on configuration
 type ScenarioFactory struct{}
@@ -14,8 +19,10 @@ func (f *ScenarioFactory) Create(config core.ScenarioConfig) (core.Scenario, err
 	case "crud":
 		return NewCRUDScenario(config.Parameters), nil
 	case "write_read":
-		return NewWriteReadScenario(config.Parameters), nil
+		return NewReadYourWrites(config.Parameters), nil
+	case "memtable_stress":
+		return storage.NewMemtableStressScenario(config.Parameters), nil
 	default:
-		return NewCRUDScenario(config.Parameters), nil
+		return nil, fmt.Errorf("unkown scenario: %s", config.Type)
 	}
 }

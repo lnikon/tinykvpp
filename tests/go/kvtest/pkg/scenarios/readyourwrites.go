@@ -8,15 +8,15 @@ import (
 	"github.com/lnikon/kvtest/pkg/core"
 )
 
-type WriteReadScenario struct {
+type ReadYourWritesScenario struct {
 	name          string
 	valueSize     int
 	numOperations int
 	delay         time.Duration
 }
 
-func NewWriteReadScenario(params map[string]interface{}) *WriteReadScenario {
-	scenario := &WriteReadScenario{
+func NewReadYourWrites(params map[string]interface{}) *ReadYourWritesScenario {
+	scenario := &ReadYourWritesScenario{
 		name:          "ReadYourWrites",
 		valueSize:     256,
 		numOperations: 1024,
@@ -38,10 +38,10 @@ func NewWriteReadScenario(params map[string]interface{}) *WriteReadScenario {
 	return scenario
 }
 
-func (wr *WriteReadScenario) Execute(ctx *core.TestContext) error {
-	for i := 0; i < wr.numOperations; i++ {
+func (s *ReadYourWritesScenario) Execute(ctx *core.TestContext) error {
+	for i := 0; i < s.numOperations; i++ {
 		key := ctx.GenerateKey()
-		expectedValue := ctx.GenerateValue(wr.valueSize)
+		expectedValue := ctx.GenerateValue(s.valueSize)
 
 		err := ctx.KV.Put(ctx.Context(), []byte(key), []byte(expectedValue))
 		if err != nil {
@@ -57,20 +57,20 @@ func (wr *WriteReadScenario) Execute(ctx *core.TestContext) error {
 			return fmt.Errorf("data consistency error: expected %v, got %v", expectedValue, value)
 		}
 
-		time.Sleep(wr.delay)
+		time.Sleep(s.delay)
 	}
 
 	return nil
 }
 
-func (wr *WriteReadScenario) Name() string {
-	return wr.name
+func (s *ReadYourWritesScenario) Name() string {
+	return s.name
 }
 
-func (wr *WriteReadScenario) Setup(ctx *core.TestContext) error {
+func (s *ReadYourWritesScenario) Setup(ctx *core.TestContext) error {
 	return nil
 }
 
-func (wr *WriteReadScenario) Teardown(ctx *core.TestContext) error {
+func (s *ReadYourWritesScenario) Teardown(ctx *core.TestContext) error {
 	return nil
 }

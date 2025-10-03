@@ -235,14 +235,13 @@ void level_t::merge(const segments::regular_segment::shared_ptr_t &pSegment) noe
 
     // TODO(lnikon): Make this parameter configurable. Use measurement
     // units(mb).
-    const std::size_t                    segmentSize{1024};
     memtable::memtable_t                 newMemtable;
     segments::storage::segment_storage_t newSegments;
 
     for (const auto &currentRecord : mergedMemtable)
     {
         newMemtable.emplace(currentRecord);
-        if (newMemtable.size() >= segmentSize)
+        if (newMemtable.size() >= m_pConfig->LSMTreeConfig.SegmentSize)
         {
             auto name{fmt::format("{}_{}", helpers::segment_name(), index())};
             newSegments.emplace(
