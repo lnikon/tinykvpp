@@ -21,6 +21,7 @@
 #include <grpcpp/support/status.h>
 #include <absl/base/thread_annotations.h>
 
+#include "config/config.h"
 #include "raft/v1/raft_service.grpc.pb.h"
 #include "raft/v1/raft_service.pb.h"
 #include "concurrency/thread_pool.h"
@@ -129,7 +130,10 @@ class consensus_module_t final : public raft::v1::RaftService::Service
 
     consensus_module_t() = delete;
     consensus_module_t(
-        node_config_t nodeConfig, std::vector<raft_node_grpc_client_t> replicas, wal_ptr_t pWal
+        config::shared_ptr_t                 pConfig,
+        node_config_t                        nodeConfig,
+        std::vector<raft_node_grpc_client_t> replicas,
+        wal_ptr_t                            pWal
     ) noexcept;
 
     consensus_module_t(const consensus_module_t &) = delete;
@@ -263,8 +267,11 @@ class consensus_module_t final : public raft::v1::RaftService::Service
     mutable absl::Mutex             m_leaderMutex;
     std::string m_currentLeaderHint ABSL_GUARDED_BY(m_leaderMutex);
 
+    // Database-wide config.
+    config::shared_ptr_t m_pDatabaseConfig;
+
     // Stores ID and IP of the current node. Received from outside.
-    node_config_t m_config;
+    node_config_t m_nodeConfig;
 
     // Executed on follower node after successful log replication to update the state machine.
     on_commit_cbk_t        m_onCommitCbk;

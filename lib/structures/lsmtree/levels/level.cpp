@@ -241,7 +241,9 @@ void level_t::merge(const segments::regular_segment::shared_ptr_t &pSegment) noe
     for (const auto &currentRecord : mergedMemtable)
     {
         newMemtable.emplace(currentRecord);
-        if (newMemtable.size() >= m_pConfig->LSMTreeConfig.SegmentSize)
+        // TODO(lnikon): Make SegmentSize configurall.
+        // if (newMemtable.size() >= m_pConfig->LSMTreeConfig.SegmentSize)
+        if (newMemtable.size() >= 1024)
         {
             auto name{fmt::format("{}_{}", helpers::segment_name(), index())};
             newSegments.emplace(

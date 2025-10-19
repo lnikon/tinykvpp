@@ -1,18 +1,20 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include <memory>
+#include <spdlog/common.h>
 #include <vector>
 #include <thread>
 #include <chrono>
 #include <future>
 #include <filesystem>
 
+#include "config/config.h"
 #include "raft.h"
 #include "wal/wal.h"
-#include "Raft_mock.grpc.pb.h" // Generated mock stubs
+#include "raft/v1/raft_service_mock.grpc.pb.h" // Generated mock stubs
 
 using namespace testing;
-using namespace raft;
+using namespace consensus;
 
 // Test fixtures
 class RaftNodeGrpcClientTest : public ::testing::Test
@@ -22,42 +24,52 @@ class RaftNodeGrpcClientTest : public ::testing::Test
     {
         config.m_id = 1;
         config.m_ip = "127.0.0.1:5000";
-        mockStub = std::make_unique<MockRaftServiceStub>();
+        mockStub = std::make_unique<raft::v1::MockRaftServiceStub>();
         mockStubPtr = mockStub.get();
     }
 
-    node_config_t                        config;
-    std::unique_ptr<MockRaftServiceStub> mockStub;
-    MockRaftServiceStub                 *mockStubPtr;
+    node_config_t                                  config;
+    std::unique_ptr<raft::v1::MockRaftServiceStub> mockStub;
+    raft::v1::MockRaftServiceStub                 *mockStubPtr;
 };
 
 class ConsensusModuleTest : public ::testing::Test
 {
   protected:
+    config::shared_ptr_t                     pDbConfig{nullptr};
+    consensus::node_config_t                 nodeConfig;
+    consensus::consensus_module_t::wal_ptr_t walPtr;
+    std::filesystem::path                    walPath;
+
     void SetUp() override
     {
         nodeConfig.m_id = 1;
         nodeConfig.m_ip = "127.0.0.1:5001";
 
+        pDbConfig = config::make_shared();
+        pDbConfig->DatabaseConfig.DatabasePath = "./var/tkvpp/";
+
         // Create directories for test files
-        std::filesystem::create_directories("./var/tkvpp/");
+        std::filesystem::create_directories(pDbConfig->DatabaseConfig.DatabasePath);
 
         // Create real WAL instance
         walPath = std::filesystem::temp_directory_path() /
                   ("test_wal_" + std::to_string(nodeConfig.m_id) + ".log");
 
-        auto walOpt = wal::wal_builder_t{}.set_file_path(walPath).build<LogEntry>(
-            wal::log_storage_type_k::in_memory_k
-        );
-
+        auto walOpt =
+            wal::wal_builder_t{}.set_file_path(walPath).build<consensus_module_t::wal_entry_t>(
+                wal::log_storage_type_k::in_memory_k
+            );
         ASSERT_TRUE(walOpt.has_value());
-        walPtr = std::make_shared<wal::wal_t<LogEntry>>(std::move(walOpt.value()));
+        walPtr = std::make_shared<wal::wal_t<consensus_module_t::wal_entry_t>>(
+            std::move(walOpt.value())
+        );
     }
 
     void TearDown() override
     {
         // Clean up any persistent state files
-        std::filesystem::remove_all("./var/tkvpp/");
+        std::filesystem::remove_all(pDbConfig->DatabaseConfig.DatabasePath);
         if (std::filesystem::exists(walPath))
         {
             std::filesystem::remove(walPath);
@@ -67,39 +79,39 @@ class ConsensusModuleTest : public ::testing::Test
     auto createConsensusModule(std::vector<raft_node_grpc_client_t> replicas = {})
         -> std::unique_ptr<consensus_module_t>
     {
-        return std::make_unique<consensus_module_t>(nodeConfig, std::move(replicas), walPtr);
+        return std::make_unique<consensus_module_t>(
+            pDbConfig, nodeConfig, std::move(replicas), walPtr
+        );
     }
 
     auto createConsensusModuleWithPersistentWAL(std::vector<raft_node_grpc_client_t> replicas = {})
         -> std::unique_ptr<consensus_module_t>
     {
 
-        auto persistentWalOpt = wal::wal_builder_t{}.set_file_path(walPath).build<LogEntry>(
-            wal::log_storage_type_k::file_based_persistent_k
-        );
+        auto persistentWalOpt =
+            wal::wal_builder_t{}.set_file_path(walPath).build<consensus_module_t::wal_entry_t>(
+                wal::log_storage_type_k::file_based_persistent_k
+            );
 
         if (!persistentWalOpt.has_value())
         {
             return nullptr;
         }
 
-        auto persistentWalPtr =
-            std::make_shared<wal::wal_t<LogEntry>>(std::move(persistentWalOpt.value()));
+        auto persistentWalPtr = std::make_shared<wal::wal_t<consensus_module_t::wal_entry_t>>(
+            std::move(persistentWalOpt.value())
+        );
         return std::make_unique<consensus_module_t>(
-            nodeConfig, std::move(replicas), persistentWalPtr
+            pDbConfig, nodeConfig, std::move(replicas), persistentWalPtr
         );
     }
 
-    auto createMockClient(id_t id, const std::string &ip) -> raft_node_grpc_client_t
+    auto createMockClient(id_t id, const std::string &ip) -> consensus::raft_node_grpc_client_t
     {
         node_config_t clientConfig{.m_id = id, .m_ip = ip};
-        auto          mockStub = std::make_unique<MockRaftServiceStub>();
+        auto          mockStub = std::make_unique<raft::v1::MockRaftServiceStub>();
         return {clientConfig, std::move(mockStub)};
     }
-
-    node_config_t                         nodeConfig;
-    std::shared_ptr<wal::wal_t<LogEntry>> walPtr;
-    std::filesystem::path                 walPath;
 };
 
 // ============================================================================
@@ -119,7 +131,7 @@ TEST_F(RaftNodeGrpcClientTest, AppendEntriesSuccess)
     EXPECT_CALL(*mockStubPtr, AppendEntries(_, _, _))
         .WillOnce(DoAll(
             WithArg<2>(
-                [](AppendEntriesResponse *response)
+                [](raft::v1::AppendEntriesResponse *response)
                 {
                     response->set_success(true);
                     response->set_term(1);
@@ -128,9 +140,9 @@ TEST_F(RaftNodeGrpcClientTest, AppendEntriesSuccess)
             Return(grpc::Status::OK)
         ));
 
-    raft_node_grpc_client_t client(config, std::move(mockStub));
-    AppendEntriesRequest    request;
-    AppendEntriesResponse   response;
+    raft_node_grpc_client_t         client(config, std::move(mockStub));
+    raft::v1::AppendEntriesRequest  request;
+    raft::v1::AppendEntriesResponse response;
 
     bool result = client.appendEntries(request, &response);
 
@@ -144,9 +156,9 @@ TEST_F(RaftNodeGrpcClientTest, AppendEntriesFailure)
     EXPECT_CALL(*mockStubPtr, AppendEntries(_, _, _))
         .WillOnce(Return(grpc::Status(grpc::StatusCode::UNAVAILABLE, "Service unavailable")));
 
-    raft_node_grpc_client_t client(config, std::move(mockStub));
-    AppendEntriesRequest    request;
-    AppendEntriesResponse   response;
+    raft_node_grpc_client_t         client(config, std::move(mockStub));
+    raft::v1::AppendEntriesRequest  request;
+    raft::v1::AppendEntriesResponse response;
 
     bool result = client.appendEntries(request, &response);
 
@@ -158,43 +170,43 @@ TEST_F(RaftNodeGrpcClientTest, RequestVoteSuccess)
     EXPECT_CALL(*mockStubPtr, RequestVote(_, _, _))
         .WillOnce(DoAll(
             WithArg<2>(
-                [](RequestVoteResponse *response)
+                [](raft::v1::RequestVoteResponse *response)
                 {
-                    response->set_votegranted(1);
+                    response->set_vote_granted(1);
                     response->set_term(2);
                 }
             ),
             Return(grpc::Status::OK)
         ));
 
-    raft_node_grpc_client_t client(config, std::move(mockStub));
-    RequestVoteRequest      request;
-    RequestVoteResponse     response;
+    raft_node_grpc_client_t       client(config, std::move(mockStub));
+    raft::v1::RequestVoteRequest  request;
+    raft::v1::RequestVoteResponse response;
 
     bool result = client.requestVote(request, &response);
 
     EXPECT_TRUE(result);
-    EXPECT_EQ(response.votegranted(), 1);
+    EXPECT_EQ(response.vote_granted(), 1);
     EXPECT_EQ(response.term(), 2);
 }
 
-TEST_F(RaftNodeGrpcClientTest, ReplicateSuccess)
-{
-    EXPECT_CALL(*mockStubPtr, Replicate(_, _, _))
-        .WillOnce(DoAll(
-            WithArg<2>([](ReplicateEntriesResponse *response) { response->set_status("OK"); }),
-            Return(grpc::Status::OK)
-        ));
-
-    raft_node_grpc_client_t  client(config, std::move(mockStub));
-    ReplicateEntriesRequest  request;
-    ReplicateEntriesResponse response;
-
-    bool result = client.replicate(request, &response);
-
-    EXPECT_TRUE(result);
-    EXPECT_EQ(response.status(), "OK");
-}
+// TEST_F(RaftNodeGrpcClientTest, ReplicateSuccess)
+// {
+//     EXPECT_CALL(*mockStubPtr, Replicate(_, _, _))
+//         .WillOnce(DoAll(
+//             WithArg<2>([](ReplicateEntriesResponse *response) { response->set_status("OK"); }),
+//             Return(grpc::Status::OK)
+//         ));
+//
+//     raft_node_grpc_client_t  client(config, std::move(mockStub));
+//     ReplicateEntriesRequest  request;
+//     ReplicateEntriesResponse response;
+//
+//     bool result = client.replicate(request, &response);
+//
+//     EXPECT_TRUE(result);
+//     EXPECT_EQ(response.status(), "OK");
+// }
 
 // ============================================================================
 // consensus_module_t Basic Tests
@@ -210,7 +222,7 @@ TEST_F(ConsensusModuleTest, Constructor)
 
     EXPECT_EQ(consensus->currentTerm(), 0);
     EXPECT_EQ(consensus->votedFor(), 0);
-    EXPECT_EQ(consensus->getStateSafe(), NodeState::FOLLOWER);
+    EXPECT_EQ(consensus->getStateSafe(), raft::v1::NodeState::NODE_STATE_FOLLOWER);
 }
 
 TEST_F(ConsensusModuleTest, InitializationSuccess)
@@ -241,7 +253,7 @@ TEST_F(ConsensusModuleTest, WALBasicOperations)
     EXPECT_EQ(walPtr->size(), 0);
     EXPECT_TRUE(walPtr->empty());
 
-    LogEntry entry;
+    consensus_module_t::wal_entry_t entry;
     entry.set_term(1);
     entry.set_index(1);
     entry.set_payload("test payload");
@@ -271,7 +283,7 @@ TEST_F(ConsensusModuleTest, SingleNodeBecomesLeader)
     // Wait for election timeout and becoming leader
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
-    EXPECT_EQ(consensus->getStateSafe(), NodeState::LEADER);
+    EXPECT_EQ(consensus->getStateSafe(), raft::v1::NodeState::NODE_STATE_LEADER);
     EXPECT_GT(consensus->currentTerm(), 0);
 
     consensus->stop();
@@ -282,19 +294,19 @@ TEST_F(ConsensusModuleTest, RequestVoteWithHigherTerm)
     auto consensus = createConsensusModule();
     ASSERT_TRUE(consensus->init());
 
-    RequestVoteRequest request;
+    raft::v1::RequestVoteRequest request;
     request.set_term(5);
-    request.set_candidateid(2);
-    request.set_lastlogindex(0);
-    request.set_lastlogterm(0);
+    request.set_candidate_id(2);
+    request.set_last_log_index(0);
+    request.set_last_log_term(0);
 
-    RequestVoteResponse response;
-    grpc::ServerContext context;
+    raft::v1::RequestVoteResponse response;
+    grpc::ServerContext           context;
 
     auto status = consensus->RequestVote(&context, &request, &response);
 
     EXPECT_TRUE(status.ok());
-    EXPECT_EQ(response.votegranted(), 1);
+    EXPECT_EQ(response.vote_granted(), 1);
     EXPECT_EQ(consensus->currentTerm(), 5);
     EXPECT_EQ(consensus->votedFor(), 2);
 }
@@ -305,30 +317,30 @@ TEST_F(ConsensusModuleTest, RequestVoteWithLowerTerm)
     ASSERT_TRUE(consensus->init());
 
     // Manually set higher term
-    RequestVoteRequest initialRequest;
+    raft::v1::RequestVoteRequest initialRequest;
     initialRequest.set_term(5);
-    initialRequest.set_candidateid(2);
-    initialRequest.set_lastlogindex(0);
-    initialRequest.set_lastlogterm(0);
+    initialRequest.set_candidate_id(2);
+    initialRequest.set_last_log_index(0);
+    initialRequest.set_last_log_term(0);
 
-    RequestVoteResponse initialResponse;
-    grpc::ServerContext initialContext;
+    raft::v1::RequestVoteResponse initialResponse;
+    grpc::ServerContext           initialContext;
     consensus->RequestVote(&initialContext, &initialRequest, &initialResponse);
 
     // Now request with lower term
-    RequestVoteRequest request;
+    raft::v1::RequestVoteRequest request;
     request.set_term(3);
-    request.set_candidateid(3);
-    request.set_lastlogindex(0);
-    request.set_lastlogterm(0);
+    request.set_candidate_id(3);
+    request.set_last_log_index(0);
+    request.set_last_log_term(0);
 
-    RequestVoteResponse response;
-    grpc::ServerContext context;
+    raft::v1::RequestVoteResponse response;
+    grpc::ServerContext           context;
 
     auto status = consensus->RequestVote(&context, &request, &response);
 
     EXPECT_TRUE(status.ok());
-    EXPECT_EQ(response.votegranted(), 0);
+    EXPECT_EQ(response.vote_granted(), 0);
     EXPECT_EQ(response.term(), 5);
 }
 
@@ -338,32 +350,32 @@ TEST_F(ConsensusModuleTest, RequestVoteAlreadyVoted)
     ASSERT_TRUE(consensus->init());
 
     // First vote
-    RequestVoteRequest request1;
+    raft::v1::RequestVoteRequest request1;
     request1.set_term(5);
-    request1.set_candidateid(2);
-    request1.set_lastlogindex(0);
-    request1.set_lastlogterm(0);
+    request1.set_candidate_id(2);
+    request1.set_last_log_index(0);
+    request1.set_last_log_term(0);
 
-    RequestVoteResponse response1;
-    grpc::ServerContext context1;
+    raft::v1::RequestVoteResponse response1;
+    grpc::ServerContext           context1;
 
     consensus->RequestVote(&context1, &request1, &response1);
-    EXPECT_EQ(response1.votegranted(), 1);
+    EXPECT_EQ(response1.vote_granted(), 1);
 
     // Second vote from different candidate
-    RequestVoteRequest request2;
+    raft::v1::RequestVoteRequest request2;
     request2.set_term(5);
-    request2.set_candidateid(3);
-    request2.set_lastlogindex(0);
-    request2.set_lastlogterm(0);
+    request2.set_candidate_id(3);
+    request2.set_last_log_index(0);
+    request2.set_last_log_term(0);
 
-    RequestVoteResponse response2;
-    grpc::ServerContext context2;
+    raft::v1::RequestVoteResponse response2;
+    grpc::ServerContext           context2;
 
     auto status = consensus->RequestVote(&context2, &request2, &response2);
 
     EXPECT_TRUE(status.ok());
-    EXPECT_EQ(response2.votegranted(), 0);
+    EXPECT_EQ(response2.vote_granted(), 0);
 }
 
 // ============================================================================
@@ -375,21 +387,21 @@ TEST_F(ConsensusModuleTest, AppendEntriesBasic)
     auto consensus = createConsensusModule();
     ASSERT_TRUE(consensus->init());
 
-    AppendEntriesRequest request;
+    raft::v1::AppendEntriesRequest request;
     request.set_term(1);
-    request.set_senderid(2);
-    request.set_prevlogindex(0);
-    request.set_prevlogterm(0);
-    request.set_leadercommit(0);
+    request.set_sender_id(2);
+    request.set_prev_log_index(0);
+    request.set_prev_log_term(0);
+    request.set_leader_commit(0);
 
     // Add a log entry
-    LogEntry *entry = request.add_entries();
+    raft::v1::LogEntry *entry = request.add_entries();
     entry->set_term(1);
     entry->set_index(1);
     entry->set_payload("test payload");
 
-    AppendEntriesResponse response;
-    grpc::ServerContext   context;
+    raft::v1::AppendEntriesResponse response;
+    grpc::ServerContext             context;
 
     auto status = consensus->AppendEntries(&context, &request, &response);
 
@@ -407,7 +419,7 @@ TEST_F(ConsensusModuleTest, AppendEntriesBasic)
 TEST_F(ConsensusModuleTest, AppendEntriesLogInconsistency)
 {
     // Pre-populate WAL with an entry
-    LogEntry existingEntry;
+    raft::v1::LogEntry existingEntry;
     existingEntry.set_term(1);
     existingEntry.set_index(1);
     existingEntry.set_payload("existing");
@@ -417,15 +429,15 @@ TEST_F(ConsensusModuleTest, AppendEntriesLogInconsistency)
     auto consensus = createConsensusModule();
     ASSERT_TRUE(consensus->init());
 
-    AppendEntriesRequest request;
+    raft::v1::AppendEntriesRequest request;
     request.set_term(2);
-    request.set_senderid(2);
-    request.set_prevlogindex(1);
-    request.set_prevlogterm(2); // Mismatch - existing entry has term 1
-    request.set_leadercommit(0);
+    request.set_sender_id(2);
+    request.set_prev_log_index(1);
+    request.set_prev_log_term(2); // Mismatch - existing entry has term 1
+    request.set_leader_commit(0);
 
-    AppendEntriesResponse response;
-    grpc::ServerContext   context;
+    raft::v1::AppendEntriesResponse response;
+    grpc::ServerContext             context;
 
     auto status = consensus->AppendEntries(&context, &request, &response);
 
@@ -435,47 +447,48 @@ TEST_F(ConsensusModuleTest, AppendEntriesLogInconsistency)
 
 TEST_F(ConsensusModuleTest, AppendEntriesWithHigherTerm)
 {
+    spdlog::set_level(spdlog::level::debug);
     auto consensus = createConsensusModule();
     ASSERT_TRUE(consensus->init());
 
-    AppendEntriesRequest request;
+    raft::v1::AppendEntriesRequest request;
     request.set_term(5);
-    request.set_senderid(2);
-    request.set_prevlogindex(0);
-    request.set_prevlogterm(0);
-    request.set_leadercommit(0);
+    request.set_sender_id(2);
+    request.set_prev_log_index(0);
+    request.set_prev_log_term(0);
+    request.set_leader_commit(0);
 
-    AppendEntriesResponse response;
-    grpc::ServerContext   context;
+    raft::v1::AppendEntriesResponse response;
+    grpc::ServerContext             context;
 
     auto status = consensus->AppendEntries(&context, &request, &response);
 
     EXPECT_TRUE(status.ok());
     EXPECT_TRUE(response.success());
     EXPECT_EQ(consensus->currentTerm(), 5);
-    EXPECT_EQ(consensus->getStateSafe(), NodeState::FOLLOWER);
+    EXPECT_EQ(consensus->getStateSafe(), raft::v1::NodeState::NODE_STATE_FOLLOWER);
 }
 
 // ============================================================================
 // Client Replication Tests
 // ============================================================================
 
-TEST_F(ConsensusModuleTest, ReplicateAsFollower)
-{
-    auto consensus = createConsensusModule();
-    ASSERT_TRUE(consensus->init());
-
-    ReplicateEntriesRequest request;
-    request.add_payloads("test payload");
-
-    ReplicateEntriesResponse response;
-    grpc::ServerContext      context;
-
-    auto status = consensus->Replicate(&context, &request, &response);
-
-    EXPECT_TRUE(status.ok());
-    EXPECT_EQ(response.status(), "FAILED");
-}
+// TEST_F(ConsensusModuleTest, ReplicateAsFollower)
+// {
+//     auto consensus = createConsensusModule();
+//     ASSERT_TRUE(consensus->init());
+//
+//     ReplicateEntriesRequest request;
+//     request.add_payloads("test payload");
+//
+//     ReplicateEntriesResponse response;
+//     grpc::ServerContext      context;
+//
+//     auto status = consensus->Replicate(&context, &request, &response);
+//
+//     EXPECT_TRUE(status.ok());
+//     EXPECT_EQ(response.status(), "FAILED");
+// }
 
 TEST_F(ConsensusModuleTest, ReplicateAsLeader)
 {
@@ -486,7 +499,7 @@ TEST_F(ConsensusModuleTest, ReplicateAsLeader)
     consensus->start();
     std::this_thread::sleep_for(std::chrono::milliseconds(500)); // Wait to become leader
 
-    if (consensus->getStateSafe() == NodeState::LEADER)
+    if (consensus->getStateSafe() == raft::v1::NodeState::NODE_STATE_LEADER)
     {
         auto future = consensus->replicateAsync("test payload");
 
@@ -522,17 +535,17 @@ TEST_F(ConsensusModuleTest, PersistentStateRestore)
         ASSERT_TRUE(consensus1->init());
 
         // Simulate voting for candidate 2 in term 3
-        RequestVoteRequest request;
+        raft::v1::RequestVoteRequest request;
         request.set_term(3);
-        request.set_candidateid(2);
-        request.set_lastlogindex(0);
-        request.set_lastlogterm(0);
+        request.set_candidate_id(2);
+        request.set_last_log_index(0);
+        request.set_last_log_term(0);
 
-        RequestVoteResponse response;
-        grpc::ServerContext context;
+        raft::v1::RequestVoteResponse response;
+        grpc::ServerContext           context;
 
         consensus1->RequestVote(&context, &request, &response);
-        EXPECT_EQ(response.votegranted(), 1);
+        EXPECT_EQ(response.vote_granted(), 1);
     }
 
     // Create new consensus module and verify state restoration
@@ -548,10 +561,10 @@ TEST_F(ConsensusModuleTest, PersistentStateRestore)
 TEST_F(ConsensusModuleTest, WALPersistenceRecovery)
 {
     // Test with persistent WAL
-    std::vector<LogEntry> testEntries;
+    std::vector<raft::v1::LogEntry> testEntries;
     for (int i = 0; i < 5; ++i)
     {
-        LogEntry entry;
+        raft::v1::LogEntry entry;
         entry.set_term(1);
         entry.set_index(i + 1);
         entry.set_payload("payload_" + std::to_string(i));
@@ -568,18 +581,18 @@ TEST_F(ConsensusModuleTest, WALPersistenceRecovery)
             // Add entries via AppendEntries
             for (const auto &entry : testEntries)
             {
-                AppendEntriesRequest request;
+                raft::v1::AppendEntriesRequest request;
                 request.set_term(1);
-                request.set_senderid(2);
-                request.set_prevlogindex(entry.index() - 1);
-                request.set_prevlogterm(entry.index() > 1 ? 1 : 0);
-                request.set_leadercommit(0);
+                request.set_sender_id(2);
+                request.set_prev_log_index(entry.index() - 1);
+                request.set_prev_log_term(entry.index() > 1 ? 1 : 0);
+                request.set_leader_commit(0);
 
-                LogEntry *reqEntry = request.add_entries();
+                raft::v1::LogEntry *reqEntry = request.add_entries();
                 reqEntry->CopyFrom(entry);
 
-                AppendEntriesResponse response;
-                grpc::ServerContext   context;
+                raft::v1::AppendEntriesResponse response;
+                grpc::ServerContext             context;
 
                 auto status = persistentConsensus->AppendEntries(&context, &request, &response);
                 EXPECT_TRUE(status.ok());
@@ -661,7 +674,7 @@ TEST_F(ConsensusModuleTest, WALResetOperations)
     // Add some entries to WAL
     for (int i = 0; i < 5; ++i)
     {
-        LogEntry entry;
+        raft::v1::LogEntry entry;
         entry.set_term(1);
         entry.set_index(i + 1);
         entry.set_payload("entry_" + std::to_string(i));
@@ -700,7 +713,7 @@ TEST_F(ConsensusModuleTest, OnCommitCallback)
     std::string receivedPayload;
 
     consensus->setOnCommitCallback(
-        [&](const LogEntry &entry) -> bool
+        [&](const raft::v1::LogEntry &entry) -> bool
         {
             callbackCalled = true;
             receivedPayload = entry.payload();
@@ -711,20 +724,20 @@ TEST_F(ConsensusModuleTest, OnCommitCallback)
     ASSERT_TRUE(consensus->init());
 
     // Add an entry and set commit index
-    AppendEntriesRequest request;
+    raft::v1::AppendEntriesRequest request;
     request.set_term(1);
-    request.set_senderid(2);
-    request.set_prevlogindex(0);
-    request.set_prevlogterm(0);
-    request.set_leadercommit(1);
+    request.set_sender_id(2);
+    request.set_prev_log_index(0);
+    request.set_prev_log_term(0);
+    request.set_leader_commit(1);
 
-    LogEntry *entry = request.add_entries();
+    raft::v1::LogEntry *entry = request.add_entries();
     entry->set_term(1);
     entry->set_index(1);
     entry->set_payload("callback_test");
 
-    AppendEntriesResponse response;
-    grpc::ServerContext   context;
+    raft::v1::AppendEntriesResponse response;
+    grpc::ServerContext             context;
 
     auto status = consensus->AppendEntries(&context, &request, &response);
     EXPECT_TRUE(status.ok());
@@ -766,15 +779,15 @@ TEST_F(ConsensusModuleTest, OnLeaderChangeCallback)
     EXPECT_TRUE(becameLeader.load());
 
     // Simulate losing leadership through higher term AppendEntries
-    AppendEntriesRequest request;
+    raft::v1::AppendEntriesRequest request;
     request.set_term(consensus->currentTerm() + 1);
-    request.set_senderid(2);
-    request.set_prevlogindex(0);
-    request.set_prevlogterm(0);
-    request.set_leadercommit(0);
+    request.set_sender_id(2);
+    request.set_prev_log_index(0);
+    request.set_prev_log_term(0);
+    request.set_leader_commit(0);
 
-    AppendEntriesResponse response;
-    grpc::ServerContext   context;
+    raft::v1::AppendEntriesResponse response;
+    grpc::ServerContext             context;
 
     consensus->AppendEntries(&context, &request, &response);
 
@@ -798,9 +811,9 @@ class RaftClusterTest : public ::testing::Test
         std::filesystem::create_directories("./var/tkvpp/");
 
         // Create mock stubs for network communication
-        mockStub1 = std::make_unique<MockRaftServiceStub>();
-        mockStub2 = std::make_unique<MockRaftServiceStub>();
-        mockStub3 = std::make_unique<MockRaftServiceStub>();
+        mockStub1 = std::make_unique<raft::v1::MockRaftServiceStub>();
+        mockStub2 = std::make_unique<raft::v1::MockRaftServiceStub>();
+        mockStub3 = std::make_unique<raft::v1::MockRaftServiceStub>();
 
         // Keep raw pointers for setting expectations
         mockStubPtr1 = mockStub1.get();
@@ -814,12 +827,14 @@ class RaftClusterTest : public ::testing::Test
     }
 
     std::unique_ptr<consensus_module_t> createNodeWithMockPeers(
-        id_t                                              nodeId,
-        const std::string                                &nodeIp,
-        std::vector<std::pair<id_t, std::string>>         peerConfigs,
-        std::vector<std::unique_ptr<MockRaftServiceStub>> peerStubs
+        id_t                                                        nodeId,
+        const std::string                                          &nodeIp,
+        std::vector<std::pair<id_t, std::string>>                   peerConfigs,
+        std::vector<std::unique_ptr<raft::v1::MockRaftServiceStub>> peerStubs
     )
     {
+        auto pDbConfig = config::make_shared();
+        pDbConfig->DatabaseConfig.DatabasePath = "./var/tkvpp/";
 
         node_config_t nodeConfig{nodeId, nodeIp};
 
@@ -827,7 +842,7 @@ class RaftClusterTest : public ::testing::Test
         auto walPath = std::filesystem::temp_directory_path() /
                        ("cluster_test_wal_" + std::to_string(nodeId) + ".log");
 
-        auto walOpt = wal::wal_builder_t{}.set_file_path(walPath).build<LogEntry>(
+        auto walOpt = wal::wal_builder_t{}.set_file_path(walPath).build<raft::v1::LogEntry>(
             wal::log_storage_type_k::in_memory_k
         );
 
@@ -836,26 +851,28 @@ class RaftClusterTest : public ::testing::Test
             return nullptr;
         }
 
-        auto walPtr = std::make_shared<wal::wal_t<LogEntry>>(std::move(walOpt.value()));
+        auto walPtr = std::make_shared<wal::wal_t<raft::v1::LogEntry>>(std::move(walOpt.value()));
 
         // Create replica clients with mock stubs
         std::vector<raft_node_grpc_client_t> replicas;
         for (size_t i = 0; i < peerConfigs.size() && i < peerStubs.size(); ++i)
         {
-            node_config_t peerConfig{peerConfigs[i].first, peerConfigs[i].second};
+            node_config_t peerConfig{.m_id = peerConfigs[i].first, .m_ip = peerConfigs[i].second};
             replicas.emplace_back(peerConfig, std::move(peerStubs[i]));
         }
 
-        return std::make_unique<consensus_module_t>(nodeConfig, std::move(replicas), walPtr);
+        return std::make_unique<consensus_module_t>(
+            pDbConfig, nodeConfig, std::move(replicas), walPtr
+        );
     }
 
-    std::unique_ptr<MockRaftServiceStub> mockStub1;
-    std::unique_ptr<MockRaftServiceStub> mockStub2;
-    std::unique_ptr<MockRaftServiceStub> mockStub3;
+    std::unique_ptr<raft::v1::MockRaftServiceStub> mockStub1;
+    std::unique_ptr<raft::v1::MockRaftServiceStub> mockStub2;
+    std::unique_ptr<raft::v1::MockRaftServiceStub> mockStub3;
 
-    MockRaftServiceStub *mockStubPtr1;
-    MockRaftServiceStub *mockStubPtr2;
-    MockRaftServiceStub *mockStubPtr3;
+    raft::v1::MockRaftServiceStub *mockStubPtr1;
+    raft::v1::MockRaftServiceStub *mockStubPtr2;
+    raft::v1::MockRaftServiceStub *mockStubPtr3;
 };
 
 TEST_F(RaftClusterTest, LeaderElectionWithMockNetwork)
@@ -864,11 +881,11 @@ TEST_F(RaftClusterTest, LeaderElectionWithMockNetwork)
     EXPECT_CALL(*mockStubPtr2, RequestVote(_, _, _))
         .WillRepeatedly(DoAll(
             WithArg<2>(
-                [](RequestVoteResponse *response)
+                [](raft::v1::RequestVoteResponse *response)
                 {
-                    response->set_votegranted(1);
+                    response->set_vote_granted(1);
                     response->set_term(1);
-                    response->set_responderid(2);
+                    response->set_responder_id(2);
                 }
             ),
             Return(grpc::Status::OK)
@@ -877,11 +894,11 @@ TEST_F(RaftClusterTest, LeaderElectionWithMockNetwork)
     EXPECT_CALL(*mockStubPtr3, RequestVote(_, _, _))
         .WillRepeatedly(DoAll(
             WithArg<2>(
-                [](RequestVoteResponse *response)
+                [](raft::v1::RequestVoteResponse *response)
                 {
-                    response->set_votegranted(1);
+                    response->set_vote_granted(1);
                     response->set_term(1);
-                    response->set_responderid(3);
+                    response->set_responder_id(3);
                 }
             ),
             Return(grpc::Status::OK)
@@ -892,7 +909,7 @@ TEST_F(RaftClusterTest, LeaderElectionWithMockNetwork)
         {2, "127.0.0.1:5002"}, {3, "127.0.0.1:5003"}
     };
 
-    std::vector<std::unique_ptr<MockRaftServiceStub>> stubs;
+    std::vector<std::unique_ptr<raft::v1::MockRaftServiceStub>> stubs;
     stubs.push_back(std::move(mockStub2));
     stubs.push_back(std::move(mockStub3));
 
@@ -905,7 +922,7 @@ TEST_F(RaftClusterTest, LeaderElectionWithMockNetwork)
     // Wait for election to complete
     std::this_thread::sleep_for(std::chrono::milliseconds(600));
 
-    EXPECT_EQ(node1->getStateSafe(), NodeState::LEADER);
+    EXPECT_EQ(node1->getStateSafe(), raft::v1::NodeState::NODE_STATE_LEADER);
     EXPECT_GT(node1->currentTerm(), 0);
 
     node1->stop();
@@ -917,11 +934,11 @@ TEST_F(RaftClusterTest, HeartbeatCommunication)
     EXPECT_CALL(*mockStubPtr2, AppendEntries(_, _, _))
         .WillRepeatedly(DoAll(
             WithArg<2>(
-                [](AppendEntriesResponse *response)
+                [](raft::v1::AppendEntriesResponse *response)
                 {
                     response->set_success(true);
                     response->set_term(1);
-                    response->set_responderid(2);
+                    response->set_responder_id(2);
                     response->set_match_index(0);
                 }
             ),
@@ -931,11 +948,11 @@ TEST_F(RaftClusterTest, HeartbeatCommunication)
     EXPECT_CALL(*mockStubPtr3, AppendEntries(_, _, _))
         .WillRepeatedly(DoAll(
             WithArg<2>(
-                [](AppendEntriesResponse *response)
+                [](raft::v1::AppendEntriesResponse *response)
                 {
                     response->set_success(true);
                     response->set_term(1);
-                    response->set_responderid(3);
+                    response->set_responder_id(3);
                     response->set_match_index(0);
                 }
             ),
@@ -946,11 +963,11 @@ TEST_F(RaftClusterTest, HeartbeatCommunication)
     EXPECT_CALL(*mockStubPtr2, RequestVote(_, _, _))
         .WillOnce(DoAll(
             WithArg<2>(
-                [](RequestVoteResponse *response)
+                [](raft::v1::RequestVoteResponse *response)
                 {
-                    response->set_votegranted(1);
+                    response->set_vote_granted(1);
                     response->set_term(1);
-                    response->set_responderid(2);
+                    response->set_responder_id(2);
                 }
             ),
             Return(grpc::Status::OK)
@@ -959,11 +976,11 @@ TEST_F(RaftClusterTest, HeartbeatCommunication)
     EXPECT_CALL(*mockStubPtr3, RequestVote(_, _, _))
         .WillOnce(DoAll(
             WithArg<2>(
-                [](RequestVoteResponse *response)
+                [](raft::v1::RequestVoteResponse *response)
                 {
-                    response->set_votegranted(1);
+                    response->set_vote_granted(1);
                     response->set_term(1);
-                    response->set_responderid(3);
+                    response->set_responder_id(3);
                 }
             ),
             Return(grpc::Status::OK)
@@ -973,7 +990,7 @@ TEST_F(RaftClusterTest, HeartbeatCommunication)
         {2, "127.0.0.1:5002"}, {3, "127.0.0.1:5003"}
     };
 
-    std::vector<std::unique_ptr<MockRaftServiceStub>> stubs;
+    std::vector<std::unique_ptr<raft::v1::MockRaftServiceStub>> stubs;
     stubs.push_back(std::move(mockStub2));
     stubs.push_back(std::move(mockStub3));
 
@@ -986,7 +1003,7 @@ TEST_F(RaftClusterTest, HeartbeatCommunication)
     // Wait longer to ensure heartbeats are sent
     std::this_thread::sleep_for(std::chrono::milliseconds(800));
 
-    EXPECT_EQ(leader->getStateSafe(), NodeState::LEADER);
+    EXPECT_EQ(leader->getStateSafe(), raft::v1::NodeState::NODE_STATE_LEADER);
 
     leader->stop();
 }
@@ -997,11 +1014,11 @@ TEST_F(RaftClusterTest, LogReplicationWithMockNetwork)
     EXPECT_CALL(*mockStubPtr2, AppendEntries(_, _, _))
         .WillRepeatedly(DoAll(
             WithArg<2>(
-                [](AppendEntriesResponse *response)
+                [](raft::v1::AppendEntriesResponse *response)
                 {
                     response->set_success(true);
                     response->set_term(1);
-                    response->set_responderid(2);
+                    response->set_responder_id(2);
                     response->set_match_index(1);
                 }
             ),
@@ -1011,11 +1028,11 @@ TEST_F(RaftClusterTest, LogReplicationWithMockNetwork)
     EXPECT_CALL(*mockStubPtr3, AppendEntries(_, _, _))
         .WillRepeatedly(DoAll(
             WithArg<2>(
-                [](AppendEntriesResponse *response)
+                [](raft::v1::AppendEntriesResponse *response)
                 {
                     response->set_success(true);
                     response->set_term(1);
-                    response->set_responderid(3);
+                    response->set_responder_id(3);
                     response->set_match_index(1);
                 }
             ),
@@ -1026,11 +1043,11 @@ TEST_F(RaftClusterTest, LogReplicationWithMockNetwork)
     EXPECT_CALL(*mockStubPtr2, RequestVote(_, _, _))
         .WillOnce(DoAll(
             WithArg<2>(
-                [](RequestVoteResponse *response)
+                [](raft::v1::RequestVoteResponse *response)
                 {
-                    response->set_votegranted(1);
+                    response->set_vote_granted(1);
                     response->set_term(1);
-                    response->set_responderid(2);
+                    response->set_responder_id(2);
                 }
             ),
             Return(grpc::Status::OK)
@@ -1039,11 +1056,11 @@ TEST_F(RaftClusterTest, LogReplicationWithMockNetwork)
     EXPECT_CALL(*mockStubPtr3, RequestVote(_, _, _))
         .WillOnce(DoAll(
             WithArg<2>(
-                [](RequestVoteResponse *response)
+                [](raft::v1::RequestVoteResponse *response)
                 {
-                    response->set_votegranted(1);
+                    response->set_vote_granted(1);
                     response->set_term(1);
-                    response->set_responderid(3);
+                    response->set_responder_id(3);
                 }
             ),
             Return(grpc::Status::OK)
@@ -1053,7 +1070,7 @@ TEST_F(RaftClusterTest, LogReplicationWithMockNetwork)
         {2, "127.0.0.1:5002"}, {3, "127.0.0.1:5003"}
     };
 
-    std::vector<std::unique_ptr<MockRaftServiceStub>> stubs;
+    std::vector<std::unique_ptr<raft::v1::MockRaftServiceStub>> stubs;
     stubs.push_back(std::move(mockStub2));
     stubs.push_back(std::move(mockStub3));
 
@@ -1066,7 +1083,7 @@ TEST_F(RaftClusterTest, LogReplicationWithMockNetwork)
     // Wait to become leader
     std::this_thread::sleep_for(std::chrono::milliseconds(600));
 
-    if (leader->getStateSafe() == NodeState::LEADER)
+    if (leader->getStateSafe() == raft::v1::NodeState::NODE_STATE_LEADER)
     {
         // Test async replication
         auto future = leader->replicateAsync("test_replication_payload");
@@ -1093,11 +1110,11 @@ TEST_F(RaftClusterTest, NetworkPartitionSimulation)
     EXPECT_CALL(*mockStubPtr3, RequestVote(_, _, _))
         .WillOnce(DoAll(
             WithArg<2>(
-                [](RequestVoteResponse *response)
+                [](raft::v1::RequestVoteResponse *response)
                 {
-                    response->set_votegranted(1);
+                    response->set_vote_granted(1);
                     response->set_term(1);
-                    response->set_responderid(3);
+                    response->set_responder_id(3);
                 }
             ),
             Return(grpc::Status::OK)
@@ -1107,7 +1124,7 @@ TEST_F(RaftClusterTest, NetworkPartitionSimulation)
         {2, "127.0.0.1:5002"}, {3, "127.0.0.1:5003"}
     };
 
-    std::vector<std::unique_ptr<MockRaftServiceStub>> stubs;
+    std::vector<std::unique_ptr<raft::v1::MockRaftServiceStub>> stubs;
     stubs.push_back(std::move(mockStub2));
     stubs.push_back(std::move(mockStub3));
 
@@ -1122,7 +1139,7 @@ TEST_F(RaftClusterTest, NetworkPartitionSimulation)
     std::this_thread::sleep_for(std::chrono::milliseconds(800));
 
     // Should be able to become leader with majority (2 out of 3)
-    EXPECT_EQ(node1->getStateSafe(), NodeState::LEADER);
+    EXPECT_EQ(node1->getStateSafe(), raft::v1::NodeState::NODE_STATE_LEADER);
 
     node1->stop();
 }
@@ -1133,11 +1150,11 @@ TEST_F(RaftClusterTest, ConflictingTerms)
     EXPECT_CALL(*mockStubPtr2, RequestVote(_, _, _))
         .WillOnce(DoAll(
             WithArg<2>(
-                [](RequestVoteResponse *response)
+                [](raft::v1::RequestVoteResponse *response)
                 {
-                    response->set_votegranted(0); // Don't grant vote
-                    response->set_term(5);        // But indicate higher term
-                    response->set_responderid(2);
+                    response->set_vote_granted(0); // Don't grant vote
+                    response->set_term(5);         // But indicate higher term
+                    response->set_responder_id(2);
                 }
             ),
             Return(grpc::Status::OK)
@@ -1146,11 +1163,11 @@ TEST_F(RaftClusterTest, ConflictingTerms)
     EXPECT_CALL(*mockStubPtr3, RequestVote(_, _, _))
         .WillOnce(DoAll(
             WithArg<2>(
-                [](RequestVoteResponse *response)
+                [](raft::v1::RequestVoteResponse *response)
                 {
-                    response->set_votegranted(1);
+                    response->set_vote_granted(1);
                     response->set_term(1); // Lower term
-                    response->set_responderid(3);
+                    response->set_responder_id(3);
                 }
             ),
             Return(grpc::Status::OK)
@@ -1160,7 +1177,7 @@ TEST_F(RaftClusterTest, ConflictingTerms)
         {2, "127.0.0.1:5002"}, {3, "127.0.0.1:5003"}
     };
 
-    std::vector<std::unique_ptr<MockRaftServiceStub>> stubs;
+    std::vector<std::unique_ptr<raft::v1::MockRaftServiceStub>> stubs;
     stubs.push_back(std::move(mockStub2));
     stubs.push_back(std::move(mockStub3));
 
@@ -1174,7 +1191,7 @@ TEST_F(RaftClusterTest, ConflictingTerms)
 
     // Node should update its term and revert to follower
     EXPECT_EQ(node1->currentTerm(), 5);
-    EXPECT_EQ(node1->getStateSafe(), NodeState::FOLLOWER);
+    EXPECT_EQ(node1->getStateSafe(), raft::v1::NodeState::NODE_STATE_FOLLOWER);
 
     node1->stop();
 }
@@ -1194,7 +1211,7 @@ TEST_F(ConsensusModuleTest, ThreeNodeClusterSetup)
 
     // Verify cluster configuration
     EXPECT_EQ(consensus->currentTerm(), 0);
-    EXPECT_EQ(consensus->getStateSafe(), NodeState::FOLLOWER);
+    EXPECT_EQ(consensus->getStateSafe(), raft::v1::NodeState::NODE_STATE_FOLLOWER);
 
     // The actual election would require mock expectations for network calls
     // This is a basic structural test
@@ -1224,15 +1241,15 @@ TEST_F(ConsensusModuleTest, AppendEntriesErrorConditions)
     ASSERT_TRUE(consensus->init());
 
     // Test with missing previous log entry
-    AppendEntriesRequest request;
+    raft::v1::AppendEntriesRequest request;
     request.set_term(1);
-    request.set_senderid(2);
-    request.set_prevlogindex(10); // Non-existent index
-    request.set_prevlogterm(1);
-    request.set_leadercommit(0);
+    request.set_sender_id(2);
+    request.set_prev_log_index(10); // Non-existent index
+    request.set_prev_log_term(1);
+    request.set_leader_commit(0);
 
-    AppendEntriesResponse response;
-    grpc::ServerContext   context;
+    raft::v1::AppendEntriesResponse response;
+    grpc::ServerContext             context;
 
     auto status = consensus->AppendEntries(&context, &request, &response);
 
@@ -1249,10 +1266,10 @@ TEST_F(ConsensusModuleTest, LogConsistencyWithWAL)
     auto consensus = createConsensusModule();
     ASSERT_TRUE(consensus->init());
 
-    std::vector<LogEntry> entries;
+    std::vector<raft::v1::LogEntry> entries;
     for (int i = 0; i < 3; ++i)
     {
-        LogEntry entry;
+        raft::v1::LogEntry entry;
         entry.set_term(1);
         entry.set_index(i + 1);
         entry.set_payload("consistency_test_" + std::to_string(i));
@@ -1262,18 +1279,18 @@ TEST_F(ConsensusModuleTest, LogConsistencyWithWAL)
     // Add entries via AppendEntries
     for (const auto &entry : entries)
     {
-        AppendEntriesRequest request;
+        raft::v1::AppendEntriesRequest request;
         request.set_term(1);
-        request.set_senderid(2);
-        request.set_prevlogindex(entry.index() - 1);
-        request.set_prevlogterm(entry.index() > 1 ? 1 : 0);
-        request.set_leadercommit(0);
+        request.set_sender_id(2);
+        request.set_prev_log_index(entry.index() - 1);
+        request.set_prev_log_term(entry.index() > 1 ? 1 : 0);
+        request.set_leader_commit(0);
 
-        LogEntry *reqEntry = request.add_entries();
+        raft::v1::LogEntry *reqEntry = request.add_entries();
         reqEntry->CopyFrom(entry);
 
-        AppendEntriesResponse response;
-        grpc::ServerContext   context;
+        raft::v1::AppendEntriesResponse response;
+        grpc::ServerContext             context;
 
         auto status = consensus->AppendEntries(&context, &request, &response);
         EXPECT_TRUE(status.ok());
@@ -1305,47 +1322,47 @@ TEST_F(ConsensusModuleTest, LogTruncationWithWAL)
     ASSERT_TRUE(consensus->init());
 
     // Add initial entries
-    std::vector<LogEntry> initialEntries;
+    std::vector<raft::v1::LogEntry> initialEntries;
     for (int i = 0; i < 5; ++i)
     {
-        LogEntry entry;
+        raft::v1::LogEntry entry;
         entry.set_term(1);
         entry.set_index(i + 1);
         entry.set_payload("initial_" + std::to_string(i));
         initialEntries.push_back(entry);
 
-        AppendEntriesRequest request;
+        raft::v1::AppendEntriesRequest request;
         request.set_term(1);
-        request.set_senderid(2);
-        request.set_prevlogindex(i);
-        request.set_prevlogterm(i > 0 ? 1 : 0);
-        request.set_leadercommit(0);
+        request.set_sender_id(2);
+        request.set_prev_log_index(i);
+        request.set_prev_log_term(i > 0 ? 1 : 0);
+        request.set_leader_commit(0);
 
-        LogEntry *reqEntry = request.add_entries();
+        raft::v1::LogEntry *reqEntry = request.add_entries();
         reqEntry->CopyFrom(entry);
 
-        AppendEntriesResponse response;
-        grpc::ServerContext   context;
+        raft::v1::AppendEntriesResponse response;
+        grpc::ServerContext             context;
         consensus->AppendEntries(&context, &request, &response);
     }
 
     EXPECT_EQ(walPtr->size(), 5);
 
     // Now send conflicting entry that should cause truncation
-    AppendEntriesRequest conflictRequest;
+    raft::v1::AppendEntriesRequest conflictRequest;
     conflictRequest.set_term(2); // Higher term
-    conflictRequest.set_senderid(3);
-    conflictRequest.set_prevlogindex(3); // After 3rd entry
-    conflictRequest.set_prevlogterm(1);
-    conflictRequest.set_leadercommit(0);
+    conflictRequest.set_sender_id(3);
+    conflictRequest.set_prev_log_index(3); // After 3rd entry
+    conflictRequest.set_prev_log_term(1);
+    conflictRequest.set_leader_commit(0);
 
-    LogEntry *conflictEntry = conflictRequest.add_entries();
+    raft::v1::LogEntry *conflictEntry = conflictRequest.add_entries();
     conflictEntry->set_term(2);
     conflictEntry->set_index(4);
     conflictEntry->set_payload("conflict_entry");
 
-    AppendEntriesResponse conflictResponse;
-    grpc::ServerContext   conflictContext;
+    raft::v1::AppendEntriesResponse conflictResponse;
+    grpc::ServerContext             conflictContext;
 
     auto status = consensus->AppendEntries(&conflictContext, &conflictRequest, &conflictResponse);
     EXPECT_TRUE(status.ok());
@@ -1363,10 +1380,10 @@ TEST_F(ConsensusModuleTest, LogTruncationWithWAL)
 TEST_F(ConsensusModuleTest, WALRecordsMethodTest)
 {
     // Test the records() method specifically
-    std::vector<LogEntry> testEntries;
+    std::vector<raft::v1::LogEntry> testEntries;
     for (int i = 0; i < 3; ++i)
     {
-        LogEntry entry;
+        raft::v1::LogEntry entry;
         entry.set_term(1);
         entry.set_index(i + 1);
         entry.set_payload("records_test_" + std::to_string(i));
@@ -1398,20 +1415,20 @@ TEST_F(ConsensusModuleTest, ConsensusModuleLogMethodTest)
     // Add entries through consensus module
     for (int i = 0; i < 3; ++i)
     {
-        AppendEntriesRequest request;
+        raft::v1::AppendEntriesRequest request;
         request.set_term(1);
-        request.set_senderid(2);
-        request.set_prevlogindex(i);
-        request.set_prevlogterm(i > 0 ? 1 : 0);
-        request.set_leadercommit(0);
+        request.set_sender_id(2);
+        request.set_prev_log_index(i);
+        request.set_prev_log_term(i > 0 ? 1 : 0);
+        request.set_leader_commit(0);
 
-        LogEntry *entry = request.add_entries();
+        raft::v1::LogEntry *entry = request.add_entries();
         entry->set_term(1);
         entry->set_index(i + 1);
         entry->set_payload("consensus_log_test_" + std::to_string(i));
 
-        AppendEntriesResponse response;
-        grpc::ServerContext   context;
+        raft::v1::AppendEntriesResponse response;
+        grpc::ServerContext             context;
         consensus->AppendEntries(&context, &request, &response);
         EXPECT_TRUE(response.success());
     }
@@ -1440,7 +1457,7 @@ TEST_F(ConsensusModuleTest, WALPerformanceTest)
 
     for (size_t i = 0; i < numEntries; ++i)
     {
-        LogEntry entry;
+        raft::v1::LogEntry entry;
         entry.set_term(1);
         entry.set_index(i + 1);
         entry.set_payload("perf_test_" + std::to_string(i));
@@ -1489,22 +1506,22 @@ TEST_F(ConsensusModuleTest, ConcurrentWALAccess)
             {
                 for (int i = 0; i < entriesPerThread; ++i)
                 {
-                    AppendEntriesRequest request;
+                    raft::v1::AppendEntriesRequest request;
                     request.set_term(1);
-                    request.set_senderid(2);
-                    request.set_prevlogindex(0); // Simplified for concurrent test
-                    request.set_prevlogterm(0);
-                    request.set_leadercommit(0);
+                    request.set_sender_id(2);
+                    request.set_prev_log_index(0); // Simplified for concurrent test
+                    request.set_prev_log_term(0);
+                    request.set_leader_commit(0);
 
-                    LogEntry *entry = request.add_entries();
+                    raft::v1::LogEntry *entry = request.add_entries();
                     entry->set_term(1);
                     entry->set_index(1); // Simplified
                     entry->set_payload(
                         "thread_" + std::to_string(t) + "_entry_" + std::to_string(i)
                     );
 
-                    AppendEntriesResponse response;
-                    grpc::ServerContext   context;
+                    raft::v1::AppendEntriesResponse response;
+                    grpc::ServerContext             context;
 
                     auto status = consensus->AppendEntries(&context, &request, &response);
                     if (status.ok() && response.success())
@@ -1537,7 +1554,7 @@ TEST_F(ConsensusModuleTest, WALBoundaryConditions)
     EXPECT_FALSE(walPtr->read(SIZE_MAX).has_value());
 
     // Add one entry
-    LogEntry entry;
+    raft::v1::LogEntry entry;
     entry.set_term(1);
     entry.set_index(1);
     entry.set_payload("boundary_test");
@@ -1568,18 +1585,18 @@ TEST_F(ConsensusModuleTest, ConsensusModuleWithEmptyWAL)
     EXPECT_EQ(log.size(), 0);
 
     // Test vote request with empty log
-    RequestVoteRequest request;
+    raft::v1::RequestVoteRequest request;
     request.set_term(1);
-    request.set_candidateid(2);
-    request.set_lastlogindex(0);
-    request.set_lastlogterm(0);
+    request.set_candidate_id(2);
+    request.set_last_log_index(0);
+    request.set_last_log_term(0);
 
-    RequestVoteResponse response;
-    grpc::ServerContext context;
+    raft::v1::RequestVoteResponse response;
+    grpc::ServerContext           context;
 
     auto status = consensus->RequestVote(&context, &request, &response);
     EXPECT_TRUE(status.ok());
-    EXPECT_EQ(response.votegranted(), 1);
+    EXPECT_EQ(response.vote_granted(), 1);
 }
 
 // ============================================================================

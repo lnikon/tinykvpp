@@ -57,12 +57,6 @@ namespace
         return std::nullopt;
     }
 
-    if (pConfig->ServerConfig.peers.empty())
-    {
-        spdlog::error("maybe_create_consensus_module: List of node IPs can't be empty");
-        return std::nullopt;
-    }
-
     std::vector<consensus::raft_node_grpc_client_t> replicas;
     for (consensus::id_t replicaId{1}; const auto &replicaIp : pConfig->ServerConfig.peers)
     {
@@ -79,8 +73,9 @@ namespace
         ++replicaId;
     }
 
-    auto pConsensusModule =
-        std::make_shared<consensus::consensus_module_t>(nodeConfig, std::move(replicas), pWAL);
+    auto pConsensusModule = std::make_shared<consensus::consensus_module_t>(
+        pConfig, nodeConfig, std::move(replicas), pWAL
+    );
     if (!pConsensusModule->init())
     {
         spdlog::error("maybe_create_consensus_module: Failed to initialize the consensus module");
