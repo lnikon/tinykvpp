@@ -14,20 +14,20 @@
         "storageType": "persistent"
     },
     "lsm": {
-        "flushThreshold": 64000000,
+        "flushThreshold": 1024,
         "maximumLevels": 12,
         "levelZeroCompaction": {
             "compactionStrategy": "levelled",
-            "compactionThreshold": 256000000
+            "compactionThreshold": 8096 
         },
         "levelNonZeroCompaction": {
             "compactionStrategy": "tiered",
-            "compactionThreshold": 256000000
+            "compactionThreshold": 4096 
         }
     },
     "server": {
         "transport": "grpc",
-        "host": "127.0.0.1",
+        "host": "0.0.0.0",
         "port": 9891,
         "id": 1,
         "peers": []

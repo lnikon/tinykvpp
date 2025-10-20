@@ -53,9 +53,9 @@ func NewMemtableStressScenario(params map[string]interface{}) *MemtableStressSce
 }
 
 func (s *MemtableStressScenario) Execute(ctx *core.TestContext) error {
-	log.Printf("[%s] === Test 1: Sequential Writes (Flush Detection) === ", s.name)
+	log.Printf("[%s] === Test 1: Memtable Stress (Flush Detection) === ", s.name)
 	if err := s.testSequentialWrites(ctx); err != nil {
-		return fmt.Errorf("sequantial writes failec: %w", err)
+		return fmt.Errorf("sequantial writes failed: %w", err)
 	}
 	log.Printf("[%s] Sequential writes test passed", s.name)
 

@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cassert>
+#include <cstdint>
 #include <iterator>
 #include <optional>
 #include <queue>
@@ -116,24 +117,25 @@ auto level_t::record(const key_t &key) const noexcept
 auto level_t::compact() const noexcept -> segments::regular_segment::shared_ptr_t
 {
     absl::ReaderMutexLock lock{&m_mutex};
-    const auto            bytesUsedForLevel{bytes_used()};
 
-    // If level size hasn't reached the size limit then skip the compaction
-    const bool isZeroLevel{index() == 0};
-    const auto zeroLevelThreshold{m_pConfig->LSMTreeConfig.LevelZeroCompactionThreshold};
-    if (isZeroLevel && bytesUsedForLevel < zeroLevelThreshold)
-    {
-        return nullptr;
-    }
-
-    const auto nonZeroLevelThreshold{
-        m_pConfig->LSMTreeConfig.LevelNonZeroCompactionThreshold * std::pow(10, index())
+    // Skip compaction if size of the level is less than the threshold
+    const std::uint64_t used{bytes_used()};
+    const std::uint64_t threshold{
+        index() == 0 ? m_pConfig->LSMTreeConfig.LevelZeroCompactionThreshold
+                     : m_pConfig->LSMTreeConfig.LevelNonZeroCompactionThreshold *
+                           static_cast<std::uint64_t>(std::pow(10, index()))
     };
-    if (!isZeroLevel && bytesUsedForLevel < nonZeroLevelThreshold)
+    if (used < threshold)
     {
+        spdlog::info(
+            "Skipping level={} compaction. Used={}, threshold={}", index(), used, threshold
+        );
         return nullptr;
     }
 
+    spdlog::info("Compacting level={}. Used={}, threshold={}", index(), used, threshold);
+
+    // Merge segments from the current level
     std::priority_queue<
         std::pair<
             typename memtable::memtable_t::const_iterator,
@@ -284,19 +286,20 @@ void level_t::merge(const segments::regular_segment::shared_ptr_t &pSegment) noe
 void level_t::purge() noexcept
 {
     absl::WriterMutexLock lock{&m_mutex};
-    spdlog::debug("Purging level {} with {} segments", index(), m_storage.size());
+    spdlog::info("Purging level {} with {} segments", index(), m_storage.size());
     const auto idx{index()};
     for (auto &pSegment : m_storage)
     {
         pSegment->remove_from_disk();
 
-        ASSERT(m_manifest->add(
+        auto ok{m_manifest->add(
             db::manifest::manifest_t::segment_record_t{
                 .op = segment_operation_k::remove_segment_k,
                 .name = pSegment->get_name(),
                 .level = idx
             }
-        ));
+        )};
+        ASSERT(ok);
     }
     m_storage.clear();
 }

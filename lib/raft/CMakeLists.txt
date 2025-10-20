@@ -17,3 +17,6 @@ add_executable(RaftTest "raft_test.cpp")
 set_target_properties(RaftTest PROPERTIES CXX_STANDARD 23)
 target_link_libraries(RaftTest gtest::gtest Raft RaftProtoObjects
                       TKVProtoObjects Concurrency)
+
+include(GoogleTest)
+gtest_discover_tests(RaftTest)

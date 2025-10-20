@@ -1,3 +1,5 @@
+#include <chrono>
+#include <thread>
 #include <utility>
 #include <cassert>
 
@@ -90,15 +92,18 @@ auto levels_t::compact() -> segments::regular_segment::shared_ptr_t
             continue;
         }
 
-        // Update manifest with compacted level
-        // TODO(lnikon): Replace this and following ASSERTS()s with manifest batching!
-        ASSERT(m_pManifest->add(
-            db::manifest::manifest_t::level_record_t{
-                .op = level_operation_k::compact_level_k, .level = currentLevel->index()
-            }
-        ));
+        {
+            // TODO(lnikon): Replace this and following ASSERTS()s with manifest batching!
+            auto ok{m_pManifest->add(
+                db::manifest::manifest_t::level_record_t{
+                    .op = level_operation_k::compact_level_k, .level = currentLevel->index()
+                }
+            )};
+            ASSERT(ok);
+        }
 
         {
+            // Update manifest with compacted level
             // Update manifest with new segment
             auto ok{m_pManifest->add(
                 db::manifest::manifest_t::segment_record_t{
@@ -197,11 +202,12 @@ auto levels_t::size() const noexcept -> levels_t::levels_storage_t::size_type
     // Generate name for the segment and add it to the manifest
     auto name{fmt::format("{}_{}", segments::helpers::segment_name(), 0)};
     // TODO(lnikon): Replace this and following ASSERTS()s with manifest batching!
-    ASSERT(m_pManifest->add(
+    auto ok{m_pManifest->add(
         db::manifest::manifest_t::segment_record_t{
             .op = segment_operation_k::add_segment_k, .name = name, .level = 0
         }
-    ));
+    )};
+    ASSERT(ok);
 
     auto pSegment{m_levels[0]->segment(std::move(memtable), name)};
     if (pSegment)
@@ -225,21 +231,16 @@ auto levels_t::restore() noexcept -> void
 
 void levels_t::compaction_task(std::stop_token stoken) noexcept
 {
-    while (true)
+    while (!stoken.stop_requested())
     {
-        if (stoken.stop_requested())
-        {
-            return;
-        }
+        m_level0_segment_flushed_notification.WaitForNotification();
 
-        if (m_level0_segment_flushed_notification.WaitForNotificationWithTimeout(absl::Seconds(1)))
+        auto ok{compact()};
+        if (!ok)
         {
-            compact();
+            spdlog::error("Compaction failed.");
         }
-        else
-        {
-            continue;
-        }
+        ASSERT(ok);
     }
 }
 

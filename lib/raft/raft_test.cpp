@@ -836,7 +836,7 @@ class RaftClusterTest : public ::testing::Test
         auto pDbConfig = config::make_shared();
         pDbConfig->DatabaseConfig.DatabasePath = "./var/tkvpp/";
 
-        node_config_t nodeConfig{nodeId, nodeIp};
+        node_config_t nodeConfig{.m_id = nodeId, .m_ip = nodeIp};
 
         // Create WAL for this node
         auto walPath = std::filesystem::temp_directory_path() /
@@ -860,6 +860,8 @@ class RaftClusterTest : public ::testing::Test
             node_config_t peerConfig{.m_id = peerConfigs[i].first, .m_ip = peerConfigs[i].second};
             replicas.emplace_back(peerConfig, std::move(peerStubs[i]));
         }
+
+        spdlog::info("replicas.size()={}", replicas.size());
 
         return std::make_unique<consensus_module_t>(
             pDbConfig, nodeConfig, std::move(replicas), walPtr
@@ -1110,7 +1112,7 @@ TEST_F(RaftClusterTest, NetworkPartitionSimulation)
     EXPECT_CALL(*mockStubPtr3, RequestVote(_, _, _))
         .WillOnce(DoAll(
             WithArg<2>(
-                [](raft::v1::RequestVoteResponse *response)
+                [](raft::v1::RequestVoteResponse *response) -> void
                 {
                     response->set_vote_granted(1);
                     response->set_term(1);

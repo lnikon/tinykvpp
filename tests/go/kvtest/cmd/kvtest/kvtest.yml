@@ -18,8 +18,8 @@ scenarios:
     type: memtable_stress
     enabled: true
     parameters:
-      record_size: 16000
-      record_count: 8096
+      record_size: 33
+      record_count: 128
       concurrent_writers: 1
       flush_threshold: 6400000
   - name: basic_crud

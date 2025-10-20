@@ -1,22 +1,24 @@
-#include "manifest/manifest.h"
-#include "wal/wal.h"
-#include <catch2/catch_test_macros.hpp>
+#include <gtest/gtest.h>
+#include <gmock/gmock.h>
 
-#include <config/config.h>
 #include <db/db.h>
-#include <structures/lsmtree/lsmtree.h>
 
-TEST_CASE("db interface validation", "[db]")
+// ============================================================================
+// Main Test Runner
+// ============================================================================
+
+int main(int argc, char **argv)
 {
-    config::shared_ptr_t pConfig{config::make_shared()};
-    auto                 pSegmentStorage{structures::lsmtree::segments::storage::make_shared()};
-    auto                 manifest{db::manifest::make_shared(pConfig)};
-    auto                 wal{wal::make_shared("wal")};
-    auto                 lsmTree{structures::lsmtree::lsmtree_t{pConfig, manifest, wal}};
+    ::testing::InitGoogleTest(&argc, argv);
+    ::testing::InitGoogleMock(&argc, argv);
 
-    SECTION("fail when db path is empty")
-    {
-        db::db_t db(pConfig);
-        // REQUIRE(db.open() == false);
-    }
+    // Create test directories
+    std::filesystem::create_directories("./var/tkvpp/");
+
+    int result = RUN_ALL_TESTS();
+
+    // Cleanup
+    std::filesystem::remove_all("./var/tkvpp/");
+
+    return result;
 }

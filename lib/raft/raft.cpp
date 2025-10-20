@@ -212,7 +212,7 @@ auto consensus_module_t::init() -> bool
         return false;
     }
 
-    m_replicationMonitor = std::thread([this] { monitorPendingReplications(); });
+    m_replicationMonitor = std::thread([this] -> void { monitorPendingReplications(); });
 
     return true;
 }
@@ -395,11 +395,6 @@ auto consensus_module_t::AppendEntries(
         m_log->add(entry);
     }
 
-    if (!pRequest->entries().empty())
-    {
-        spdlog::info("leaderCommit={}, m_commitIndex={}", pRequest->leader_commit(), m_commitIndex);
-    }
-
     if (pRequest->leader_commit() > m_commitIndex)
     {
         // Update m_commitIndex
@@ -417,17 +412,6 @@ auto consensus_module_t::AppendEntries(
         }
     }
 
-    if (!entries.empty())
-    {
-        spdlog::info(
-            "Follower Node={} PREPARING applying m_lastApplied+1={}, m_commitIndex={}",
-            m_nodeConfig.m_id,
-            m_lastApplied + 1,
-            m_commitIndex
-        );
-    }
-
-    // Apply committed entries to the state machine
     applyCommittedEntries();
 
     pResponse->set_term(m_currentTerm);
@@ -441,9 +425,7 @@ auto consensus_module_t::AppendEntries(
         spdlog::error("Node={} is unable to persist votedFor", m_nodeConfig.m_id, m_votedFor);
     }
 
-    {
-        m_leaderHeartbeatReceived.store(true);
-    }
+    m_leaderHeartbeatReceived.store(true);
 
     spdlog::debug(
         "Node={} is resetting election timeout at term={}", m_nodeConfig.m_id, m_currentTerm
@@ -507,8 +489,6 @@ auto consensus_module_t::RequestVote(
                     "Node={} is unable to persist votedFor", m_nodeConfig.m_id, m_votedFor
                 );
             }
-
-            spdlog::info("Node={} votedFor={}", m_nodeConfig.m_id, pRequest->candidate_id());
 
             pResponse->set_term(m_currentTerm);
             pResponse->set_vote_granted(1);
@@ -681,7 +661,9 @@ void consensus_module_t::becomeFollower(uint32_t newTerm)
     if (m_onLeaderChangeCbk)
     {
         auto callback = m_onLeaderChangeCbk;
-        m_internalThreadPool->enqueue([callback = std::move(callback)] { callback(false); });
+        m_internalThreadPool->enqueue(
+            [callback = std::move(callback)] -> void { callback(false); }
+        );
     }
 }
 
@@ -710,7 +692,6 @@ void consensus_module_t::becomeLeader()
 
     if (m_onLeaderChangeCbk)
     {
-        spdlog::info("Executing onLeaderChangeCbk");
         auto callback = m_onLeaderChangeCbk;
         m_internalThreadPool->enqueue([callback = std::move(callback)] { callback(true); });
     }
@@ -925,15 +906,8 @@ auto consensus_module_t::onSendAppendEntriesRPC(
 
         if (m_log->size() >= majorityIndex && majorityIndex > m_commitIndex)
         {
-            spdlog::info("Node={} found majorityIndex={}", m_nodeConfig.m_id, majorityIndex);
             if (m_log->read(majorityIndex - 1)->term() == m_currentTerm)
             {
-                spdlog::info(
-                    "Node={} is updating commitIndex to majorityIndex={}",
-                    m_nodeConfig.m_id,
-                    majorityIndex
-                );
-
                 if (!updatePersistentState(majorityIndex, std::nullopt))
                 {
                     spdlog::error(
@@ -1007,7 +981,7 @@ void consensus_module_t::startElection()
         spdlog::info("Node={} starts election. New term={}", m_nodeConfig.m_id, m_currentTerm);
 
         // Node in a canditate state should vote for itself.
-        m_voteCount++;
+        m_voteCount = 1;
         if (!updatePersistentState(std::nullopt, m_nodeConfig.m_id))
         {
             spdlog::error(
@@ -1018,10 +992,6 @@ void consensus_module_t::startElection()
         // Early majority check for a single node cluster
         if (hasMajority(m_voteCount.load()))
         {
-            spdlog::info(
-                "Node={} achieved majority (single node cluster), becoming leader",
-                m_nodeConfig.m_id
-            );
             becomeLeader();
             return;
         }
@@ -1163,7 +1133,6 @@ auto consensus_module_t::findMajorityIndexMatch() const -> uint32_t
     }
 
     std::ranges::sort(matchIndexes);
-    // spdlog::info("Node={} matchIndexes={}", m_config.m_id, fmt::join(matchIndexes, ", "));
     return matchIndexes[matchIndexes.size() / 2];
 }
 
@@ -1178,10 +1147,6 @@ auto consensus_module_t::waitForMajorityReplication(uint32_t logIndex) const -> 
         }
         return hasMajority(count);
     };
-
-    spdlog::info(
-        "Node={} is waiting for majority to agree on logIndex={}", m_nodeConfig.m_id, logIndex
-    );
 
     const auto timeout{absl::Seconds(generate_raft_timeout())};
     return m_stateMutex.AwaitWithTimeout(absl::Condition(&hasMajorityLambda), timeout);
@@ -1364,8 +1329,6 @@ void consensus_module_t::applyCommittedEntries()
             m_internalThreadPool->enqueue(
                 [this, entry = std::move(logEntry.value()), applyIndex]
                 {
-                    spdlog::info("Applying log entry {} to state machine", applyIndex);
-
                     try
                     {
                         if (m_onCommitCbk(entry))

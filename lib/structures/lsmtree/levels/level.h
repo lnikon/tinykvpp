@@ -1,11 +1,13 @@
 #pragma once
 
-#include "structures/lsmtree/segments/lsmtree_regular_segment.h"
-#include <db/manifest/manifest.h>
-#include <config/config.h>
-#include <structures/lsmtree/segments/segment_storage.h>
+#include <cstdint>
 
 #include <absl/synchronization/mutex.h>
+
+#include "structures/lsmtree/segments/lsmtree_regular_segment.h"
+#include "db/manifest/manifest.h"
+#include "config/config.h"
+#include "structures/lsmtree/segments/segment_storage.h"
 
 namespace structures::lsmtree::level
 {
@@ -13,7 +15,7 @@ namespace structures::lsmtree::level
 class level_t
 {
   public:
-    using level_index_type_t = std::size_t;
+    using level_index_type_t = std::uint64_t;
     using record_t = structures::memtable::memtable_t::record_t;
     using key_t = record_t::key_t;
 

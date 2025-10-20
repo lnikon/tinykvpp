@@ -27,7 +27,7 @@ add_executable(DBTest db_test.cpp)
 set_target_properties(DBTest PROPERTIES CXX_STANDARD 23)
 target_link_libraries(
   DBTest
-  Catch2::Catch2WithMain
+  gtest::gtest
   spdlog::spdlog
   fmt::fmt
   LSMTree
@@ -36,6 +36,5 @@ target_link_libraries(
   Config
   HashIndex)
 
-# Register Catch2 tests with CTest
-include(Catch)
-catch_discover_tests(DBTest)
+include(GoogleTest)
+gtest_discover_tests(DBTest)

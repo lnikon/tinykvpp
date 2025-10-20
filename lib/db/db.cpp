@@ -182,7 +182,6 @@ db_t::put(const tinykvpp::v1::PutRequest *pRequest, tinykvpp::v1::PutResponse *p
     }
 
     auto waitStatus = future.wait_for(m_config->DatabaseConfig.requestTimeout);
-    spdlog::info("waitStatus={}", magic_enum::enum_name(waitStatus));
     if (waitStatus == std::future_status::ready)
     {
         if (!future.get())
@@ -266,8 +265,6 @@ void db_t::processRequests()
         {
             continue;
         }
-
-        spdlog::info("Processing request: {}", request->requestId);
 
         m_requestPool.enqueue([this, request = std::move(request.value())] mutable
                               { handleClientRequest(std::move(request)); });
