@@ -1,0 +1,18 @@
+cmake_minimum_required(VERSION 3.25)
+project(frankie)
+
+add_library(Concurrency thread_safe_queue.cpp thread_pool.cpp helpers.cpp)
+
+set_target_properties(Concurrency PROPERTIES CXX_STANDARD 23)
+target_include_directories(
+    Concurrency
+    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../include
+)
+target_link_libraries(
+    Concurrency
+    PUBLIC abseil::abseil spdlog::spdlog fmt::fmt libassert::assert
+)
+
+# add_executable(DBTest "db_test.cpp") set_target_properties(DBTest PROPERTIES
+# CXX_STANDARD 23) target_link_libraries( DBTest Catch2::Catch2WithMain
+# spdlog::spdlog fmt::fmt LSMTree MemTable DB Config HashIndex)

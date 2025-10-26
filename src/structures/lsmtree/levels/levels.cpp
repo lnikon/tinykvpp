@@ -1,0 +1,265 @@
+#include <thread>
+#include <utility>
+#include <cassert>
+
+#include <absl/synchronization/mutex.h>
+#include <spdlog/spdlog.h>
+#include <libassert/assert.hpp>
+
+#include "structures/lsmtree/segments/helpers.h"
+#include "structures/lsmtree/levels/levels.h"
+#include "db/manifest/manifest.h"
+#include "concurrency/helpers.h"
+
+namespace structures::lsmtree::levels
+{
+
+using level_operation_k = db::manifest::manifest_t::level_record_t::operation_k;
+using segment_operation_k = db::manifest::manifest_t::segment_record_t::operation_k;
+
+levels_t::levels_t(config::shared_ptr_t pConfig, db::manifest::shared_ptr_t pManifest) noexcept
+    : m_pConfig{std::move(pConfig)},
+      m_pManifest{std::move(std::move(pManifest))},
+      m_compaction_thread([this](std::stop_token stoken) { compaction_task(stoken); })
+{
+    // TODO(lnikon): Make number of levels configurable
+    // const std::size_t levelCount{m_pConfig->LSMTreeConfig.LevelCount};
+    const std::size_t levelCount{7};
+    for (std::size_t idx{0}; idx < levelCount; idx++)
+    {
+        level();
+    }
+}
+
+levels_t::levels_t(levels_t &&other) noexcept
+{
+    absl::WriterMutexLock otherLock{&other.m_mutex};
+    move_from(std::move(other));
+}
+
+auto levels_t::operator=(levels_t &&other) noexcept -> levels_t &
+{
+    if (this != &other)
+    {
+        concurrency::absl_dual_mutex_lock_guard lock{m_mutex, other.m_mutex};
+        move_from(std::move(other));
+    }
+    return *this;
+}
+
+levels_t::~levels_t() noexcept
+{
+    m_compaction_thread.request_stop();
+    if (m_compaction_thread.joinable())
+    {
+        spdlog::debug("Waiting for compaction thread to finish");
+        m_compaction_thread.join();
+    }
+    else
+    {
+        spdlog::debug("Compaction thread is not joinable, skipping join");
+    }
+}
+
+auto levels_t::compact() -> segments::regular_segment::shared_ptr_t
+{
+    absl::MutexLock lock{&m_mutex};
+
+    segments::regular_segment::shared_ptr_t compactedCurrentLevelSegment{nullptr};
+    for (std::size_t idx{0}; idx < m_levels.size(); idx++)
+    {
+        auto currentLevel{m_levels[idx]};
+        assert(currentLevel);
+
+        // Do not compact the last level
+        if (currentLevel->index() == m_levels.size() - 1)
+        {
+            break;
+        }
+
+        // Try to compact the @currentLevel
+        compactedCurrentLevelSegment = currentLevel->compact();
+
+        // If 0th level is not ready for the compaction, then skip the other levels
+        if (!compactedCurrentLevelSegment)
+        {
+            if (currentLevel->index() == 0)
+            {
+                break;
+            }
+
+            continue;
+        }
+
+        {
+            // TODO(lnikon): Replace this and following ASSERTS()s with manifest batching!
+            auto ok{m_pManifest->add(
+                db::manifest::manifest_t::level_record_t{
+                    .op = level_operation_k::compact_level_k, .level = currentLevel->index()
+                }
+            )};
+            ASSERT(ok);
+        }
+
+        {
+            // Update manifest with compacted level
+            // Update manifest with new segment
+            auto ok{m_pManifest->add(
+                db::manifest::manifest_t::segment_record_t{
+                    .op = segment_operation_k::add_segment_k,
+                    .name = compactedCurrentLevelSegment->get_name(),
+                    .level = currentLevel->index()
+                }
+            )};
+            ASSERT(ok);
+        }
+
+        // If computation succeeded, then flush the compacted segment into disk
+        compactedCurrentLevelSegment->flush();
+
+        // Get the next level
+        level::shared_ptr_t nextLevel = m_levels[currentLevel->index() + 1];
+        assert(nextLevel);
+
+        // Lock the next level and merge current compacted level into it
+        {
+            nextLevel->merge(compactedCurrentLevelSegment);
+        }
+
+        // Purge the segment representing the compacted level and update the
+        // manifest
+        {
+            bool ok{m_pManifest->add(
+                db::manifest::manifest_t::segment_record_t{
+                    .op = segment_operation_k::remove_segment_k,
+                    .name = compactedCurrentLevelSegment->get_name(),
+                    .level = currentLevel->index()
+                }
+            )};
+            ASSERT(ok);
+        }
+        compactedCurrentLevelSegment->remove_from_disk();
+
+        // After merging current level into the next level purge the current
+        // level and update the manifest
+        ASSERT(m_pManifest->add(
+            db::manifest::manifest_t::level_record_t{
+                .op = level_operation_k::purge_level_k, .level = currentLevel->index()
+            }
+        ));
+        currentLevel->purge();
+    }
+
+    // If compaction happened, then return the resulting segment
+    return compactedCurrentLevelSegment;
+}
+
+auto levels_t::level() noexcept -> level::shared_ptr_t
+{
+    absl::MutexLock lock{&m_mutex};
+    return m_levels.emplace_back(level::make_shared(m_levels.size(), m_pConfig, m_pManifest));
+}
+
+[[maybe_unused]] auto levels_t::level(const std::size_t idx) noexcept -> level::shared_ptr_t
+{
+    assert(idx < m_levels.size());
+    return m_levels[idx];
+}
+
+auto levels_t::record(const key_t &key) const noexcept -> std::optional<record_t>
+{
+    absl::MutexLock lock{&m_mutex};
+
+    std::optional<record_t> result{};
+    for (const auto &currentLevel : m_levels)
+    {
+        assert(currentLevel);
+        result = currentLevel->record(key);
+        if (result)
+        {
+            spdlog::debug("Found key {} at level {}", key.m_key, currentLevel->index());
+            break;
+        }
+    }
+    return result;
+}
+
+auto levels_t::size() const noexcept -> levels_t::levels_storage_t::size_type
+{
+    absl::MutexLock lock{&m_mutex};
+    return m_levels.size();
+}
+
+[[nodiscard]] auto levels_t::flush_to_level0(memtable::memtable_t memtable) const noexcept
+    -> segments::regular_segment::shared_ptr_t
+{
+
+    absl::MutexLock lock{&m_mutex};
+
+    assert(m_levels[0]);
+
+    // Generate name for the segment and add it to the manifest
+    auto name{fmt::format("{}_{}", segments::helpers::segment_name(), 0)};
+    // TODO(lnikon): Replace this and following ASSERTS()s with manifest batching!
+    auto ok{m_pManifest->add(
+        db::manifest::manifest_t::segment_record_t{
+            .op = segment_operation_k::add_segment_k, .name = name, .level = 0
+        }
+    )};
+    ASSERT(ok);
+
+    auto pSegment{m_levels[0]->segment(std::move(memtable), name)};
+    if (pSegment)
+    {
+        if (!m_level0_segment_flushed_notification.HasBeenNotified())
+        {
+            m_level0_segment_flushed_notification.Notify();
+        }
+    }
+    return pSegment;
+}
+
+auto levels_t::restore() noexcept -> void
+{
+    absl::WriterMutexLock lock{&m_mutex};
+    for (auto &level : m_levels)
+    {
+        level->restore();
+    }
+}
+
+void levels_t::compaction_task(std::stop_token stoken) noexcept
+{
+    while (!stoken.stop_requested())
+    {
+        m_level0_segment_flushed_notification.WaitForNotification();
+
+        auto ok{compact()};
+        if (!ok)
+        {
+            spdlog::error("Compaction failed.");
+        }
+        // ASSERT(ok);
+    }
+}
+
+void levels_t::move_from(levels_t &&other) noexcept
+{
+    m_pConfig = std::move(other.m_pConfig);
+    m_pManifest = std::move(other.m_pManifest);
+    m_levels = std::move(other.m_levels);
+
+    other.m_compaction_thread.request_stop();
+    if (other.m_compaction_thread.joinable())
+    {
+        spdlog::debug("Waiting for compaction thread to finish");
+        other.m_compaction_thread.join();
+    }
+    else
+    {
+        spdlog::debug("Compaction thread is not joinable, skipping join");
+    }
+    m_compaction_thread = std::jthread([this](std::stop_token stoken) { compaction_task(stoken); });
+}
+
+} // namespace structures::lsmtree::levels

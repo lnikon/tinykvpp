@@ -1,0 +1,57 @@
+[tools]
+node = "latest"
+python = "latest"
+buf = "latest"
+
+[env]
+PROFILE = "debug"
+COMPILER = "clang"
+JOBS = "24"
+IMAGE = "silkeh/clang"
+IMAGE_VERSION = "latest"
+
+[tasks.conan]
+run = [
+  "conan install . --output-folder=build --build=missing --profile=./conan/profiles/$PROFILE-$COMPILER",
+  "cmake --preset conan-$PROFILE",
+]
+
+[tasks.build]
+run = ["cmake --build ./build -j$JOBS"]
+
+[tasks.image]
+run = """
+  podman build \
+  --build-arg TARGET=$IMAGE:$IMAGE_VERSION \
+  --build-arg COMPILER=$COMPILER \
+  --build-arg BUILD_TYPE=$PROFILE . --file Dockerfile --tag tinykvpp-$COMPILER
+  """
+
+[tasks.up_standalone]
+run = """
+  cd infra
+  podman compose -f docker-compose.standalone.yaml up -d
+"""
+
+[tasks.down_standalone]
+run = """
+  cd infra
+  podman compose -f docker-compose.standalone.yaml down -v 
+"""
+
+[tasks.up_cluster]
+run = """
+  cd infra
+  podman compose -f docker-compose.cluster.yaml up -d
+"""
+
+[tasks.down_cluster]
+run = """
+  cd infra
+  podman compose -f docker-compose.cluster.yaml down -v 
+"""
+
+[tasks.kvtest]
+run = """
+  ./tests/go/kvtest/cmd/kvtest/kvtest -c {{arg(name="kvtest.yml", default="./tests/go/kvtest/cmd/kvtest/kvtest.yml")}} run
+"""

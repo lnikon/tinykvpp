@@ -12,15 +12,13 @@
 #include <cxxopts.hpp>
 #include <magic_enum/magic_enum.hpp>
 
-#include "config.h"
-#include "db.h"
-#include "db_config.h"
-#include "lsmtree.h"
-#include "manifest/manifest.h"
-#include "wal/common.h"
-#include "memtable.h"
+#include "db/db.h"
 #include "raft/raft.h"
+#include "structures/memtable/memtable.h"
+#include "structures/lsmtree/lsmtree.h"
+#include "wal/common.h"
 #include "server/grpc_server.h"
+#include "config/config.h"
 
 using tk_key_t = structures::memtable::memtable_t::record_t::key_t;
 using tk_value_t = structures::memtable::memtable_t::record_t::value_t;
@@ -166,14 +164,14 @@ auto main(int argc, char *argv[]) -> int
 
         // Load the config
         const auto &configPath = parsedOptions["config"].as<std::string>();
-        const auto &configJson = loadConfigJson(configPath);
-        validateConfigJson(configJson);
+        const auto &configJson = config::loadConfigJson(configPath);
+        config::validateConfigJson(configJson);
 
         // Setup the logging
-        configureLogging(configJson["logging"]["loggingLevel"].get<std::string>());
+        config::configureLogging(configJson["logging"]["loggingLevel"].get<std::string>());
 
         // Setup database config
-        auto pDbConfig = initializeDatabaseConfig(configJson, configPath);
+        auto pDbConfig = config::initializeDatabaseConfig(configJson, configPath);
         if (pDbConfig->WALConfig.storageType == wal::log_storage_type_k::undefined_k)
         {
             spdlog::error("Undefined WAL storage type");
@@ -259,7 +257,7 @@ auto main(int argc, char *argv[]) -> int
         };
 
         // Start consensus module and gRPC server
-        auto serverThread = std::jthread([&pServer] { pServer->Wait(); });
+        auto serverThread = std::jthread([&pServer] -> void { pServer->Wait(); });
 
         // Start consensus module
         if (pConsensusModule)
