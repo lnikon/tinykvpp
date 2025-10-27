@@ -1,11 +1,6 @@
-//
-// Created by nikon on 1/22/22.
-//
+#include <gtest/gtest.h>
 
-#include <catch2/catch_test_macros.hpp>
-#include <string>
-
-#include "memtable.h"
+#include "structures/memtable/memtable.h"
 
 using namespace structures;
 
@@ -14,7 +9,7 @@ using record_t = memtable::memtable_t::record_t;
 using record_key_t = structures::memtable::memtable_t::record_t::key_t;
 using record_value_t = structures::memtable::memtable_t::record_t::value_t;
 
-TEST_CASE("Emplace and Find", "[MemTable]")
+TEST(MemTableTest, EmplaceAndFind)
 {
     memtable_t mt;
     mt.emplace(record_t{record_key_t{"B"}, record_value_t{"123"}});
@@ -23,14 +18,14 @@ TEST_CASE("Emplace and Find", "[MemTable]")
     mt.emplace(record_t{record_key_t{"C"}, record_value_t{"Hello"}});
 
     auto record = mt.find(record_key_t{"C"});
-    REQUIRE(record->m_key == record_key_t{"C"});
-    REQUIRE(record->m_value == record_value_t{"Hello"});
+    EXPECT_EQ(record->m_key, record_key_t{"C"});
+    EXPECT_EQ(record->m_value, record_value_t{"Hello"});
 
     record = mt.find(record_key_t{"V"});
-    REQUIRE(record == std::nullopt);
+    EXPECT_EQ(record, std::nullopt);
 }
 
-TEST_CASE("Check record size before and after insertion", "[MemTable]")
+TEST(MemTableTest, CheckRecordSize)
 {
     {
         memtable_t     mt;
@@ -40,11 +35,11 @@ TEST_CASE("Check record size before and after insertion", "[MemTable]")
         mt.emplace(record_t{k, v});
 
         auto record = mt.find(record_key_t{"B"});
-        REQUIRE(record != std::nullopt);
+        EXPECT_NE(record, std::nullopt);
 
         size_t actualSize = record->size();
         size_t expectedSize = k.size() + v.size();
-        REQUIRE(actualSize == expectedSize);
+        EXPECT_EQ(actualSize, expectedSize);
     }
 
     {
@@ -55,11 +50,11 @@ TEST_CASE("Check record size before and after insertion", "[MemTable]")
         mt.emplace(record_t{k, v});
 
         auto record = mt.find(record_key_t{"B"});
-        REQUIRE(record != std::nullopt);
+        EXPECT_NE(record, std::nullopt);
 
         size_t actualSize = record->size();
         size_t expectedSize = k.size() + v.size();
-        REQUIRE(actualSize == expectedSize);
+        EXPECT_EQ(actualSize, expectedSize);
     }
 
     {
@@ -71,16 +66,16 @@ TEST_CASE("Check record size before and after insertion", "[MemTable]")
         mt.emplace(record);
 
         auto recordOpt = mt.find(k);
-        REQUIRE(recordOpt != std::nullopt);
+        EXPECT_NE(recordOpt, std::nullopt);
         record = *recordOpt;
 
         size_t actualSize = record.size();
         size_t expectedSize = k.size() + v.size();
-        REQUIRE(actualSize == expectedSize);
+        EXPECT_EQ(actualSize, expectedSize);
     }
 }
 
-TEST_CASE("Check size", "[MemTable]")
+TEST(MemTableTest, CheckSize)
 {
     memtable_t mt;
     auto       k1 = record_key_t{"B"}, k2 = record_key_t{"A"}, k3 = record_key_t{"Z"};
@@ -90,10 +85,10 @@ TEST_CASE("Check size", "[MemTable]")
     mt.emplace(record_t{k3, v3});
 
     // TODO: Not sure if this a good/correct way to check MemTable::Size() :)
-    REQUIRE(mt.size() == k1.size() + v1.size() + k2.size() + v2.size() + k3.size() + v3.size());
+    EXPECT_EQ(mt.size(), k1.size() + v1.size() + k2.size() + v2.size() + k3.size() + v3.size());
 }
 
-TEST_CASE("Check count", "[MemTable]")
+TEST(MemTableTest, CheckCount)
 {
     memtable_t mt;
     mt.emplace(record_t{record_key_t{"B"}, record_value_t{"123"}});
@@ -101,5 +96,5 @@ TEST_CASE("Check count", "[MemTable]")
     mt.emplace(record_t{record_key_t{"Z"}, record_value_t{"z`34.44"}});
     mt.emplace(record_t{record_key_t{"C"}, record_value_t{"Hello"}});
 
-    REQUIRE(mt.count() == 4);
+    EXPECT_EQ(mt.count(), 4);
 }

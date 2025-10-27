@@ -51,3 +51,6 @@ current
 
 # Compiled Protobufs
 *.pb.*
+
+# node
+node_modules
