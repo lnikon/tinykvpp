@@ -61,7 +61,7 @@ class level_t
     [[__nodiscard__]] auto bytes_used() const noexcept -> std::size_t;
 
   private:
-    void purge(const segments::regular_segment::shared_ptr_t &pSegment) noexcept;
+    void purge(segments::regular_segment::shared_ptr_t pSegment) noexcept;
 
     mutable absl::Mutex m_mutex;
 

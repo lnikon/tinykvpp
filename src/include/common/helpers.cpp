@@ -1,14 +1,6 @@
-#include <algorithm>
-#include <iterator>
-#include <random>
-#include <array>
+#include "common/helpers.h"
 
-#include <fmt/core.h>
-
-#include "structures/lsmtree/segments/helpers.h"
-#include "common/uuid.h"
-
-namespace structures::lsmtree::segments::helpers
+namespace common
 {
 
 auto uuid() -> std::string
@@ -24,15 +16,13 @@ auto uuid() -> std::string
     return to_string(uuids::basic_uuid_random_generator{gen}());
 }
 
-auto segment_name() -> types::name_t
+auto segment_name() -> std::string
 {
-    return types::name_t{fmt::format("segment_{}", uuid())};
+    return fmt::format("segment_{}", uuid());
 }
 
-auto segment_path(const std::filesystem::path &datadir, const types::name_t &name)
+auto segment_path(const std::filesystem::path &datadir, const std::string &name)
     -> std::filesystem::path
 {
     return datadir / name;
 }
-
-} // namespace structures::lsmtree::segments::helpers

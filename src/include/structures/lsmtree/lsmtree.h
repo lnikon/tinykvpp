@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+#include <expected>
 #include <memory>
 #include <optional>
 #include <sys/types.h>
@@ -17,10 +19,16 @@
 namespace structures::lsmtree
 {
 
-enum class lsmtree_status_k : uint8_t
+enum class lsmtree_success_k : std::int8_t
 {
+    undefined_k = -1,
     ok_k,
     memtable_reset_k,
+};
+
+enum class lsmtree_error_k : std::int8_t
+{
+    undefined_k = -1,
     put_failed_k,
     get_failed_k,
     recover_failed_k,
@@ -34,7 +42,6 @@ enum class lsmtree_status_k : uint8_t
     level_add_failed_k,
     level_compact_failed_k,
     level_purge_failed_k,
-    unknown_error_k
 };
 
 class lsmtree_t final
@@ -55,21 +62,21 @@ class lsmtree_t final
     lsmtree_t(const lsmtree_t &) = delete;
     auto operator=(const lsmtree_t &) -> lsmtree_t & = delete;
 
-    lsmtree_t(lsmtree_t &&other) noexcept;
-    auto operator=(lsmtree_t &&other) noexcept -> lsmtree_t &;
+    lsmtree_t(lsmtree_t &&other) noexcept = delete;
+    auto operator=(lsmtree_t &&other) noexcept -> lsmtree_t & = delete;
 
     ~lsmtree_t() noexcept;
 
-    [[nodiscard]] auto put(record_t record) noexcept -> lsmtree_status_k;
+    [[nodiscard]] auto put(record_t record) noexcept
+        -> std::expected<lsmtree_success_k, lsmtree_error_k>;
+
     [[nodiscard]] auto get(const key_t &key) noexcept -> std::optional<record_t>;
 
   private:
     void memtable_flush_task(std::stop_token stoken) noexcept;
-    void move_from(lsmtree_t &&other) noexcept;
 
     config::shared_ptr_t m_pConfig;
 
-    // TODO(lnikon): Add absl:: thread guards!
     absl::Mutex                                            m_mutex;
     std::optional<memtable::memtable_t> m_table            ABSL_GUARDED_BY(m_mutex);
     db::manifest::shared_ptr_t m_pManifest                 ABSL_GUARDED_BY(m_mutex);
@@ -82,7 +89,9 @@ using shared_ptr_t = std::shared_ptr<lsmtree_t>;
 
 struct lsmtree_builder_t final
 {
-    using wal_t = wal::shared_ptr_t<raft::v1::LogEntry>;
+    using entry_t = raft::v1::LogEntry;
+    using wal_t = wal::shared_ptr_t<entry_t>;
+
     [[nodiscard]] auto
     build(config::shared_ptr_t pConfig, db::manifest::shared_ptr_t pManifest, wal_t pWal) const
         -> std::shared_ptr<lsmtree_t>;

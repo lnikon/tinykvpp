@@ -1,3 +1,6 @@
+#include <absl/time/clock.h>
+#include <absl/time/time.h>
+#include <expected>
 #include <memory>
 #include <optional>
 #include <cassert>
@@ -34,22 +37,6 @@ lsmtree_t::lsmtree_t(
 {
 }
 
-lsmtree_t::lsmtree_t(lsmtree_t &&other) noexcept
-{
-    absl::WriterMutexLock otherLock{&other.m_mutex};
-    move_from(std::move(other));
-}
-
-auto lsmtree_t::operator=(lsmtree_t &&other) noexcept -> lsmtree_t &
-{
-    if (this != &other)
-    {
-        concurrency::absl_dual_mutex_lock_guard lock{m_mutex, other.m_mutex};
-        move_from(std::move(other));
-    }
-    return *this;
-}
-
 lsmtree_t::~lsmtree_t() noexcept
 {
     m_flushing_thread.request_stop();
@@ -57,6 +44,7 @@ lsmtree_t::~lsmtree_t() noexcept
     {
         spdlog::debug("Waiting for flushing thread to finish");
         m_flushing_thread.join();
+        spdlog::debug("Waiting for flushing thread to finish... Done");
     }
     else
     {
@@ -64,7 +52,7 @@ lsmtree_t::~lsmtree_t() noexcept
     }
 }
 
-auto lsmtree_t::put(record_t record) noexcept -> lsmtree_status_k
+auto lsmtree_t::put(record_t record) noexcept -> std::expected<lsmtree_success_k, lsmtree_error_k>
 {
     assert(m_pConfig);
 
@@ -79,10 +67,10 @@ auto lsmtree_t::put(record_t record) noexcept -> lsmtree_status_k
     {
         m_flushing_queue.push(std::move(m_table.value()));
         m_table = std::make_optional<memtable::memtable_t>();
-        return lsmtree_status_k::memtable_reset_k;
+        return lsmtree_success_k::memtable_reset_k;
     }
 
-    return lsmtree_status_k::ok_k;
+    return lsmtree_success_k::ok_k;
 }
 
 auto lsmtree_t::get(const key_t &key) noexcept -> std::optional<record_t>
@@ -104,14 +92,36 @@ auto lsmtree_t::get(const key_t &key) noexcept -> std::optional<record_t>
     // Lookup in immutable memtables
     if (!result.has_value())
     {
+        spdlog::info(
+            "cant find record {} in memtable... searching in flush queues size={}",
+            key.m_key,
+            m_flushing_queue.size()
+        );
         result = m_flushing_queue.find<memtable::memtable_t::record_t>(key);
+        if (result.has_value())
+        {
+            spdlog::info("found record {} in flushing queues", key.m_key);
+        }
+    }
+    else
+    {
+        spdlog::info("found record {} in memtable", key.m_key);
     }
 
     // If key isn't in in-memory table, then it probably was flushed.
     // Lookup for the key in on-disk segments
     if (!result.has_value())
     {
+        spdlog::info("cant find record {} in flush queues... searching in levels", key.m_key);
         result = m_pLevels->record(key);
+        if (!result.has_value())
+        {
+            spdlog::info("cant find record {} in levels :(((", key.m_key);
+        }
+        else
+        {
+            spdlog::info("found record {} in levels", key.m_key);
+        }
     }
 
     return result;
@@ -134,63 +144,47 @@ void lsmtree_t::memtable_flush_task(std::stop_token stoken) noexcept
                 m_flushing_queue.size()
             );
 
-            auto memtables = m_flushing_queue.pop_all();
-            while (!memtables.empty())
+            // auto memtables = m_flushing_queue.pop_all();
+            auto memtables = m_flushing_queue.reserve();
+            if (!memtables.has_value())
             {
-                auto memtable = memtables.front();
-                memtables.pop_front();
+                return;
+            }
 
+            for (auto &memtable : memtables.value())
+            {
                 // TODO: Assert will crash the program, maybe we
                 // should return an error code?
                 absl::WriterMutexLock lock{&m_mutex};
                 bool                  ok{m_pLevels->flush_to_level0(std::move(memtable))};
                 assert(ok);
             }
+
+            m_flushing_queue.consume();
             return;
         }
 
-        if (std::optional<memtable::memtable_t> memtable = m_flushing_queue.pop();
-            memtable.has_value() && !memtable->empty())
-        {
-            spdlog::debug(
-                "Flushing memtable to level0. "
-                "memtable.size={}, flushing_queue.size={}",
-                memtable.value().size(),
-                m_flushing_queue.size()
-            );
-
-            // TODO: Assert will crash the program, maybe we should
-            // return an error code?
-            absl::WriterMutexLock lock{&m_mutex};
-            bool                  ok{m_pLevels->flush_to_level0(std::move(memtable.value()))};
-            assert(ok);
-        }
+        // auto memtables = m_flushing_queue.reserve();
+        // if (!memtables.has_value())
+        // {
+        //     absl::SleepFor(absl::Milliseconds(50));
+        //     continue;
+        // }
+        //
+        // auto idx{1};
+        // for (auto &memtable : memtables.value())
+        // {
+        //     spdlog::debug("LSMTree: Flushing {}/{} memtable into disk", idx++,
+        //     memtables->size());
+        //
+        //     // TODO: Assert will crash the program, maybe we should
+        //     // return an error code?
+        //     absl::WriterMutexLock lock{&m_mutex};
+        //     bool                  ok{m_pLevels->flush_to_level0(std::move(memtable))};
+        //     assert(ok);
+        // }
+        // m_flushing_queue.consume();
     }
-}
-
-void lsmtree_t::move_from(lsmtree_t &&other) noexcept
-{
-    m_pConfig = std::move(other.m_pConfig);
-    m_table = std::move(other.m_table);
-    m_pManifest = std::move(other.m_pManifest);
-    m_pLevels = std::move(other.m_pLevels);
-
-    other.m_flushing_thread.request_stop();
-    if (other.m_flushing_thread.joinable())
-    {
-        spdlog::debug("Waiting for flushing thread to finish");
-        other.m_flushing_thread.join();
-    }
-    else
-    {
-        spdlog::debug("Flushing thread is not joinable, skipping join");
-    }
-
-    // Start a new flushing thread for the moved object
-    m_flushing_queue = std::move(other.m_flushing_queue);
-    m_flushing_thread =
-        std::jthread([this](std::stop_token stoken) { memtable_flush_task(stoken); });
-    spdlog::debug("Flushing thread started for moved lsmtree_t object");
 }
 
 auto lsmtree_builder_t::build(
@@ -275,7 +269,7 @@ auto lsmtree_builder_t::build_levels_from_manifest(
     for (const auto &record : records)
     {
         std::visit(
-            [&](auto record)
+            [&](auto record) -> auto
             {
                 using T = std::decay_t<decltype(record)>;
                 if constexpr (std::is_same_v<T, db::manifest::manifest_t::segment_record_t>)

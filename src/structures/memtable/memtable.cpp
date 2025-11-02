@@ -1,6 +1,7 @@
 #include "structures/memtable/memtable.h"
 
 #include <cstddef>
+#include <spdlog/spdlog.h>
 #include <utility>
 #include <vector>
 
@@ -95,6 +96,7 @@ auto memtable_t::record_t::operator>(const memtable_t::record_t &record) const -
 
 auto memtable_t::record_t::operator==(const record_t &record) const -> bool
 {
+    spdlog::info("memtable::==: this.{} record.{}", m_key.m_key, record.m_key.m_key);
     return m_key == record.m_key;
 }
 

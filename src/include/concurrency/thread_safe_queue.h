@@ -1,12 +1,16 @@
 #pragma once
 
+#include <absl/base/thread_annotations.h>
 #include <algorithm>
 #include <deque>
+#include <iterator>
 #include <optional>
 
 #include <absl/synchronization/mutex.h>
 #include <absl/time/time.h>
+#include <spdlog/spdlog.h>
 
+#include "db/db_config.h"
 #include "helpers.h"
 
 namespace concurrency
@@ -17,7 +21,7 @@ template <typename TItem> class thread_safe_queue_t
   public:
     using queue_t = std::deque<TItem>;
 
-    thread_safe_queue_t() = default;
+    thread_safe_queue_t() noexcept;
 
     thread_safe_queue_t(const thread_safe_queue_t &) = delete;
     auto operator=(const thread_safe_queue_t &) -> thread_safe_queue_t & = delete;
@@ -32,6 +36,16 @@ template <typename TItem> class thread_safe_queue_t
     auto pop() -> std::optional<TItem>;
     auto pop_all() -> queue_t;
 
+    // Transactional interface.
+    // NOLINTBEGIN(modernize-use-trailing-return-type)
+    /**
+     * Returns stored items in oldest-to-newest order (queue in a reversed order).
+     */
+    std::optional<std::vector<TItem>> reserve() noexcept ABSL_LOCKS_EXCLUDED(m_mutex);
+    bool                              consume() noexcept ABSL_LOCKS_EXCLUDED(m_mutex);
+
+    // NOLINTEND(modernize-use-trailing-return-type)
+
     auto size() -> std::size_t;
 
     template <typename TRecord, typename TKey = TRecord::Key>
@@ -40,11 +54,19 @@ template <typename TItem> class thread_safe_queue_t
     void shutdown();
 
   private:
-    mutable absl::Mutex m_mutex;
-    queue_t m_queue     ABSL_GUARDED_BY(m_mutex);
-
     std::atomic<bool> m_shutdown{false};
+
+    mutable absl::Mutex m_mutex;
+
+    queue_t m_queue                              ABSL_GUARDED_BY(m_mutex);
+    std::optional<std::uint64_t> m_reservedIndex ABSL_GUARDED_BY(m_mutex);
 };
+
+template <typename TItem>
+inline thread_safe_queue_t<TItem>::thread_safe_queue_t() noexcept
+    : m_reservedIndex{std::nullopt}
+{
+}
 
 template <typename TItem>
 inline thread_safe_queue_t<TItem>::thread_safe_queue_t(thread_safe_queue_t &&other) noexcept
@@ -102,7 +124,50 @@ template <typename TItem> inline auto thread_safe_queue_t<TItem>::pop() -> std::
 template <typename TItem> inline auto thread_safe_queue_t<TItem>::pop_all() -> queue_t
 {
     absl::WriterMutexLock lock(&m_mutex);
+    spdlog::info("thread_safe_queue_t<TItem>::pop_all()");
     return m_queue.empty() ? queue_t{} : std::move(m_queue);
+}
+
+template <typename TItem>
+inline auto thread_safe_queue_t<TItem>::reserve() noexcept -> std::optional<std::vector<TItem>>
+{
+    absl::WriterMutexLock lock{&m_mutex};
+
+    if (m_queue.empty())
+    {
+        spdlog::debug("thread_safe_queue: Queue is empty. Nothing to reserve");
+        return std::nullopt;
+    }
+
+    if (m_reservedIndex.has_value())
+    {
+        spdlog::error("thread_safe_queue: Another reservation is in progress");
+        return std::nullopt;
+    }
+    m_reservedIndex = m_queue.size();
+
+    return std::make_optional<std::vector<TItem>>(std::rbegin(m_queue), std::rend(m_queue));
+}
+
+template <typename TItem> inline auto thread_safe_queue_t<TItem>::consume() noexcept -> bool
+{
+    absl::WriterMutexLock lock{&m_mutex};
+
+    if (!m_reservedIndex.has_value())
+    {
+        spdlog::error("thread_safe_queue: No reservation to consume");
+        return false;
+    }
+
+    const auto consumeUpTo{m_reservedIndex.value()};
+    ASSERT(consumeUpTo != 0);
+    for (std::uint64_t idx{0}; idx < consumeUpTo; idx++)
+    {
+        m_queue.pop_front();
+    }
+    m_reservedIndex = std::nullopt;
+
+    return true;
 }
 
 template <typename TItem> inline auto thread_safe_queue_t<TItem>::size() -> std::size_t
@@ -117,6 +182,11 @@ inline auto thread_safe_queue_t<TItem>::find(const TKey &recordKey) const noexce
     -> std::optional<TRecord>
 {
     absl::ReaderMutexLock lock(&m_mutex);
+
+    if (m_queue.empty())
+    {
+        spdlog::info("MEMTABLES ARE EMPTY");
+    }
 
     for (const auto &memtable : m_queue)
     {

@@ -27,6 +27,8 @@ target_link_libraries(
         WAL
         Raft
         RaftProtoObjects
+        Microsoft.GSL::GSL
+        libuuid::libuuid
 )
 
 add_executable(LSMTreeTest lsmtree_test.cpp)
@@ -34,7 +36,7 @@ set_target_properties(LSMTreeTest PROPERTIES CXX_STANDARD 23)
 target_link_libraries(
     LSMTreeTest
     PRIVATE
-        Catch2::Catch2WithMain
+        gtest::gtest
         spdlog::spdlog
         fmt::fmt
         LSMTree
@@ -48,6 +50,5 @@ target_link_libraries(
         Concurrency
 )
 
-# Register Catch2 tests with CTest
-include(Catch)
-catch_discover_tests(LSMTreeTest)
+include(GoogleTest)
+gtest_discover_tests(LSMTreeTest)

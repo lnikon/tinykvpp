@@ -1,5 +1,6 @@
 #pragma once
 
+#include <absl/time/time.h>
 #include <optional>
 #include <vector>
 
@@ -13,6 +14,8 @@
 namespace structures::lsmtree::levels
 {
 
+static constexpr const auto gWaitForSegmentFlushNotificationTimeout{absl::Milliseconds(50)};
+
 class levels_t
 {
   public:
@@ -25,8 +28,8 @@ class levels_t
     levels_t(const levels_t &) = delete;
     auto operator=(const levels_t &) -> levels_t & = delete;
 
-    levels_t(levels_t &&other) noexcept;
-    auto operator=(levels_t &&other) noexcept -> levels_t &;
+    levels_t(levels_t &&other) noexcept = delete;
+    auto operator=(levels_t &&other) noexcept -> levels_t & = delete;
 
     ~levels_t() noexcept;
 
@@ -34,16 +37,13 @@ class levels_t
     [[nodiscard]] auto compact() -> segments::regular_segment::shared_ptr_t;
     [[nodiscard]] auto level() noexcept -> level::shared_ptr_t;
     [[nodiscard]] auto level(std::size_t idx) noexcept -> level::shared_ptr_t;
-
     [[nodiscard]] auto size() const noexcept -> levels_storage_t::size_type;
-
     [[nodiscard]] auto flush_to_level0(memtable::memtable_t memtable) const noexcept
         -> segments::regular_segment::shared_ptr_t;
 
     auto restore() noexcept -> void;
 
   private:
-    void move_from(levels_t &&other) noexcept;
     void compaction_task(std::stop_token stoken) noexcept;
 
     config::shared_ptr_t m_pConfig;

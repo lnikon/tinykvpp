@@ -7,9 +7,9 @@
 namespace db::manifest
 {
 
-manifest_t::manifest_t(fs::path_t path, wal::wal_t<manifest_t::record_t> wal) noexcept
+manifest_t::manifest_t(fs::path_t path, wal::shared_ptr_t<manifest_t::record_t> wal) noexcept
     : m_path{std::move(path)},
-      m_wal{std::move(wal)}
+      m_pWal{std::move(wal)}
 {
 }
 
@@ -20,7 +20,7 @@ auto manifest_t::path() const noexcept -> fs::path_t
 
 auto manifest_t::add(record_t info) -> bool
 {
-    return m_enabled ? m_wal.add(std::move(info)) : [this]()
+    return m_enabled ? m_pWal->add(std::move(info)) : [this]() -> bool
     {
         spdlog::info("Manifest at {} is disabled - skipping record addition", m_path.c_str());
         return false;
@@ -29,27 +29,27 @@ auto manifest_t::add(record_t info) -> bool
 
 auto manifest_t::records() const noexcept -> std::vector<record_t>
 {
-    return m_wal.records();
+    return m_pWal->records();
 }
 
 void manifest_t::enable()
 {
     m_enabled = true;
     spdlog::info("Manifest at {} enabled - ready to record changes", m_path.c_str());
-    spdlog::debug("Manifest enable triggered with {} pending records", m_wal.size());
+    spdlog::debug("Manifest enable triggered with {} pending records", m_pWal->size());
 }
 
 void manifest_t::disable()
 {
     m_enabled = false;
     spdlog::info("Manifest at {} disabled - changes will not be recorded", m_path.c_str());
-    spdlog::debug("Manifest disable triggered with {} pending records", m_wal.size());
+    spdlog::debug("Manifest disable triggered with {} pending records", m_pWal->size());
 }
 
-auto manifest_builder_t::build(fs::path_t path, wal::wal_t<manifest_t::record_t> wal)
+auto manifest_builder_t::build(fs::path_t path, wal::shared_ptr_t<manifest_t::record_t> pWal)
     -> std::optional<manifest_t>
 {
-    return std::make_optional(manifest_t{std::move(path), std::move(wal)});
+    return std::make_optional(manifest_t{std::move(path), std::move(pWal)});
 }
 
 } // namespace db::manifest

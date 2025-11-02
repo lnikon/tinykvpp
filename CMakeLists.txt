@@ -48,6 +48,8 @@ find_package(prometheus-cpp REQUIRED)
 find_package(libassert REQUIRED)
 find_package(magic_enum REQUIRED)
 find_package(liburing REQUIRED)
+find_package(Microsoft.GSL REQUIRED)
+find_package(libuuid REQUIRED)
 
 add_subdirectory(proto)
 add_subdirectory(src)

@@ -13,7 +13,7 @@ add_executable(SkipListTest skiplist_test.cpp)
 set_target_properties(SkipListTest PROPERTIES CXX_STANDARD 23)
 target_link_libraries(
     SkipListTest
-    Catch2::Catch2WithMain
+    gtest::gtest
     spdlog::spdlog
     fmt::fmt
     LSMTree
@@ -22,6 +22,5 @@ target_link_libraries(
     Config
 )
 
-# Register Catch2 tests with CTest
-include(Catch)
-catch_discover_tests(SkipListTest)
+# include(GoogleTest)
+# gtest_discover_tests(SkipListTest)

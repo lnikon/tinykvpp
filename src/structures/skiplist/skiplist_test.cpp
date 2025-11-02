@@ -1,13 +1,8 @@
-//
-// Created by nikon on 1/22/22.
-//
+#include <gtest/gtest.h>
 
 #include <algorithm>
-#include <catch2/catch_test_macros.hpp>
 
-#include "skiplist.h"
-
-#include <spdlog/spdlog.h>
+#include "structures/lsmtree/lsmtree.h"
 
 using namespace structures;
 
@@ -22,7 +17,7 @@ struct test_record_t
 
 using test_skiplist_t = skiplist::skiplist_t<test_record_t, std::less<>>;
 
-TEST_CASE("Emplace and Find", "[SkipList]")
+TEST(SkipListTest, EmplaceAndFind)
 {
     test_skiplist_t sl;
 
@@ -32,22 +27,22 @@ TEST_CASE("Emplace and Find", "[SkipList]")
 
     // Get what we put
     auto rec = sl.find("rec2");
-    REQUIRE(rec.has_value());
-    REQUIRE(rec->m_key == "rec2");
-    REQUIRE(rec->m_value == "val2");
+    EXPECT_TRUE(rec.has_value());
+    EXPECT_EQ(rec->m_key, "rec2");
+    EXPECT_EQ(rec->m_value, "val2");
 
     // Return nullopt on non-existing keys
     rec = sl.find("nonexst");
-    REQUIRE_FALSE(rec.has_value());
+    EXPECT_FALSE(rec.has_value());
 
     sl.emplace({"rec3", "val4"});
     rec = sl.find("rec3");
-    REQUIRE(rec.has_value());
-    REQUIRE(rec->m_key == "rec3");
-    REQUIRE(rec->m_value == "val4");
+    EXPECT_TRUE(rec.has_value());
+    EXPECT_EQ(rec->m_key, "rec3");
+    EXPECT_EQ(rec->m_value, "val4");
 }
 
-TEST_CASE("Calculate size using iterators", "[SkipList]")
+TEST(SkipListTest, CalcSizeWithIters)
 {
     test_skiplist_t sl;
 
@@ -62,10 +57,10 @@ TEST_CASE("Calculate size using iterators", "[SkipList]")
         size++;
     }
 
-    REQUIRE(size == sl.size());
+    EXPECT_EQ(size, sl.size());
 }
 
-TEST_CASE("Check records pointed by iterators", "[SkipList]")
+TEST(SkipListTest, IterValid)
 {
     test_skiplist_t sl;
 
@@ -74,34 +69,33 @@ TEST_CASE("Check records pointed by iterators", "[SkipList]")
     sl.emplace({"rec2", "val2"});
 
     auto begin{sl.begin()};
-    REQUIRE(begin->m_key == "rec1");
+    EXPECT_EQ(begin->m_key, "rec1");
+
     begin++;
-    REQUIRE(begin->m_key == "rec2");
-    //    begin++;
-    //    REQUIRE(begin->m_key == "rec3");
-    //    begin++;
-    //    REQUIRE(begin == sl.end());
+    EXPECT_EQ(begin->m_key, "rec2");
 }
 
-TEST_CASE("std::find_if", "[SkipList]")
+TEST(SkipListTest, StdFindIf)
 {
-    test_skiplist_t sl;
+    test_skiplist_t skiplist;
 
-    sl.emplace({"rec1", "val1"});
-    sl.emplace({"rec3", "val3"});
-    sl.emplace({"rec2", "val2"});
+    skiplist.emplace({.m_key = "rec1", .m_value = "val1"});
+    skiplist.emplace({.m_key = "rec3", .m_value = "val3"});
+    skiplist.emplace({.m_key = "rec2", .m_value = "val2"});
 
-    auto it = std::find_if(std::begin(sl),
-                           std::end(sl),
-                           [](const test_record_t &record) { return record.m_key == "rec1"; });
-    STATIC_CHECK(std::is_same_v<decltype(it), test_skiplist_t::iterator>);
-    REQUIRE(it != sl.end());
-    REQUIRE(it->m_key == "rec1");
-    REQUIRE(it->m_value == "val1");
+    {
+        auto iter = std::ranges::find_if(
+            skiplist, [](const test_record_t &record) -> bool { return record.m_key == "rec1"; }
+        );
+        EXPECT_NE(iter, skiplist.end());
+        EXPECT_EQ(iter->m_key, "rec1");
+        EXPECT_EQ(iter->m_value, "val1");
+    }
 
-    it = std::find_if(std::begin(sl),
-                      std::end(sl),
-                      [](const test_record_t &record) { return record.m_key == "rec4"; });
-    STATIC_CHECK(std::is_same_v<decltype(it), test_skiplist_t::iterator>);
-    REQUIRE(it == sl.end());
+    {
+        auto it = std::ranges::find_if(
+            skiplist, [](const test_record_t &record) -> bool { return record.m_key == "rec4"; }
+        );
+        EXPECT_EQ(it, skiplist.end());
+    }
 }

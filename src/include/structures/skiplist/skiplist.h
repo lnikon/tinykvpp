@@ -50,6 +50,8 @@ template <typename record_gt, typename comparator_gt> class skiplist_t
         using pointer = Pointer;
         using reference = Reference;
 
+        iterator_base() = default;
+
         explicit iterator_base(node_shared_ptr_t node)
             : m_node{node}
         {
@@ -118,6 +120,16 @@ template <typename record_gt, typename comparator_gt> class skiplist_t
     }
 
     [[nodiscard]] auto cend() const -> const_iterator
+    {
+        return const_iterator(nullptr);
+    }
+
+    [[nodiscard]] auto begin() const -> const_iterator
+    {
+        return const_iterator(m_head->forward[0]);
+    }
+
+    [[nodiscard]] auto end() const -> const_iterator
     {
         return const_iterator(nullptr);
     }

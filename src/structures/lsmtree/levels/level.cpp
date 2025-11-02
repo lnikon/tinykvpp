@@ -127,9 +127,9 @@ auto level_t::compact() const noexcept -> segments::regular_segment::shared_ptr_
     };
     if (used < threshold)
     {
-        spdlog::info(
-            "Skipping level={} compaction. Used={}, threshold={}", index(), used, threshold
-        );
+        // spdlog::info(
+        //     "Skipping level={} compaction. Used={}, threshold={}", index(), used, threshold
+        // );
         return nullptr;
     }
 
@@ -196,7 +196,7 @@ void level_t::merge(const segments::regular_segment::shared_ptr_t &pSegment) noe
     // Segments overlapping with input memtable
     auto overlappingSegmentsView =
         m_storage | std::views::filter(
-                        [pSegment](const auto &currentSegment)
+                        [pSegment](const auto &currentSegment) -> auto
                         {
                             return !(
                                 currentSegment->max().value() < pSegment->min().value() ||
@@ -272,7 +272,7 @@ void level_t::merge(const segments::regular_segment::shared_ptr_t &pSegment) noe
 
     // Delete overlapping segments after the merging process is complete
     std::ranges::for_each(
-        overlappingSegmentsView, [this](auto pSegment) { this->purge(pSegment); }
+        overlappingSegmentsView, [this](auto pSegment) -> auto { this->purge(std::move(pSegment)); }
     );
 
     // Flush new segments
@@ -292,14 +292,14 @@ void level_t::purge() noexcept
     {
         pSegment->remove_from_disk();
 
-        auto ok{m_manifest->add(
+        auto success{m_manifest->add(
             db::manifest::manifest_t::segment_record_t{
                 .op = segment_operation_k::remove_segment_k,
                 .name = pSegment->get_name(),
                 .level = idx
             }
         )};
-        ASSERT(ok);
+        ASSERT(success);
     }
     m_storage.clear();
 }
@@ -318,20 +318,21 @@ auto level_t::purge(const segments::types::name_t &segmentName) noexcept -> void
     }
 }
 
-void level_t::purge(const segments::regular_segment::shared_ptr_t &pSegment) noexcept
+void level_t::purge(segments::regular_segment::shared_ptr_t pSegment) noexcept
 {
     absl::WriterMutexLock lock{&m_mutex};
     assert(pSegment);
 
     spdlog::debug("Removing segment {} from level {}", pSegment->get_name(), index());
 
-    ASSERT(m_manifest->add(
+    auto success{m_manifest->add(
         db::manifest::manifest_t::segment_record_t{
             .op = segment_operation_k::remove_segment_k,
             .name = pSegment->get_name(),
             .level = index()
         }
-    ));
+    )};
+    ASSERT(success);
 
     pSegment->remove_from_disk();
     m_storage.remove(pSegment);

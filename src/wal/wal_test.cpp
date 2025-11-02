@@ -63,7 +63,7 @@ class WALTest : public testing::TestWithParam<wal::log_storage_type_k>
         std::filesystem::remove(GetTemporaryFilepath());
     }
 
-    static auto GetWAL() -> std::optional<wal::wal_t<rec_t>>
+    static auto GetWAL()
     {
         return wal::wal_builder_t{}
             .set_file_path(GetTemporaryFilepath())
@@ -84,13 +84,12 @@ std::vector<rec_t> WALTest::Recs = {
 TEST_P(WALTest, SuccessfullyCreatesEmptyWAL)
 {
     auto wal = WALTest::GetWAL();
-
     EXPECT_TRUE(wal.has_value());
 
-    EXPECT_EQ(wal->size(), 0);
-    EXPECT_TRUE(wal->empty());
+    EXPECT_EQ(wal.value()->size(), 0);
+    EXPECT_TRUE(wal.value()->empty());
 
-    auto res{wal->read(0)};
+    auto res{wal.value()->read(0)};
     EXPECT_FALSE(res.has_value());
 }
 
@@ -99,12 +98,12 @@ TEST_P(WALTest, AppendAndCheckSize)
     auto wal = WALTest::GetWAL();
 
     EXPECT_TRUE(wal.has_value());
-    EXPECT_TRUE(wal->add(Recs[0]));
+    EXPECT_TRUE(wal.value()->add(Recs[0]));
 
-    EXPECT_EQ(wal->size(), 1);
-    EXPECT_FALSE(wal->empty());
+    EXPECT_EQ(wal.value()->size(), 1);
+    EXPECT_FALSE(wal.value()->empty());
 
-    auto res{wal->read(0)};
+    auto res{wal.value()->read(0)};
     EXPECT_TRUE(res.has_value());
     EXPECT_EQ(res->key, Recs[0].key);
     EXPECT_EQ(res->value, Recs[0].value);
@@ -120,16 +119,16 @@ TEST_P(WALTest, AppendSameEntryAndCheckSize)
 
     for (const auto &rec : recs)
     {
-        EXPECT_TRUE(wal->add(rec));
+        EXPECT_TRUE(wal.value()->add(rec));
     }
 
-    const auto walSize = wal->size();
+    const auto walSize = wal.value()->size();
     EXPECT_EQ(walSize, recs.size());
-    EXPECT_FALSE(wal->empty());
+    EXPECT_FALSE(wal.value()->empty());
 
     for (const auto &[idx, rec] : std::views::enumerate(recs))
     {
-        auto res{wal->read(idx)};
+        auto res{wal.value()->read(idx)};
         EXPECT_TRUE(res.has_value());
         EXPECT_EQ(res->key, rec.key);
         EXPECT_EQ(res->value, rec.value);
@@ -146,14 +145,14 @@ TEST_P(WALTest, AppendAndRestAndCheckSize)
 
     for (const auto &rec : recs)
     {
-        EXPECT_TRUE(wal->add(rec));
+        EXPECT_TRUE(wal.value()->add(rec));
     }
 
-    EXPECT_EQ(wal->size(), recs.size());
-    EXPECT_FALSE(wal->empty());
-    EXPECT_TRUE(wal->reset());
-    EXPECT_EQ(wal->size(), 0);
-    EXPECT_TRUE(wal->empty());
+    EXPECT_EQ(wal.value()->size(), recs.size());
+    EXPECT_FALSE(wal.value()->empty());
+    EXPECT_TRUE(wal.value()->reset());
+    EXPECT_EQ(wal.value()->size(), 0);
+    EXPECT_TRUE(wal.value()->empty());
 }
 
 TEST_P(WALTest, AppendAndResetLastNAndCheckSize)
@@ -167,23 +166,23 @@ TEST_P(WALTest, AppendAndResetLastNAndCheckSize)
 
     for (const auto &rec : recs)
     {
-        EXPECT_TRUE(wal->add(rec));
+        EXPECT_TRUE(wal.value()->add(rec));
     }
 
-    const auto walSizeBeforeResetLastN = wal->size();
+    const auto walSizeBeforeResetLastN = wal.value()->size();
     EXPECT_EQ(walSizeBeforeResetLastN, recs.size());
-    EXPECT_FALSE(wal->empty());
+    EXPECT_FALSE(wal.value()->empty());
 
-    EXPECT_TRUE(wal->reset_last_n(lastN));
+    EXPECT_TRUE(wal.value()->reset_last_n(lastN));
 
-    const auto walSizeAfteresetLastN = wal->size();
+    const auto walSizeAfteresetLastN = wal.value()->size();
     EXPECT_EQ(walSizeAfteresetLastN, walSizeBeforeResetLastN - lastN);
-    EXPECT_FALSE(wal->empty());
+    EXPECT_FALSE(wal.value()->empty());
 
     for (const auto &[idx, rec] :
          recs | std::views::enumerate | std::views::take(recs.size() - lastN))
     {
-        auto res{wal->read(idx)};
+        auto res{wal.value()->read(idx)};
         EXPECT_TRUE(res.has_value());
         EXPECT_EQ(res->key, rec.key);
         EXPECT_EQ(res->value, rec.value);
@@ -194,9 +193,9 @@ TEST_P(WALTest, ResetLastNOnEmptyWAL)
 {
     auto wal = WALTest::GetWAL();
 
-    EXPECT_FALSE(wal->reset_last_n(std::numeric_limits<std::size_t>::min()));
-    EXPECT_FALSE(wal->reset_last_n(std::numeric_limits<std::size_t>::max() / 2));
-    EXPECT_FALSE(wal->reset_last_n(std::numeric_limits<std::size_t>::max()));
+    EXPECT_FALSE(wal.value()->reset_last_n(std::numeric_limits<std::size_t>::min()));
+    EXPECT_FALSE(wal.value()->reset_last_n(std::numeric_limits<std::size_t>::max() / 2));
+    EXPECT_FALSE(wal.value()->reset_last_n(std::numeric_limits<std::size_t>::max()));
 }
 
 TEST_P(WALTest, ResetAndAdd)
@@ -209,18 +208,18 @@ TEST_P(WALTest, ResetAndAdd)
 
     for (const auto &rec : recs)
     {
-        EXPECT_TRUE(wal->add(rec));
+        EXPECT_TRUE(wal.value()->add(rec));
     }
-    EXPECT_EQ(wal->size(), recs.size());
+    EXPECT_EQ(wal.value()->size(), recs.size());
 
-    EXPECT_TRUE(wal->reset());
-    EXPECT_EQ(wal->size(), 0);
+    EXPECT_TRUE(wal.value()->reset());
+    EXPECT_EQ(wal.value()->size(), 0);
 
     for (const auto &rec : recs)
     {
-        EXPECT_TRUE(wal->add(rec));
+        EXPECT_TRUE(wal.value()->add(rec));
     }
-    EXPECT_EQ(wal->size(), recs.size());
+    EXPECT_EQ(wal.value()->size(), recs.size());
 }
 
 TEST_P(WALTest, ResetLasnNAndAdd)
@@ -234,26 +233,26 @@ TEST_P(WALTest, ResetLasnNAndAdd)
 
     for (const auto &rec : recs)
     {
-        EXPECT_TRUE(wal->add(rec));
+        EXPECT_TRUE(wal.value()->add(rec));
     }
 
-    const auto walSizeBeforeResetLastN = wal->size();
+    const auto walSizeBeforeResetLastN = wal.value()->size();
     EXPECT_EQ(walSizeBeforeResetLastN, recs.size());
-    EXPECT_FALSE(wal->empty());
+    EXPECT_FALSE(wal.value()->empty());
 
-    EXPECT_TRUE(wal->reset_last_n(lastN));
+    EXPECT_TRUE(wal.value()->reset_last_n(lastN));
 
-    const auto walSizeAfteresetLastN = wal->size();
+    const auto walSizeAfteresetLastN = wal.value()->size();
     EXPECT_EQ(walSizeAfteresetLastN, walSizeBeforeResetLastN - lastN);
-    EXPECT_FALSE(wal->empty());
+    EXPECT_FALSE(wal.value()->empty());
 
-    EXPECT_TRUE(wal->add(recs[4]));
-    EXPECT_EQ(wal->size(), walSizeBeforeResetLastN - lastN + 1);
+    EXPECT_TRUE(wal.value()->add(recs[4]));
+    EXPECT_EQ(wal.value()->size(), walSizeBeforeResetLastN - lastN + 1);
 
     for (const auto &[idx, rec] :
          recs | std::views::enumerate | std::views::take(recs.size() - lastN + 1))
     {
-        auto res{wal->read(idx)};
+        auto res{wal.value()->read(idx)};
         EXPECT_TRUE(res.has_value());
         EXPECT_EQ(res->key, rec.key);
         EXPECT_EQ(res->value, rec.value);
@@ -265,7 +264,7 @@ TEST_P(WALTest, GetRecordsOnEmptyWAL)
     auto wal = WALTest::GetWAL();
 
     EXPECT_TRUE(wal.has_value());
-    EXPECT_EQ(wal->records().size(), 0);
+    EXPECT_EQ(wal.value()->records().size(), 0);
 }
 
 TEST_P(WALTest, AppendAndGetRecords)
@@ -278,13 +277,13 @@ TEST_P(WALTest, AppendAndGetRecords)
 
     for (const auto &rec : recs)
     {
-        EXPECT_TRUE(wal->add(rec));
+        EXPECT_TRUE(wal.value()->add(rec));
     }
 
-    EXPECT_EQ(wal->size(), recs.size());
-    EXPECT_FALSE(wal->empty());
+    EXPECT_EQ(wal.value()->size(), recs.size());
+    EXPECT_FALSE(wal.value()->empty());
 
-    std::vector<rec_t> walRecs = wal->records();
+    std::vector<rec_t> walRecs = wal.value()->records();
     EXPECT_EQ(recs.size(), walRecs.size());
 
     for (const auto &[idx, rec] : std::views::enumerate(recs))
@@ -299,8 +298,8 @@ TEST_P(WALTest, ReadOutOfBounds)
     auto wal = WALTest::GetWAL();
 
     ASSERT_TRUE(wal.has_value());
-    EXPECT_FALSE(wal->read(-1).has_value());
-    EXPECT_FALSE(wal->read(1000).has_value());
+    EXPECT_FALSE(wal.value()->read(-1).has_value());
+    EXPECT_FALSE(wal.value()->read(1000).has_value());
 }
 
 // ----
@@ -322,9 +321,9 @@ TEST_P(WALTest, CreateAndRecoverInMemoryWAL)
     // Fill it will mock data
     for (const auto &rec : WALTest::Recs)
     {
-        EXPECT_TRUE(initialWal->add(rec));
+        EXPECT_TRUE(initialWal.value()->add(rec));
     }
-    EXPECT_EQ(initialWal->size(), WALTest::Recs.size());
+    EXPECT_EQ(initialWal.value()->size(), WALTest::Recs.size());
 
     // Recover the WAL
     auto recoveredWal = wal::wal_builder_t{}
@@ -332,9 +331,9 @@ TEST_P(WALTest, CreateAndRecoverInMemoryWAL)
                             .build<rec_t>(wal::log_storage_type_k::in_memory_k);
 
     // Main assertions
-    EXPECT_NE(initialWal->size(), recoveredWal->size());
-    EXPECT_EQ(recoveredWal->size(), 0);
-    EXPECT_TRUE(recoveredWal->empty());
+    EXPECT_NE(initialWal.value()->size(), recoveredWal.value()->size());
+    EXPECT_EQ(recoveredWal.value()->size(), 0);
+    EXPECT_TRUE(recoveredWal.value()->empty());
 }
 
 TEST_P(WALTest, CreateAndRecoverFileBasedWAL)
@@ -352,24 +351,24 @@ TEST_P(WALTest, CreateAndRecoverFileBasedWAL)
     // Fill it will mock data
     for (const auto &rec : WALTest::Recs)
     {
-        EXPECT_TRUE(initialWal->add(rec));
+        EXPECT_TRUE(initialWal.value()->add(rec));
     }
-    EXPECT_EQ(initialWal->size(), WALTest::Recs.size());
-    auto initialRecords = initialWal->records();
+    EXPECT_EQ(initialWal.value()->size(), WALTest::Recs.size());
+    auto initialRecords = initialWal.value()->records();
 
     // Recover the WAL
     auto recoveredWal = wal::wal_builder_t{}
                             .set_file_path(GetTemporaryFilepath())
                             .build<rec_t>(wal::log_storage_type_k::file_based_persistent_k);
-    auto recoveredRecords = initialWal->records();
+    auto recoveredRecords = initialWal.value()->records();
 
     // Main assertions
-    EXPECT_EQ(initialWal->size(), recoveredWal->size());
+    EXPECT_EQ(initialWal.value()->size(), recoveredWal.value()->size());
 
-    for (std::size_t idx{0}; idx < initialWal->size(); idx++)
+    for (std::size_t idx{0}; idx < initialWal.value()->size(); idx++)
     {
-        EXPECT_EQ(initialWal->read(idx)->key, recoveredWal->read(idx)->key);
-        EXPECT_EQ(initialWal->read(idx)->value, recoveredWal->read(idx)->value);
+        EXPECT_EQ(initialWal.value()->read(idx)->key, recoveredWal.value()->read(idx)->key);
+        EXPECT_EQ(initialWal.value()->read(idx)->value, recoveredWal.value()->read(idx)->value);
 
         EXPECT_EQ(initialRecords[idx].key, recoveredRecords[idx].key);
         EXPECT_EQ(initialRecords[idx].value, recoveredRecords[idx].value);

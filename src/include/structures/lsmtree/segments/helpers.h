@@ -1,6 +1,5 @@
 #pragma once
 
-#include "config/config.h"
 #include "structures/lsmtree/segments/types.h"
 
 #include <filesystem>

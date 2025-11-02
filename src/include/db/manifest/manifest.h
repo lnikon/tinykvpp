@@ -157,7 +157,7 @@ struct manifest_t
     using record_t = std::variant<std::monostate, segment_record_t, level_record_t>;
     using storage_t = std::vector<record_t>;
 
-    manifest_t(fs::path_t path, wal::wal_t<manifest_t::record_t> wal) noexcept;
+    manifest_t(fs::path_t path, wal::shared_ptr_t<manifest_t::record_t> pWal) noexcept;
 
     [[nodiscard]] auto path() const noexcept -> fs::path_t;
 
@@ -168,9 +168,9 @@ struct manifest_t
     void disable();
 
   private:
-    bool                             m_enabled{false};
-    fs::path_t                       m_path;
-    wal::wal_t<manifest_t::record_t> m_wal;
+    bool                                    m_enabled{false};
+    fs::path_t                              m_path;
+    wal::shared_ptr_t<manifest_t::record_t> m_pWal;
 };
 
 using shared_ptr_t = std::shared_ptr<manifest_t>;
@@ -233,7 +233,7 @@ auto operator>>(TStream &stream, manifest_t::record_t &rRecord) -> TStream &
 
 struct manifest_builder_t final
 {
-    [[nodiscard]] auto build(fs::path_t path, wal::wal_t<manifest_t::record_t> wal)
+    [[nodiscard]] auto build(fs::path_t path, wal::shared_ptr_t<manifest_t::record_t> wal)
         -> std::optional<manifest_t>;
 };
 

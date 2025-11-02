@@ -375,8 +375,7 @@ auto db_t::onRaftCommit(const raft::v1::LogEntry &entry) -> bool
     {
     case tinykvpp::v1::DatabaseOperation::TYPE_PUT:
     {
-        if (m_pLSMtree->put(std::move(record)) ==
-            structures::lsmtree::lsmtree_status_k::put_failed_k)
+        if (!m_pLSMtree->put(std::move(record)))
         {
             spdlog::error("Failed to update the lsmtree");
             return false;

@@ -191,7 +191,6 @@ auto main(int argc, char *argv[]) -> int
             spdlog::error("Unable to build WAL");
             return EXIT_FAILURE;
         }
-        auto pWAL = wal::make_shared<raft::v1::LogEntry>(std::move(maybeWal.value()));
 
         // Build consensus module
         consensus::node_config_t nodeConfig{
@@ -205,7 +204,9 @@ auto main(int argc, char *argv[]) -> int
         grpcBuilder.AddListeningPort(nodeConfig.m_ip, grpc::InsecureServerCredentials());
 
         std::shared_ptr<consensus::consensus_module_t> pConsensusModule{nullptr};
-        if (auto maybeConsensusModule{maybe_create_consensus_module(pDbConfig, nodeConfig, pWAL)};
+        if (auto maybeConsensusModule{
+                maybe_create_consensus_module(pDbConfig, nodeConfig, maybeWal.value())
+            };
             maybeConsensusModule.has_value())
         {
             pConsensusModule = std::move(maybeConsensusModule.value());
@@ -231,7 +232,8 @@ auto main(int argc, char *argv[]) -> int
         };
 
         // Build LSMTree
-        auto pLSMTree = structures::lsmtree::lsmtree_builder_t{}.build(pDbConfig, pManifest, pWAL);
+        auto pLSMTree =
+            structures::lsmtree::lsmtree_builder_t{}.build(pDbConfig, pManifest, maybeWal.value());
         if (!pLSMTree)
         {
             spdlog::error("Main: Unable to build LSMTree");

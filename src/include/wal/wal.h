@@ -1,5 +1,6 @@
 #pragma once
 
+#include <memory>
 #include <optional>
 #include <variant>
 #include <utility>
@@ -74,7 +75,7 @@ inline auto wal_t<TEntry>::read(size_t index) const -> std::optional<entry_type_
 
 template <typename TEntry> inline auto wal_t<TEntry>::add(entry_type_t entry) -> bool
 {
-    return std::visit([&](auto &storage) { return storage.append(entry); }, m_log);
+    return std::visit([&](auto &storage) -> auto { return storage.append(entry); }, m_log);
 }
 
 template <typename TEntry>
@@ -145,11 +146,14 @@ class wal_builder_t final
     auto set_file_path(fs::path_t path) -> wal_builder_t &;
 
     template <typename TEntry>
-    [[nodiscard]] auto build(log_storage_type_k type) noexcept -> std::optional<wal_t<TEntry>>
+    [[nodiscard]] auto build(log_storage_type_k type) noexcept
+        -> std::optional<wal::shared_ptr_t<TEntry>>
     {
         if (type == log_storage_type_k::in_memory_k)
         {
-            return wal_t{variant_t<TEntry>{in_memory_log_storage_t<TEntry>{}}};
+            return std::make_shared<wal_t<TEntry>>(
+                variant_t<TEntry>{in_memory_log_storage_t<TEntry>{}}
+            );
         }
 
         if (type == log_storage_type_k::file_based_persistent_k)
@@ -166,7 +170,9 @@ class wal_builder_t final
                                    .build();
                 storage.has_value())
             {
-                return wal_t<TEntry>{variant_t<TEntry>{std::move(storage.value())}};
+                return std::make_shared<wal_t<TEntry>>(
+                    variant_t<TEntry>{std::move(storage.value())}
+                );
             }
 
             return std::nullopt;
