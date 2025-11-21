@@ -163,7 +163,7 @@ auto levels_t::record(const key_t &key) const noexcept -> std::optional<record_t
         result = currentLevel->record(key);
         if (result)
         {
-            spdlog::debug("Found key {} at level {}", key.m_key, currentLevel->index());
+            spdlog::debug("Found key at level {}", currentLevel->index());
             break;
         }
     }

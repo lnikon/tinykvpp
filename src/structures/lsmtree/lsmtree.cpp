@@ -93,34 +93,33 @@ auto lsmtree_t::get(const key_t &key) noexcept -> std::optional<record_t>
     if (!result.has_value())
     {
         spdlog::info(
-            "cant find record {} in memtable... searching in flush queues size={}",
-            key.m_key,
+            "cant find record in memtable... searching in flush queues size={}",
             m_flushing_queue.size()
         );
         result = m_flushing_queue.find<memtable::memtable_t::record_t>(key);
         if (result.has_value())
         {
-            spdlog::info("found record {} in flushing queues", key.m_key);
+            spdlog::info("found record in flushing queues");
         }
     }
     else
     {
-        spdlog::info("found record {} in memtable", key.m_key);
+        spdlog::info("found record in memtable");
     }
 
     // If key isn't in in-memory table, then it probably was flushed.
     // Lookup for the key in on-disk segments
     if (!result.has_value())
     {
-        spdlog::info("cant find record {} in flush queues... searching in levels", key.m_key);
+        spdlog::info("cant find record in flush queues... searching in levels");
         result = m_pLevels->record(key);
         if (!result.has_value())
         {
-            spdlog::info("cant find record {} in levels :(((", key.m_key);
+            spdlog::info("cant find record in levels :(((");
         }
         else
         {
-            spdlog::info("found record {} in levels", key.m_key);
+            spdlog::info("found record in levels");
         }
     }
 
@@ -164,26 +163,25 @@ void lsmtree_t::memtable_flush_task(std::stop_token stoken) noexcept
             return;
         }
 
-        // auto memtables = m_flushing_queue.reserve();
-        // if (!memtables.has_value())
-        // {
-        //     absl::SleepFor(absl::Milliseconds(50));
-        //     continue;
-        // }
-        //
-        // auto idx{1};
-        // for (auto &memtable : memtables.value())
-        // {
-        //     spdlog::debug("LSMTree: Flushing {}/{} memtable into disk", idx++,
-        //     memtables->size());
-        //
-        //     // TODO: Assert will crash the program, maybe we should
-        //     // return an error code?
-        //     absl::WriterMutexLock lock{&m_mutex};
-        //     bool                  ok{m_pLevels->flush_to_level0(std::move(memtable))};
-        //     assert(ok);
-        // }
-        // m_flushing_queue.consume();
+        auto memtables = m_flushing_queue.reserve();
+        if (!memtables.has_value())
+        {
+            absl::SleepFor(absl::Milliseconds(50));
+            continue;
+        }
+
+        auto idx{1};
+        for (auto &memtable : memtables.value())
+        {
+            spdlog::debug("LSMTree: Flushing {}/{} memtable into disk", idx++, memtables->size());
+
+            // TODO: Assert will crash the program, maybe we should
+            // return an error code?
+            absl::WriterMutexLock lock{&m_mutex};
+            bool                  ok{m_pLevels->flush_to_level0(std::move(memtable))};
+            // assert(ok);
+        }
+        m_flushing_queue.consume();
     }
 }
 

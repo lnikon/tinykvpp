@@ -10,6 +10,8 @@ add_subdirectory(server)
 add_subdirectory(raft)
 add_subdirectory(wal)
 add_subdirectory(posix_wrapper)
+add_subdirectory(common)
+add_subdirectory(serialization)
 
 add_executable(Main main.cpp)
 set_target_properties(Main PROPERTIES CXX_STANDARD 23)

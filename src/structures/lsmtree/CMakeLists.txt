@@ -31,7 +31,7 @@ target_link_libraries(
         libuuid::libuuid
 )
 
-add_executable(LSMTreeTest lsmtree_test.cpp)
+add_executable(LSMTreeTest lsmtree_test_basic.cpp)
 set_target_properties(LSMTreeTest PROPERTIES CXX_STANDARD 23)
 target_link_libraries(
     LSMTreeTest
@@ -48,6 +48,7 @@ target_link_libraries(
         FS
         DB
         Concurrency
+        Common
 )
 
 include(GoogleTest)

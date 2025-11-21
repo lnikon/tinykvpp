@@ -102,12 +102,7 @@ auto level_t::record(const key_t &key) const noexcept
     {
         if (const auto &result = pSegment->record(key); !result.empty())
         {
-            spdlog::debug(
-                "Found record {} at level {} in segment {}",
-                key.m_key,
-                index(),
-                pSegment->get_name()
-            );
+            spdlog::debug("Found record at level {} in segment {}", index(), pSegment->get_name());
             return result[0];
         }
     }

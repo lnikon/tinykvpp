@@ -55,7 +55,7 @@ regular_segment_t::regular_segment_t(
 auto regular_segment_t::record(const hashindex::hashindex_t::offset_t &offset)
     -> std::optional<record_t>
 {
-    std::fstream ss{get_path(), std::ios::in};
+    std::fstream ss{get_path(), std::ios::in | std::fstream::binary};
     ss.seekg(offset);
 
     memtable_t::record_t record;
@@ -101,7 +101,7 @@ void regular_segment_t::flush()
     const auto hashIndexBlockOffset{stringStream.tellp()};
     for (const auto &[key, offset] : m_hashIndex)
     {
-        stringStream << key.m_key << ' ' << offset << '\n';
+        stringStream << key.m_key << ' ' << offset; // << '\n';
     }
 
     // Calculate size of the index block
@@ -111,14 +111,14 @@ void regular_segment_t::flush()
     const auto footerBlockOffset{stringStream.tellp()};
 
     // Serialize footer
-    stringStream << hashIndexBlockOffset << ' ' << hashIndexBlockSize << std::endl;
+    stringStream << hashIndexBlockOffset << ' ' << hashIndexBlockSize; // << '\n';
 
     // Add padding to the footer end
     const auto footerPaddingSize{footerSize - (stringStream.tellp() - footerBlockOffset)};
-    stringStream << std::string(footerPaddingSize, ' ') << std::endl;
+    stringStream << std::string(footerPaddingSize, ' '); // << '\n';
 
     // Flush the segment into the disk
-    std::fstream stream(get_path(), std::fstream::trunc | std::fstream::out);
+    std::fstream stream{get_path(), std::fstream::binary | std::fstream::trunc | std::fstream::out};
     if (!stream.is_open())
     {
         throw std::runtime_error("unable to flush segment for path " + m_path.string());
@@ -210,7 +210,7 @@ void regular_segment_t::restore()
 // TODO(lnikon): Add validations on file size. Need 'RandomAccessFile'.
 void regular_segment_t::restore_index()
 {
-    std::fstream sst(m_path);
+    std::fstream sst(m_path, std::fstream::binary);
     if (!sst.is_open())
     {
         // TODO(lnikon): Better way to handle this case. Without exceptions.
