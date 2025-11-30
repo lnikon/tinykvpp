@@ -1,4 +1,5 @@
 #include <cassert>
+#include <cstdint>
 #include <fstream>
 #include <optional>
 #include <ios>
@@ -7,9 +8,203 @@
 #include <iostream>
 
 #include <spdlog/spdlog.h>
+#include <magic_enum/magic_enum.hpp>
+#include <libassert/assert.hpp>
 
+#include "serialization/buffer_writer.h"
+#include "serialization/common.h"
+#include "serialization/endian_integer.h"
 #include "structures/lsmtree/lsmtree_types.h"
+#include "structures/memtable/memtable.h"
 #include "structures/lsmtree/segments/lsmtree_regular_segment.h"
+
+namespace
+{
+
+constexpr const std::uint32_t SEGMENT_HEADER_MAGIC_NUMBER{0xDEADBEEF};
+constexpr const std::uint32_t SEGMENT_VERSION_NUMBER{1};
+
+[[nodiscard]] auto calculate_header_size_bytes() noexcept -> std::uint32_t
+{
+    std::uint32_t headerSize{0};
+    headerSize += 4; // magic
+    headerSize += 4; // version
+    headerSize += 4; // body_offset
+    headerSize += 4; // index_offset
+    headerSize += 4; // size
+    headerSize += 4; // crc32
+    return headerSize;
+}
+
+[[nodiscard]] auto
+calculate_body_size_bytes(const structures::memtable::memtable_t &memtable) noexcept
+    -> std::uint32_t
+{
+    std::uint32_t memtableSize{0};
+    for (const auto &record : memtable)
+    {
+        memtableSize += serialization::varint_size(record.m_key.m_key.length());
+        memtableSize += record.m_key.m_key.length();
+        memtableSize += serialization::varint_size(record.m_value.m_value.length());
+        memtableSize += record.m_value.m_value.length();
+        memtableSize += sizeof(std::uint64_t); // u64 timestamp
+    }
+    return memtableSize;
+}
+
+[[nodiscard]] auto
+calculate_index_size_bytes(const structures::memtable::memtable_t &memtable) noexcept
+    -> std::uint32_t
+{
+    std::uint32_t indexSize{0};
+    for (const auto &record : memtable)
+    {
+        indexSize += serialization::varint_size(record.m_key.m_key.length());
+        indexSize += record.m_key.m_key.length();
+        indexSize += sizeof(std::uint32_t); // u32 body_offset
+    }
+    return indexSize;
+}
+
+// TODO(lnikon): Use strong types for headerSize, bodySize, bufferSize, as they are consecutive
+// u32s and can be mixed up
+[[nodiscard]] auto serialize_header(
+    serialization::buffer_writer_t &writer,
+    std::uint32_t                   headerSize,
+    std::uint32_t                   bodySize,
+    std::uint32_t                   bufferSize
+) noexcept -> std::optional<serialization::serialization_error_k>
+{
+    return writer
+        .write_endian_integer(
+            serialization::le_uint32_t{SEGMENT_HEADER_MAGIC_NUMBER}
+        )                                                                         // magic_number
+        .write_endian_integer(serialization::le_uint32_t{SEGMENT_VERSION_NUMBER}) // version
+        .write_endian_integer(serialization::le_uint32_t{headerSize})             // body_offset
+        .write_endian_integer(serialization::le_uint32_t{headerSize + bodySize})  // index_ofset
+        .write_endian_integer(serialization::le_uint32_t{bufferSize})             // size
+        .error();
+}
+
+[[nodiscard]] auto serialize_body(
+    serialization::buffer_writer_t &writer, const structures::memtable::memtable_t &memtable
+) noexcept -> std::optional<serialization::serialization_error_k>
+{
+    for (const auto &record : memtable)
+    {
+        if (writer.write_varint(record.m_key.m_key.length())
+                .write_string(record.m_key.m_key)
+                .write_varint(record.m_value.m_value.length())
+                .write_string(record.m_value.m_value)
+                .write_endian_integer(
+                    serialization::le_uint64_t{static_cast<std::uint32_t>(
+                        record.m_timestamp.m_value.time_since_epoch().count()
+                    )}
+                )
+                .has_error())
+        {
+            spdlog::debug(
+                "Failed to serialize memtable record: Error={}, key={}, value={}, "
+                "sequenceNumber={}, "
+                "timestamp={}",
+                magic_enum::enum_name(writer.error().value()),
+                record.m_key.m_key,
+                record.m_value.m_value,
+                record.m_sequenceNumber,
+                static_cast<std::uint32_t>(record.m_timestamp.m_value.time_since_epoch().count())
+            );
+            return writer.error();
+        }
+    }
+    return std::nullopt;
+}
+
+[[nodiscard]] auto serialize_index(
+    serialization::buffer_writer_t         &writer,
+    const structures::memtable::memtable_t &memtable,
+    std::uint32_t                           bodyOffset
+) noexcept -> std::optional<serialization::serialization_error_k>
+{
+    std::uint32_t nextIndexEntryOffsetInBody{bodyOffset};
+    for (const auto &record : memtable)
+    {
+        if (writer.write_varint(record.m_key.m_key.length())
+                .write_string(record.m_key.m_key)
+                .write_endian_integer(serialization::le_uint64_t{nextIndexEntryOffsetInBody})
+                .has_error())
+        {
+            spdlog::error(
+                "Failed to serialize index entry. Error={}, key={}, offset={}",
+                magic_enum::enum_name(writer.error().value()),
+                record.m_key.m_key,
+                nextIndexEntryOffsetInBody
+            );
+            return writer.error();
+        }
+
+        nextIndexEntryOffsetInBody += serialization::varint_size(record.m_key.m_key.length()) +
+                                      record.m_key.m_key.length() +
+                                      serialization::varint_size(record.m_value.m_value.length()) +
+                                      record.m_value.m_value.length() + sizeof(std::uint64_t);
+    }
+    return std::nullopt;
+}
+
+[[nodiscard]] auto serialize_segment(const structures::memtable::memtable_t &memtable) noexcept
+    -> std::optional<std::vector<std::byte>>
+{
+    // Calculate number of bytes being serialized
+    const auto headerSize{calculate_header_size_bytes()};
+    const auto bodySize{calculate_body_size_bytes(memtable)};
+    const auto indexSize{calculate_index_size_bytes(memtable)};
+    const auto bufferSize{headerSize + bodySize + indexSize};
+
+    // Calculate offsets into body and index
+    const auto bodyOffset{headerSize};
+
+    // Allocate the buffer
+    std::vector<std::byte> buffer;
+    buffer.reserve(bufferSize);
+    buffer.resize(bufferSize);
+
+    // Serialize into the buffer
+    serialization::buffer_writer_t writer{buffer};
+    ASSERT(writer.bytes_written(), bufferSize);
+
+    if (auto error = serialize_header(writer, headerSize, bodySize, bufferSize))
+    {
+        spdlog::error(
+            "Failed to serialize segment header. Error={}",
+            magic_enum::enum_name(writer.error().value())
+        );
+        return std::nullopt;
+    }
+
+    // TODO(lnikon): With a change to the binary_writer_t interface can combine these loops into a
+    // one, need to supply write_pos to the writer with a proper offset for index start, which
+    // initially should be index_offset=headerSize+memtableSize
+    if (auto error = serialize_body(writer, memtable); error.has_value())
+    {
+        spdlog::error(
+            "Failed to serialize segment body. Error={}",
+            magic_enum::enum_name(writer.error().value())
+        );
+        return std::nullopt;
+    }
+
+    if (auto error = serialize_index(writer, memtable, bodyOffset); error.has_value())
+    {
+        spdlog::error(
+            "Failed to serialize segment index. Error={}",
+            magic_enum::enum_name(writer.error().value())
+        );
+        return std::nullopt;
+    }
+
+    return buffer;
+}
+
+} // namespace
 
 namespace structures::lsmtree::segments::regular_segment
 {
@@ -58,75 +253,48 @@ auto regular_segment_t::record(const hashindex::hashindex_t::offset_t &offset)
     std::fstream ss{get_path(), std::ios::in | std::fstream::binary};
     ss.seekg(offset);
 
-    memtable_t::record_t record;
-    record.read(ss);
+    // TODO(lnikon): Use binary_buffer_reader_t here
+    // memtable_t::record_t record;
+    // record.read(ss);
+    // return std::make_optional(std::move(record));
 
-    return std::make_optional(std::move(record));
+    return std::nullopt;
 }
 
 void regular_segment_t::flush()
 {
-    // Skip execution if for some reason the memtable is empty
     if (!m_memtable.has_value())
     {
         spdlog::warn("Can not flush empty memtable at segment {}", m_path.c_str());
         return;
     }
 
-    if (m_memtable->empty())
+    const auto &memtable{m_memtable.value()};
+    if (memtable.empty())
     {
         spdlog::warn("Can not flush memtable of size 0 at segment {}", m_path.c_str());
         return;
     }
 
-    // Serialize memtable into stringstream and build hash index
-    std::stringstream stringStream;
-    std::size_t       cursor{0};
-    const auto       &memtable = m_memtable.value();
-    for (std::size_t recordIndex{0}; const auto &record : memtable)
+    auto bufferOpt{serialize_segment(memtable)};
+    if (!bufferOpt.has_value())
     {
-        std::size_t ss_before = stringStream.tellp();
-        record.write(stringStream);
-        if (recordIndex++ != m_memtable.value().count())
-        {
-            stringStream << '\n';
-        }
-        const auto length{static_cast<std::size_t>(stringStream.tellp()) - ss_before};
-        m_hashIndex.emplace(record, cursor);
-        cursor += length;
-    }
-    assert(!m_hashIndex.empty());
-
-    // Serialize hashindex
-    const auto hashIndexBlockOffset{stringStream.tellp()};
-    for (const auto &[key, offset] : m_hashIndex)
-    {
-        stringStream << key.m_key << ' ' << offset; // << '\n';
+        spdlog::error("Failed to serialize segment");
+        return;
     }
 
-    // Calculate size of the index block
-    const auto hashIndexBlockSize{stringStream.tellp() - hashIndexBlockOffset};
-
-    // Get offset into footer section
-    const auto footerBlockOffset{stringStream.tellp()};
-
-    // Serialize footer
-    stringStream << hashIndexBlockOffset << ' ' << hashIndexBlockSize; // << '\n';
-
-    // Add padding to the footer end
-    const auto footerPaddingSize{footerSize - (stringStream.tellp() - footerBlockOffset)};
-    stringStream << std::string(footerPaddingSize, ' '); // << '\n';
-
-    // Flush the segment into the disk
-    std::fstream stream{get_path(), std::fstream::binary | std::fstream::trunc | std::fstream::out};
-    if (!stream.is_open())
+    std::ofstream binaryStream(get_path(), std::ios::binary);
+    if (!binaryStream.is_open())
     {
-        throw std::runtime_error("unable to flush segment for path " + m_path.string());
+        spdlog::error(
+            "Unable to open binary stream to write segment. Path={}", get_path().string()
+        );
+        return;
     }
 
-    assert(!stringStream.str().empty());
-    stream << stringStream.str();
-    stream.flush();
+    binaryStream.write(
+        reinterpret_cast<const char *>(bufferOpt.value().data()), bufferOpt.value().size()
+    );
 }
 
 void regular_segment_t::remove_from_disk() const noexcept
@@ -248,7 +416,9 @@ void regular_segment_t::restore_index()
         //        bytesRead += end - start;
         bytesRead += line.size() + 1;
 
-        m_hashIndex.emplace(structures::lsmtree::record_t{key_t{key}, value_t{}}, offset);
+        m_hashIndex.emplace(
+            structures::lsmtree::record_t{key_t{key}, value_t{}, sequence_number_t{}}, offset
+        );
     }
 
     if (m_hashIndex.empty())

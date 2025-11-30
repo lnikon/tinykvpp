@@ -215,23 +215,25 @@ auto lsmtree_builder_t::build_memtable_from_wal(wal_t pWal) noexcept
     -> std::optional<memtable::memtable_t>
 {
     memtable::memtable_t table;
-    for (const auto &records{pWal->records()}; const auto &record : records)
-    {
-        tinykvpp::v1::DatabaseOperation op;
-        op.ParseFromString(record.payload());
 
-        switch (op.type())
+    // walEntry contains Raft related fields (term + index) and a generic payload,
+    // which in this case encapsulates DatabaseOperation
+    for (const auto &walEntries{pWal->records()}; const raft::v1::LogEntry &walEntry : walEntries)
+    {
+        tinykvpp::v1::DatabaseOperation dbOperation;
+        dbOperation.ParseFromString(walEntry.payload());
+
+        switch (dbOperation.type())
         {
         case tinykvpp::v1::DatabaseOperation::TYPE_PUT:
         {
-            structures::memtable::memtable_t::record_t item;
-            item.m_key.m_key = op.key();
-            item.m_value.m_value = op.value();
+            table.emplace(
+                {structures::memtable::memtable_t::record_t::key_t{dbOperation.key()},
+                 structures::memtable::memtable_t::record_t::value_t{dbOperation.value()},
+                 structures::memtable::memtable_t::record_t::sequence_number_t{walEntry.index()}}
 
-            table.emplace(std::move(item));
-
-            spdlog::debug("Recovered record {} from WAL", record.payload());
-
+            );
+            spdlog::debug("Recovered record {} from WAL", walEntry.payload());
             break;
         }
         case tinykvpp::v1::DatabaseOperation::TYPE_DELETE:
@@ -241,7 +243,7 @@ auto lsmtree_builder_t::build_memtable_from_wal(wal_t pWal) noexcept
         }
         default:
         {
-            spdlog::error("Unknown WAL operation {}", std::to_underlying(op.type()));
+            spdlog::error("Unknown WAL operation {}", std::to_underlying(dbOperation.type()));
             break;
         }
         };

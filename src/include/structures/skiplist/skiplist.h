@@ -13,7 +13,7 @@ namespace structures::skiplist
 
 const std::int64_t max_height = 12;
 
-template <typename record_gt, typename comparator_gt> class skiplist_t
+template <typename TRecord, typename TComparator> class skiplist_t
 {
   public:
     template <typename T, typename Pointer, typename Reference> struct iterator_base;
@@ -23,19 +23,19 @@ template <typename record_gt, typename comparator_gt> class skiplist_t
 
     struct node_t
     {
-        node_t(record_gt rec, std::int64_t level)
+        node_t(TRecord rec, std::int64_t level)
             : record(std::move(rec)),
               forward(level + 1, nullptr)
         {
         }
 
-        record_gt                      record;
+        TRecord                        record;
         std::vector<node_shared_ptr_t> forward;
     };
 
-    using value_type = record_gt;
-    using reference = record_gt &;
-    using const_reference = const record_gt &;
+    using value_type = TRecord;
+    using reference = TRecord &;
+    using const_reference = const TRecord &;
     using difference_type = std::ptrdiff_t;
     using size_type = std::size_t;
     using index_type = std::size_t;
@@ -134,7 +134,7 @@ template <typename record_gt, typename comparator_gt> class skiplist_t
         return const_iterator(nullptr);
     }
 
-    auto find(const typename record_gt::key_t &key) const noexcept -> std::optional<record_gt>
+    auto find(const typename TRecord::key_t &key) const noexcept -> std::optional<TRecord>
     {
         node_shared_ptr_t current{m_head};
         for (std::int64_t i = m_level; i >= 0; i--)
@@ -154,7 +154,7 @@ template <typename record_gt, typename comparator_gt> class skiplist_t
         return std::nullopt;
     }
 
-    void emplace(record_gt &&record)
+    void emplace(TRecord &&record)
     {
         const auto newLevel{random_level()};
         if (newLevel > m_level)
@@ -180,7 +180,7 @@ template <typename record_gt, typename comparator_gt> class skiplist_t
         {
             // Insert new node
             node_shared_ptr_t newNode =
-                std::make_shared<node_t>(std::forward<record_gt>(record), m_level);
+                std::make_shared<node_t>(std::forward<TRecord>(record), m_level);
             for (std::int64_t i{0}; i <= newLevel; i++)
             {
                 newNode->forward[i] = to_be_updated[i]->forward[i];
@@ -192,7 +192,7 @@ template <typename record_gt, typename comparator_gt> class skiplist_t
         else if (current->record.m_key == record.m_key)
         {
             // Update value of the existing node
-            current->record = std::forward<record_gt>(record);
+            current->record = std::forward<TRecord>(record);
         }
     }
 
@@ -216,7 +216,7 @@ template <typename record_gt, typename comparator_gt> class skiplist_t
         return level;
     }
 
-    node_shared_ptr_t m_head = std::make_shared<node_t>(record_gt{}, max_height);
+    node_shared_ptr_t m_head = std::make_shared<node_t>(TRecord{}, max_height);
     std::int64_t      m_level{0};
     std::size_t       m_size{0};
 };

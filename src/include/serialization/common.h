@@ -41,4 +41,7 @@ using byte_t = std::byte;
 // to_string_view converts std::byte span into a std::string_view
 [[nodiscard]] auto to_string_view(std::span<std::byte> span) noexcept -> std::string_view;
 
+// varint_size returns minimum number of bytes required to represent the value
+[[nodiscard]] auto varint_size(std::size_t value) noexcept -> std::size_t;
+
 } // namespace serialization

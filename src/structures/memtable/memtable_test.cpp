@@ -8,14 +8,15 @@ using structures::memtable::memtable_t;
 using record_t = memtable::memtable_t::record_t;
 using record_key_t = structures::memtable::memtable_t::record_t::key_t;
 using record_value_t = structures::memtable::memtable_t::record_t::value_t;
+using record_sequence_number_t = structures::memtable::memtable_t::record_t::sequence_number_t;
 
 TEST(MemTableTest, EmplaceAndFind)
 {
     memtable_t mt;
-    mt.emplace(record_t{record_key_t{"B"}, record_value_t{"123"}});
-    mt.emplace(record_t{record_key_t{"A"}, record_value_t{"-12"}});
-    mt.emplace(record_t{record_key_t{"Z"}, record_value_t{"34.44"}});
-    mt.emplace(record_t{record_key_t{"C"}, record_value_t{"Hello"}});
+    mt.emplace(record_t{record_key_t{"B"}, record_value_t{"123"}, record_sequence_number_t{0}});
+    mt.emplace(record_t{record_key_t{"A"}, record_value_t{"-12"}, record_sequence_number_t{0}});
+    mt.emplace(record_t{record_key_t{"Z"}, record_value_t{"34.44"}, record_sequence_number_t{0}});
+    mt.emplace(record_t{record_key_t{"C"}, record_value_t{"Hello"}, record_sequence_number_t{0}});
 
     auto record = mt.find(record_key_t{"C"});
     EXPECT_EQ(record->m_key, record_key_t{"C"});
@@ -32,7 +33,7 @@ TEST(MemTableTest, CheckRecordSize)
         record_key_t   k{"B"};
         record_value_t v{"123"};
 
-        mt.emplace(record_t{k, v});
+        mt.emplace(record_t{k, v, 0});
 
         auto record = mt.find(record_key_t{"B"});
         EXPECT_NE(record, std::nullopt);
@@ -47,7 +48,7 @@ TEST(MemTableTest, CheckRecordSize)
         record_key_t   k{"B"};
         record_value_t v{"123"};
 
-        mt.emplace(record_t{k, v});
+        mt.emplace(record_t{k, v, 0});
 
         auto record = mt.find(record_key_t{"B"});
         EXPECT_NE(record, std::nullopt);
@@ -62,7 +63,7 @@ TEST(MemTableTest, CheckRecordSize)
         record_key_t   k{"B"};
         record_value_t v{"123.456"};
 
-        auto record = record_t{k, v};
+        auto record = record_t{k, v, 0};
         mt.emplace(record);
 
         auto recordOpt = mt.find(k);
@@ -80,9 +81,9 @@ TEST(MemTableTest, CheckSize)
     memtable_t mt;
     auto       k1 = record_key_t{"B"}, k2 = record_key_t{"A"}, k3 = record_key_t{"Z"};
     auto v1 = record_value_t{"123"}, v2 = record_value_t{"34.44"}, v3 = record_value_t{"Hello"};
-    mt.emplace(record_t{k1, v1});
-    mt.emplace(record_t{k2, v2});
-    mt.emplace(record_t{k3, v3});
+    mt.emplace(record_t{k1, v1, 0});
+    mt.emplace(record_t{k2, v2, 0});
+    mt.emplace(record_t{k3, v3, 0});
 
     // TODO: Not sure if this a good/correct way to check MemTable::Size() :)
     EXPECT_EQ(mt.size(), k1.size() + v1.size() + k2.size() + v2.size() + k3.size() + v3.size());
@@ -91,10 +92,10 @@ TEST(MemTableTest, CheckSize)
 TEST(MemTableTest, CheckCount)
 {
     memtable_t mt;
-    mt.emplace(record_t{record_key_t{"B"}, record_value_t{"123"}});
-    mt.emplace(record_t{record_key_t{"A"}, record_value_t{"-12"}});
-    mt.emplace(record_t{record_key_t{"Z"}, record_value_t{"z`34.44"}});
-    mt.emplace(record_t{record_key_t{"C"}, record_value_t{"Hello"}});
+    mt.emplace(record_t{record_key_t{"B"}, record_value_t{"123"}, record_sequence_number_t{0}});
+    mt.emplace(record_t{record_key_t{"A"}, record_value_t{"-12"}, record_sequence_number_t{0}});
+    mt.emplace(record_t{record_key_t{"Z"}, record_value_t{"z`34.44"}, record_sequence_number_t{0}});
+    mt.emplace(record_t{record_key_t{"C"}, record_value_t{"Hello"}, record_sequence_number_t{0}});
 
     EXPECT_EQ(mt.count(), 4);
 }

@@ -18,6 +18,8 @@ class memtable_t
   public:
     struct record_t
     {
+        using sequence_number_t = std::uint64_t;
+
         struct key_t
         {
             using storage_type_t = std::string;
@@ -57,23 +59,19 @@ class memtable_t
         struct timestamp_t
         {
             // Used to differentiate between keys with the same timestamp
-            using clock_t = std::chrono::high_resolution_clock;
-            using underlying_value_type_t = std::chrono::time_point<clock_t>;
-
-            timestamp_t();
-
-            auto operator<(const timestamp_t &other) const -> bool;
-
-            static void swap(timestamp_t &lhs, timestamp_t &rhs);
+            using clock_t = std::chrono::system_clock;
+            using precision_t = std::chrono::nanoseconds;
+            using time_point_t = std::chrono::time_point<clock_t, precision_t>;
 
             template <typename TSTream> void write(TSTream &outStream) const;
             template <typename TSTream> void read(TSTream &outStream);
 
-            underlying_value_type_t m_value;
+            time_point_t m_value{clock_t::now()};
         };
 
-        record_t(key_t key, value_t value);
+        // TODO(lnikon): Get rid of default ctor
         record_t() = default;
+        record_t(key_t key, value_t value, sequence_number_t sequenceNumber);
 
         auto operator<(const record_t &record) const -> bool;
         auto operator>(const record_t &record) const -> bool;
@@ -84,9 +82,10 @@ class memtable_t
         template <typename TSTream> void write(TSTream &outStream) const;
         template <typename TSTream> void read(TSTream &outStream);
 
-        key_t       m_key;
-        value_t     m_value;
-        timestamp_t m_timestamp;
+        key_t             m_key;
+        value_t           m_value;
+        sequence_number_t m_sequenceNumber{0};
+        timestamp_t       m_timestamp;
     };
 
     struct record_comparator_by_key_t
@@ -105,13 +104,6 @@ class memtable_t
     using iterator = typename storage_t::iterator;
     using const_iterator = typename storage_t::const_iterator;
     using value_type = typename storage_t::value_type;
-
-    memtable_t() = default;
-    memtable_t(const memtable_t &) = default;
-    auto operator=(const memtable_t &) -> memtable_t & = default;
-    memtable_t(memtable_t &&) = default;
-    auto operator=(memtable_t &&) -> memtable_t & = default;
-    ~memtable_t() = default;
 
     /**
      * @brief
@@ -227,7 +219,7 @@ template <typename TSTream> void memtable_t::record_t::value_t::read(TSTream &ou
 // ------------------------------------------------
 template <typename TSTream> void memtable_t::record_t::timestamp_t::write(TSTream &outStream) const
 {
-    outStream << m_value.time_since_epoch().count();
+    outStream << static_cast<std::uint64_t>(m_value.time_since_epoch().count());
 }
 
 template <typename TSTream> void memtable_t::record_t::timestamp_t::read(TSTream &outStream)

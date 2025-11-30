@@ -16,7 +16,6 @@ target_link_libraries(
     gtest::gtest
     spdlog::spdlog
     fmt::fmt
-    LSMTree
     MemTable
 )
 

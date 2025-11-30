@@ -18,4 +18,15 @@ namespace serialization
     return {reinterpret_cast<const char *>(span.data()), span.size()};
 }
 
+[[nodiscard]] auto varint_size(std::size_t value) noexcept -> std::size_t
+{
+    std::size_t count{1};
+    while (value >= 128)
+    {
+        value >>= 7;
+        count++;
+    }
+    return count;
+}
+
 } // namespace serialization

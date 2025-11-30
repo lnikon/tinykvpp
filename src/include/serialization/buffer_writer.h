@@ -43,7 +43,7 @@ class buffer_writer_t final
         std::array<std::byte, MAX_VARINT_BYTES> scratch{};
         std::size_t                             count{0};
 
-        while (value > 127)
+        while (value >= 128)
         {
             scratch[count++] =
                 std::byte{static_cast<std::uint8_t>((value & 0x7F))} | std::byte{0x80};

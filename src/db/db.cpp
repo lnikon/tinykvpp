@@ -72,11 +72,13 @@ db_t::db_t(
     assert(m_pLSMtree);
 
     // Setup Raft callbacks
-    m_pConsensusModule->setOnCommitCallback([this](const raft::v1::LogEntry &entry)
-                                            { return onRaftCommit(entry); });
+    m_pConsensusModule->setOnCommitCallback(
+        [this](const raft::v1::LogEntry &entry) -> bool { return onRaftCommit(entry); }
+    );
 
-    m_pConsensusModule->setOnLeaderChangeCallback([this](bool isLeader)
-                                                  { onLeaderChange(isLeader); });
+    m_pConsensusModule->setOnLeaderChangeCallback(
+        [this](bool isLeader) -> void { onLeaderChange(isLeader); }
+    );
 }
 
 auto db_t::start() -> bool
@@ -296,7 +298,7 @@ void db_t::handleClientRequest(client_request_t request)
 
     // Handle Raft result asynchronously
     m_requestPool.enqueue(
-        [this, requestId, deadline, raftFuture = std::move(raftFuture)] mutable
+        [this, requestId, deadline, raftFuture = std::move(raftFuture)] mutable -> void
         {
             // Check if already timed out
             auto timeout = deadline - std::chrono::steady_clock::now();
@@ -367,9 +369,11 @@ auto db_t::onRaftCommit(const raft::v1::LogEntry &entry) -> bool
     tinykvpp::v1::DatabaseOperation op;
     op.ParseFromString(entry.payload());
 
-    structures::memtable::memtable_t::record_t record;
-    record.m_key.m_key = op.key();
-    record.m_value.m_value = op.value();
+    structures::memtable::memtable_t::record_t record{
+        structures::memtable::memtable_t::record_t::key_t{op.key()},
+        structures::memtable::memtable_t::record_t::value_t{op.value()},
+        structures::memtable::memtable_t::record_t::sequence_number_t{entry.index()}
+    };
 
     switch (op.type())
     {

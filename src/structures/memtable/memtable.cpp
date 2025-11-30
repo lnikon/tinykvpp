@@ -55,49 +55,33 @@ auto memtable_t::record_t::value_t::operator==(const memtable_t::record_t::value
     return m_value == other.m_value;
 }
 
-// ----------------------------------------------------
-// memtable_t::record_t::timestamp_t
-// ----------------------------------------------------
-memtable_t::record_t::timestamp_t::timestamp_t()
-    : m_value{clock_t::now()}
-{
-}
-
-auto memtable_t::record_t::timestamp_t::operator<(const timestamp_t &other) const -> bool
-{
-    return m_value < other.m_value;
-}
-
-void memtable_t::record_t::timestamp_t::swap(timestamp_t &lhs, timestamp_t &rhs)
-{
-    using std::swap;
-    swap(lhs.m_value, rhs.m_value);
-}
-
 // ---------------------------------------
 // memtable_t::record_t
 // ---------------------------------------
-memtable_t::record_t::record_t(memtable_t::record_t::key_t key, memtable_t::record_t::value_t value)
+memtable_t::record_t::record_t(key_t key, value_t value, sequence_number_t sequenceNumber)
     : m_key(std::move(key)),
-      m_value(std::move(value))
+      m_value(std::move(value)),
+      m_sequenceNumber(sequenceNumber)
 {
 }
 
 auto memtable_t::record_t::operator<(const memtable_t::record_t &record) const -> bool
 {
-    // return m_key < record.m_key && m_timestamp < record.m_timestamp;
-    return (m_key != record.m_key) ? m_key < record.m_key : !(m_timestamp < record.m_timestamp);
+    if (m_key != record.m_key)
+    {
+        return m_key < record.m_key;
+    }
+    return m_sequenceNumber < record.m_sequenceNumber;
 }
 
 auto memtable_t::record_t::operator>(const memtable_t::record_t &record) const -> bool
 {
-    return !(m_key < record.m_key);
+    return record < *this;
 }
 
 auto memtable_t::record_t::operator==(const record_t &record) const -> bool
 {
-    spdlog::info("memtable::==: this.{} record.{}", m_key.m_key, record.m_key.m_key);
-    return m_key == record.m_key;
+    return m_key == record.m_key && m_sequenceNumber == record.m_sequenceNumber;
 }
 
 auto memtable_t::record_t::size() const -> std::size_t

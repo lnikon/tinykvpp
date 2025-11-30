@@ -49,6 +49,7 @@ target_link_libraries(
         DB
         Concurrency
         Common
+        Serialization
 )
 
 include(GoogleTest)
