@@ -47,7 +47,7 @@ class crc32_t final
     constexpr crc32_t() = default;
 
     // update updates the stored crc with new data, without XORing with 0xFFFFFFFF
-    void update(std::span<const std::byte> data) noexcept;
+    [[nodiscard]] auto update(std::span<const std::byte> data) noexcept -> crc32_t &;
 
     // finalize returns the stored crc XORed with 0xFFFFFFFF
     [[nodiscard]] auto finalize() const noexcept -> std::uint32_t;

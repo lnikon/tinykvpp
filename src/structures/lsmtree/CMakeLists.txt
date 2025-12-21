@@ -23,12 +23,13 @@ target_link_libraries(
         abseil::abseil
         libassert::assert
         magic_enum::magic_enum
+        libuuid::libuuid
+        Microsoft.GSL::GSL
         Concurrency
         WAL
         Raft
         RaftProtoObjects
-        Microsoft.GSL::GSL
-        libuuid::libuuid
+        Serialization
 )
 
 add_executable(LSMTreeTest lsmtree_test_basic.cpp)

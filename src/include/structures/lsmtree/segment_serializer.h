@@ -4,7 +4,6 @@
 #include <ios>
 #include <stdexcept>
 #include <string>
-#include <iostream>
 
 #include <spdlog/spdlog.h>
 #include <magic_enum/magic_enum.hpp>

@@ -4,8 +4,9 @@
 #include <bit>
 #include <cstdint>
 #include <cstring>
-#include <iostream>
 #include <span>
+
+#include <spdlog/spdlog.h>
 
 #include "serialization/concepts.h"
 
@@ -23,7 +24,6 @@ template <typename T, std::endian Target = std::endian::little> class endian_int
 
         if constexpr (std::endian::native != Target)
         {
-            std::cout << "converted" << '\n';
             converted = std::byteswap(value);
         }
 

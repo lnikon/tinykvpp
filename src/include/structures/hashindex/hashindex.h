@@ -8,8 +8,6 @@
 namespace structures::hashindex
 {
 
-// TODO(lnikon): Benchmark with flat_*maps to understand the
-// performance.
 class hashindex_t final
 {
   public:
@@ -20,10 +18,13 @@ class hashindex_t final
     using iterator = storage_t::iterator;
 
     [[nodiscard]] auto begin() -> iterator;
+
     [[nodiscard]] auto end() -> iterator;
 
-    void               emplace(record_t record, std::size_t length);
+    void emplace(std::string key, std::uint64_t offset);
+
     [[nodiscard]] auto empty() const -> bool;
+
     [[nodiscard]] auto offset(const key_t &key) const -> std::vector<offset_t>;
 
     [[nodiscard]] auto num_of_bytes_used() const noexcept -> std::size_t;

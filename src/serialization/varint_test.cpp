@@ -95,8 +95,8 @@ TEST(BufferReaderWriterTest, EmptyString)
     EXPECT_FALSE(writer.has_error());
     EXPECT_EQ(writer.bytes_written(), 1); // Just varint(0)
 
-    buffer_reader_t  reader(buffer);
-    std::string_view str;
+    buffer_reader_t reader(buffer);
+    std::string     str;
     (void)reader.read_string(str);
 
     EXPECT_FALSE(reader.has_error());

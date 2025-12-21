@@ -3,7 +3,8 @@
 #include <optional>
 #include <span>
 #include <cstdint>
-#include <string_view>
+#include <spdlog/spdlog.h>
+#include <string>
 
 #include "serialization/common.h"
 #include "serialization/concepts.h"
@@ -72,7 +73,7 @@ class buffer_reader_t
         return *this;
     }
 
-    [[nodiscard]] auto read_string(std::string_view &out) noexcept -> buffer_reader_t &
+    [[nodiscard]] auto read_string(std::string &out) noexcept -> buffer_reader_t &
     {
         if (m_error)
         {
@@ -87,7 +88,7 @@ class buffer_reader_t
         }
 
         auto span{read_raw_bytes(count)};
-        if (span.empty() || has_error())
+        if (has_error())
         {
             return *this;
         }
@@ -127,6 +128,11 @@ class buffer_reader_t
     [[nodiscard]] auto has_error() const noexcept -> bool
     {
         return m_error.has_value();
+    }
+
+    [[nodiscard]] auto eof() const noexcept -> bool
+    {
+        return m_position == m_buffer.size();
     }
 
   private:

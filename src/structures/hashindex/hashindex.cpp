@@ -13,10 +13,10 @@ auto hashindex_t::end() -> hashindex_t::iterator
     return m_offsets.end();
 }
 
-void hashindex_t::emplace(record_t record, const std::size_t length)
+void hashindex_t::emplace(std::string key, std::uint64_t offset)
 {
-    m_offsets.emplace(record.m_key, length);
-    m_num_of_bytes += record.size() + length;
+    m_num_of_bytes += key.size();
+    m_offsets.emplace(std::move(key), offset);
 }
 
 auto hashindex_t::empty() const -> bool

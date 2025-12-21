@@ -4,7 +4,10 @@
 #include <cstring>
 #include <optional>
 #include <span>
+#include <spdlog/spdlog.h>
 #include <string_view>
+
+#include <libassert/assert.hpp>
 
 #include "serialization/common.h"
 #include "serialization/concepts.h"
@@ -15,7 +18,7 @@ namespace serialization
 class buffer_writer_t final
 {
   public:
-    buffer_writer_t(std::span<std::byte> buffer)
+    explicit buffer_writer_t(std::span<std::byte> buffer)
         : m_buffer{buffer}
     {
     }
@@ -88,7 +91,7 @@ class buffer_writer_t final
 
     [[nodiscard]] auto bytes_written() const noexcept -> std::size_t
     {
-        return m_position;
+        return m_cursor;
     }
 
     [[nodiscard]] auto error() const noexcept -> std::optional<serialization_error_k>
@@ -101,22 +104,36 @@ class buffer_writer_t final
         return m_error.has_value();
     }
 
+    [[nodiscard]] auto set_cursor(std::uint64_t cursor) noexcept -> std::uint64_t
+    {
+        ASSERT(cursor <= m_buffer.size());
+        auto oldCursor = m_cursor;
+        m_cursor = cursor;
+        return oldCursor;
+    }
+
   private:
     void write_raw_bytes(std::span<const std::byte> bytes) noexcept
     {
-        if (m_position + bytes.size() > m_buffer.size())
+        if (m_cursor + bytes.size() > m_buffer.size())
         {
+            spdlog::error(
+                "Failed to serialize bytes due to buffer overflow. m_cursor + bytes.size()={}, "
+                "m_buffer.size()={}",
+                m_cursor + bytes.size(),
+                m_buffer.size()
+            );
             m_error = serialization_error_k::buffer_overflow_k;
             return;
         }
 
-        std::memcpy(&m_buffer[m_position], bytes.data(), bytes.size());
+        std::memcpy(&m_buffer[m_cursor], bytes.data(), bytes.size());
 
-        m_position += bytes.size();
+        m_cursor += bytes.size();
     }
 
     std::span<std::byte>                 m_buffer;
-    std::size_t                          m_position{0};
+    std::uint64_t                        m_cursor{0};
     std::optional<serialization_error_k> m_error{std::nullopt};
 };
 

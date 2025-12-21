@@ -11,7 +11,7 @@ namespace structures::memtable
 // ----------------------------------------------
 // memtable_t::record_t::key_t
 // ----------------------------------------------------
-memtable_t::record_t::key_t::key_t(record_t::key_t::storage_type_t key)
+memtable_t::record_t::key_t::key_t(record_t::key_t::storage_type_t key) noexcept
     : m_key(std::move(key))
 {
 }
@@ -39,7 +39,7 @@ auto memtable_t::record_t::key_t::operator==(const memtable_t::record_t::key_t &
 // ------------------------------------------------
 // memtable_t::record_t::value_t
 // ------------------------------------------------
-memtable_t::record_t::value_t::value_t(memtable_t::record_t::value_t::storage_type_t value)
+memtable_t::record_t::value_t::value_t(memtable_t::record_t::value_t::storage_type_t value) noexcept
     : m_value(std::move(value))
 {
 }
@@ -56,12 +56,28 @@ auto memtable_t::record_t::value_t::operator==(const memtable_t::record_t::value
 }
 
 // ---------------------------------------
+// memtable_t::record_t::timestamp_t
+// ---------------------------------------
+memtable_t::record_t::timestamp_t::timestamp_t() noexcept
+    : m_value{clock_t::now()}
+{
+}
+
+memtable_t::record_t::timestamp_t::timestamp_t(time_point_t timePoint) noexcept
+    : m_value{timePoint}
+{
+}
+
+// ---------------------------------------
 // memtable_t::record_t
 // ---------------------------------------
-memtable_t::record_t::record_t(key_t key, value_t value, sequence_number_t sequenceNumber)
+memtable_t::record_t::record_t(
+    key_t key, value_t value, sequence_number_t sequenceNumber, timestamp_t timestamp
+) noexcept
     : m_key(std::move(key)),
       m_value(std::move(value)),
-      m_sequenceNumber(sequenceNumber)
+      m_sequenceNumber(sequenceNumber),
+      m_timestamp(timestamp)
 {
 }
 

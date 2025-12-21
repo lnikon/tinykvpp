@@ -29,7 +29,7 @@ class regular_segment_t final
     [[nodiscard]] auto record(const key_t &key)
         -> std::vector<std::optional<memtable::memtable_t::record_t>>;
 
-    [[nodiscard]] auto record(const hashindex::hashindex_t::offset_t &offset)
+    [[nodiscard]] auto record(const hashindex::hashindex_t::offset_t &offset) const
         -> std::optional<memtable::memtable_t::record_t>;
 
     [[nodiscard]] auto get_name() const -> types::name_t;

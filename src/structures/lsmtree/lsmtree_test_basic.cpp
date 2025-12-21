@@ -250,7 +250,7 @@ TEST(LSMTreeTestBasicCRUD, MultipleLargeKeyValuePairsFlush)
             rec.m_key.m_key.size()
         );
         EXPECT_EQ(expected->m_key.m_key, rec.m_key.m_key);
-        // EXPECT_EQ(expected->m_value.m_value, rec.m_value.m_value);
+        EXPECT_EQ(expected->m_value.m_value, rec.m_value.m_value);
         ++idx;
     }
 }

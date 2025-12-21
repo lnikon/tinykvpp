@@ -17,6 +17,7 @@ enum class serialization_error_k : std::int8_t
 
     // Read errors
     truncated_file_k,
+    end_of_file_k,
 
     // Format errors
     invalid_magic_k,

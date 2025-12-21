@@ -1,12 +1,13 @@
-#include "serialization/crc32.h"
 #include <cstddef>
 #include <cstdint>
+
+#include "serialization/crc32.h"
 
 namespace serialization
 {
 
 // update updates the stored crc with new data, without XORing with 0xFFFFFFFF
-void crc32_t::update(std::span<const std::byte> data) noexcept
+[[nodiscard]] auto crc32_t::update(std::span<const std::byte> data) noexcept -> crc32_t &
 {
     for (const std::byte byte : data)
     {
@@ -14,6 +15,7 @@ void crc32_t::update(std::span<const std::byte> data) noexcept
 
         m_crc = (m_crc >> detail::CRC32_BITS) ^ TABLE[index];
     }
+    return *this;
 }
 
 // finalize returns the stored crc XORed with 0xFFFFFFFF

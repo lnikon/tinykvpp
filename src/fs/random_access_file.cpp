@@ -2,7 +2,6 @@
 #include <cstring>
 #include <fcntl.h>
 
-#include <iostream>
 #include <liburing.h>
 #include <spdlog/spdlog.h>
 #include <magic_enum/magic_enum.hpp>
@@ -95,7 +94,8 @@ auto random_access_file_t::write(std::string_view data, ssize_t offset) noexcept
             file_error_t{
                 .code = file_error_code_k::write_failed,
                 .system_errno = -res,
-                .message = fmt::format("Write operation failed. fd={}", m_fd),
+                .message =
+                    fmt::format("Write operation failed. errno={}, fd={}", strerror(-res), m_fd),
             }
         );
     }
@@ -103,9 +103,8 @@ auto random_access_file_t::write(std::string_view data, ssize_t offset) noexcept
 }
 
 auto random_access_file_t::read(ssize_t offset, char *buffer, size_t size) noexcept
-    -> std::expected<ssize_t, file_error_t>
+    -> std::expected<std::size_t, file_error_t>
 {
-    // return pread(m_fd, buffer, size, offset);
     ssize_t res = pread(m_fd, buffer, size, offset);
     if (res < 0)
     {
@@ -113,27 +112,44 @@ auto random_access_file_t::read(ssize_t offset, char *buffer, size_t size) noexc
             file_error_t{
                 .code = file_error_code_k::read_failed,
                 .system_errno = errno,
-                .message = fmt::format("Read operation failed. fd={}", m_fd),
+                .message =
+                    fmt::format("Read operation failed. errno={}, fd={}", strerror(errno), m_fd),
             }
         );
     }
-    return res;
+    return static_cast<std::size_t>(res);
 }
 
 auto random_access_file_t::size() const noexcept -> std::expected<std::size_t, file_error_t>
 {
-    struct stat st;
-    if (fstat(m_fd, &st) == -1)
+    struct stat stat{};
+    if (fstat(m_fd, &stat) == -1)
     {
         return std::unexpected(
             file_error_t{
                 .code = file_error_code_k::stat_failed,
                 .system_errno = errno,
-                .message = fmt::format("Failed to get file size. fd={}", m_fd),
+                .message =
+                    fmt::format("Failed to get file size. errno={}, fd={}", strerror(errno), m_fd),
             }
         );
     }
-    return static_cast<std::size_t>(st.st_size);
+    return static_cast<std::size_t>(stat.st_size);
+}
+
+auto random_access_file_t::fd() const noexcept -> std::expected<int, file_error_t>
+{
+    if (m_fd == -1)
+    {
+        return std::unexpected(
+            file_error_t{
+                .code = file_error_code_k::invalid_file_descriptor,
+                .system_errno = errno,
+                .message = fmt::format("Invalid file descriptor. fd={}", m_fd),
+            }
+        );
+    }
+    return m_fd;
 }
 
 auto random_access_file_t::flush() noexcept -> std::expected<void, file_error_t>
@@ -144,7 +160,8 @@ auto random_access_file_t::flush() noexcept -> std::expected<void, file_error_t>
             file_error_t{
                 .code = file_error_code_k::flush_failed,
                 .system_errno = errno,
-                .message = fmt::format("Flush operation failed. fd={}", m_fd),
+                .message =
+                    fmt::format("Flush operation failed. errno={}, fd={}", strerror(errno), m_fd),
             }
         );
     }
@@ -156,18 +173,24 @@ auto random_access_file_t::reset() noexcept -> std::expected<void, file_error_t>
     if (ftruncate(m_fd, 0) != 0)
     {
         return std::unexpected(
-            file_error_t::from_errno(
-                file_error_code_k::truncate_failed, errno, "File truncate operation failed"
-            )
+            file_error_t{
+                .code = file_error_code_k::truncate_failed,
+                .system_errno = errno,
+                .message = "File truncate operation failed"
+            }
         );
     }
 
     if (lseek(m_fd, 0, SEEK_SET) < 0)
     {
         return std::unexpected(
-            file_error_t::from_errno(
-                file_error_code_k::seek_failed, errno, "File seek operation failed"
-            )
+            file_error_t{
+                .code = file_error_code_k::seek_failed,
+                .system_errno = errno,
+                .message = fmt::format(
+                    "File seek operation failed. errno={}, fd={}", strerror(errno), m_fd
+                )
+            }
         );
     }
 
@@ -213,9 +236,9 @@ auto random_access_file_t::stream() noexcept -> std::expected<std::stringstream,
 }
 
 /**
- * @brief Creates an append-only file with the specified path.
+ * @brief Creates an random-access file with the specified path.
  *
- * This function creates or opens a file in append-only mode. The file can be
+ * The file can be
  * opened with direct I/O if specified. The function initializes an io_uring for
  * asynchronous I/O operations on the file.
  *
@@ -237,12 +260,11 @@ auto random_access_file_builder_t::build(fs::path_t path, posix_wrapper::open_fl
 {
     if (path.empty())
     {
-        std::cerr << "errorno: " << strerror(errno) << '\n';
         return std::unexpected(
             file_error_t{
                 .code = file_error_code_k::open_failed,
                 .system_errno = errno,
-                .message = fmt::format("Provided file path is empty"),
+                .message = fmt::format("Provided file path is empty. errno={}", strerror(errno)),
             }
         );
     }
@@ -250,12 +272,13 @@ auto random_access_file_builder_t::build(fs::path_t path, posix_wrapper::open_fl
     int fdes = open(path.c_str(), posix_wrapper::to_native(openFlags), kDefaultFilePermissions);
     if (fdes < 0)
     {
-        std::cerr << "errorno: " << strerror(errno) << '\n';
         return std::unexpected(
             file_error_t{
                 .code = file_error_code_k::open_failed,
                 .system_errno = errno,
-                .message = fmt::format("Failed to open file. path={}", path.c_str()),
+                .message = fmt::format(
+                    "Failed to open file. errno={}, path={}", strerror(errno), path.c_str()
+                ),
             }
         );
     }
@@ -263,13 +286,12 @@ auto random_access_file_builder_t::build(fs::path_t path, posix_wrapper::open_fl
     io_uring ring{};
     if (int res = io_uring_queue_init(kIOUringQueueEntries, &ring, 0); res < 0)
     {
-        std::cerr << "errorno=" << strerror(errno) << " ... io_uring_queue_init=Failure" << '\n';
         close(fdes);
         return std::unexpected(
             file_error_t{
                 .code = file_error_code_k::io_uring_init_failed,
                 .system_errno = errno,
-                .message = fmt::format("io_uring_queue_init failed"),
+                .message = fmt::format("io_uring_queue_init failed. errno={}", strerror(errno)),
             }
         );
     }

@@ -13,6 +13,7 @@ target_include_directories(
     Serialization
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../include
 )
+target_link_libraries(Serialization libassert::assert)
 
 # BufferReaderWriterTest
 add_executable(BufferReaderWriterTest buffer_reader_writer_test.cpp)

@@ -5,7 +5,6 @@
 #include <string>
 #include <sys/types.h>
 #include <chrono>
-#include <iostream>
 
 #include <structures/sorted_vector/sorted_vector.h>
 #include <structures/skiplist/skiplist.h>
@@ -24,8 +23,8 @@ class memtable_t
         {
             using storage_type_t = std::string;
 
-            explicit key_t(storage_type_t key);
-            key_t() = default;
+            explicit key_t(storage_type_t key) noexcept;
+            key_t() noexcept = default;
 
             auto operator<(const key_t &other) const -> bool;
             auto operator>(const key_t &other) const -> bool;
@@ -43,8 +42,8 @@ class memtable_t
         {
             using storage_type_t = std::string;
 
-            explicit value_t(storage_type_t value);
-            value_t() = default;
+            explicit value_t(storage_type_t value) noexcept;
+            value_t() noexcept = default;
 
             auto operator==(const value_t &other) const -> bool;
 
@@ -63,15 +62,23 @@ class memtable_t
             using precision_t = std::chrono::nanoseconds;
             using time_point_t = std::chrono::time_point<clock_t, precision_t>;
 
+            timestamp_t() noexcept;
+            explicit timestamp_t(time_point_t timePoint) noexcept;
+
             template <typename TSTream> void write(TSTream &outStream) const;
             template <typename TSTream> void read(TSTream &outStream);
 
-            time_point_t m_value{clock_t::now()};
+            time_point_t m_value;
         };
 
         // TODO(lnikon): Get rid of default ctor
         record_t() = default;
-        record_t(key_t key, value_t value, sequence_number_t sequenceNumber);
+        record_t(
+            key_t             key,
+            value_t           value,
+            sequence_number_t sequenceNumber,
+            timestamp_t       timestamp = timestamp_t{}
+        ) noexcept;
 
         auto operator<(const record_t &record) const -> bool;
         auto operator>(const record_t &record) const -> bool;

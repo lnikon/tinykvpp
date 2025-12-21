@@ -1,22 +1,25 @@
 #include <cassert>
 #include <cstdint>
-#include <fstream>
+#include <expected>
 #include <optional>
-#include <ios>
-#include <stdexcept>
 #include <string>
-#include <iostream>
+#include <unistd.h>
+#include <sys/mman.h>
 
 #include <spdlog/spdlog.h>
 #include <magic_enum/magic_enum.hpp>
 #include <libassert/assert.hpp>
 
-#include "serialization/buffer_writer.h"
-#include "serialization/common.h"
-#include "serialization/endian_integer.h"
+#include "structures/lsmtree/segments/lsmtree_regular_segment.h"
+#include "posix_wrapper/open_flag.h"
 #include "structures/lsmtree/lsmtree_types.h"
 #include "structures/memtable/memtable.h"
-#include "structures/lsmtree/segments/lsmtree_regular_segment.h"
+#include "serialization/buffer_reader.h"
+#include "serialization/buffer_writer.h"
+#include "serialization/common.h"
+#include "serialization/crc32.h"
+#include "serialization/endian_integer.h"
+#include "fs/random_access_file.h"
 
 namespace
 {
@@ -27,12 +30,12 @@ constexpr const std::uint32_t SEGMENT_VERSION_NUMBER{1};
 [[nodiscard]] auto calculate_header_size_bytes() noexcept -> std::uint32_t
 {
     std::uint32_t headerSize{0};
-    headerSize += 4; // magic
-    headerSize += 4; // version
-    headerSize += 4; // body_offset
-    headerSize += 4; // index_offset
-    headerSize += 4; // size
-    headerSize += 4; // crc32
+    headerSize += sizeof(std::uint32_t); // magic
+    headerSize += sizeof(std::uint32_t); // version
+    headerSize += sizeof(std::uint32_t); // body_offset
+    headerSize += sizeof(std::uint32_t); // index_offset
+    headerSize += sizeof(std::uint32_t); // size
+    headerSize += sizeof(std::uint32_t); // crc32
     return headerSize;
 }
 
@@ -45,6 +48,7 @@ calculate_body_size_bytes(const structures::memtable::memtable_t &memtable) noex
     {
         memtableSize += serialization::varint_size(record.m_key.m_key.length());
         memtableSize += record.m_key.m_key.length();
+        memtableSize += sizeof(std::uint64_t); // sequence_number
         memtableSize += serialization::varint_size(record.m_value.m_value.length());
         memtableSize += record.m_value.m_value.length();
         memtableSize += sizeof(std::uint64_t); // u64 timestamp
@@ -83,7 +87,34 @@ calculate_index_size_bytes(const structures::memtable::memtable_t &memtable) noe
         .write_endian_integer(serialization::le_uint32_t{headerSize})             // body_offset
         .write_endian_integer(serialization::le_uint32_t{headerSize + bodySize})  // index_ofset
         .write_endian_integer(serialization::le_uint32_t{bufferSize})             // size
+        .write_endian_integer(serialization::le_uint32_t{0}) // crc32, calculated later
         .error();
+}
+
+[[nodiscard]] auto serialize_crc32(
+    serialization::buffer_writer_t   &writer,
+    const std::span<const std::byte> &buffer,
+    std::uint32_t                     bufferSize,
+    std::uint32_t                     headerSize,
+    std::uint32_t                     bodyOffset
+) noexcept -> std::optional<serialization::serialization_error_k>
+{
+    const auto crc32{serialization::crc32_t{}
+                         .update(
+                             std::span(
+                                 static_cast<const std::byte *>(buffer.data()),
+                                 headerSize - sizeof(std::uint32_t)
+                             )
+                         )
+                         .update(
+                             std::span(
+                                 static_cast<const std::byte *>(buffer.data() + bodyOffset),
+                                 bufferSize - bodyOffset
+                             )
+                         )
+                         .finalize()};
+
+    return writer.write_endian_integer(serialization::le_uint32_t{crc32}).error();
 }
 
 [[nodiscard]] auto serialize_body(
@@ -92,9 +123,8 @@ calculate_index_size_bytes(const structures::memtable::memtable_t &memtable) noe
 {
     for (const auto &record : memtable)
     {
-        if (writer.write_varint(record.m_key.m_key.length())
-                .write_string(record.m_key.m_key)
-                .write_varint(record.m_value.m_value.length())
+        if (writer.write_string(record.m_key.m_key)
+                .write_endian_integer(serialization::le_uint64_t{record.m_sequenceNumber})
                 .write_string(record.m_value.m_value)
                 .write_endian_integer(
                     serialization::le_uint64_t{static_cast<std::uint32_t>(
@@ -128,30 +158,30 @@ calculate_index_size_bytes(const structures::memtable::memtable_t &memtable) noe
     std::uint32_t nextIndexEntryOffsetInBody{bodyOffset};
     for (const auto &record : memtable)
     {
-        if (writer.write_varint(record.m_key.m_key.length())
-                .write_string(record.m_key.m_key)
-                .write_endian_integer(serialization::le_uint64_t{nextIndexEntryOffsetInBody})
+        if (writer.write_string(record.m_key.m_key)
+                .write_endian_integer(serialization::le_uint32_t{nextIndexEntryOffsetInBody})
                 .has_error())
         {
             spdlog::error(
                 "Failed to serialize index entry. Error={}, key={}, offset={}",
                 magic_enum::enum_name(writer.error().value()),
-                record.m_key.m_key,
+                "",
                 nextIndexEntryOffsetInBody
             );
             return writer.error();
         }
 
-        nextIndexEntryOffsetInBody += serialization::varint_size(record.m_key.m_key.length()) +
-                                      record.m_key.m_key.length() +
-                                      serialization::varint_size(record.m_value.m_value.length()) +
-                                      record.m_value.m_value.length() + sizeof(std::uint64_t);
+        nextIndexEntryOffsetInBody +=
+            serialization::varint_size(record.m_key.m_key.length()) + record.m_key.m_key.length() +
+            sizeof(std::uint64_t) /* seq_num */ +
+            serialization::varint_size(record.m_value.m_value.length()) +
+            record.m_value.m_value.length() + sizeof(std::uint64_t) /* timestamp */;
     }
     return std::nullopt;
 }
 
 [[nodiscard]] auto serialize_segment(const structures::memtable::memtable_t &memtable) noexcept
-    -> std::optional<std::vector<std::byte>>
+    -> std::expected<std::vector<std::byte>, serialization::serialization_error_k>
 {
     // Calculate number of bytes being serialized
     const auto headerSize{calculate_header_size_bytes()};
@@ -163,21 +193,18 @@ calculate_index_size_bytes(const structures::memtable::memtable_t &memtable) noe
     const auto bodyOffset{headerSize};
 
     // Allocate the buffer
-    std::vector<std::byte> buffer;
-    buffer.reserve(bufferSize);
-    buffer.resize(bufferSize);
+    std::vector<std::byte> buffer(bufferSize);
 
     // Serialize into the buffer
     serialization::buffer_writer_t writer{buffer};
-    ASSERT(writer.bytes_written(), bufferSize);
 
-    if (auto error = serialize_header(writer, headerSize, bodySize, bufferSize))
+    if (auto error = serialize_header(writer, headerSize, bodySize, bufferSize); error.has_value())
     {
         spdlog::error(
             "Failed to serialize segment header. Error={}",
             magic_enum::enum_name(writer.error().value())
         );
-        return std::nullopt;
+        return std::unexpected(writer.error().value());
     }
 
     // TODO(lnikon): With a change to the binary_writer_t interface can combine these loops into a
@@ -189,7 +216,7 @@ calculate_index_size_bytes(const structures::memtable::memtable_t &memtable) noe
             "Failed to serialize segment body. Error={}",
             magic_enum::enum_name(writer.error().value())
         );
-        return std::nullopt;
+        return std::unexpected(writer.error().value());
     }
 
     if (auto error = serialize_index(writer, memtable, bodyOffset); error.has_value())
@@ -198,8 +225,22 @@ calculate_index_size_bytes(const structures::memtable::memtable_t &memtable) noe
             "Failed to serialize segment index. Error={}",
             magic_enum::enum_name(writer.error().value())
         );
-        return std::nullopt;
+        return std::unexpected(writer.error().value());
     }
+
+    const auto previousCursor{writer.set_cursor(headerSize - sizeof(std::uint32_t))};
+    if (auto error = serialize_crc32(writer, buffer, bufferSize, headerSize, bodyOffset);
+        error.has_value())
+    {
+        spdlog::error(
+            "Failed to serialize segment crc32. Error={}",
+            magic_enum::enum_name(writer.error().value())
+        );
+        return std::unexpected(writer.error().value());
+    }
+    (void)writer.set_cursor(previousCursor);
+
+    ASSERT(writer.bytes_written(), bufferSize);
 
     return buffer;
 }
@@ -208,9 +249,6 @@ calculate_index_size_bytes(const structures::memtable::memtable_t &memtable) noe
 
 namespace structures::lsmtree::segments::regular_segment
 {
-
-// TODO(lnikon): This is horrible.
-const auto footerSize{128}; // bytes
 
 regular_segment_t::regular_segment_t(
     fs::path_t path, types::name_t name, memtable::memtable_t memtable
@@ -227,13 +265,14 @@ regular_segment_t::regular_segment_t(
     if (m_hashIndex.empty())
     {
         spdlog::warn("Hash index is empty for segment {}", m_path.c_str());
-        // restore_index();
+        restore_index();
         assert(!m_hashIndex.empty());
     }
 
     const auto offsets{m_hashIndex.offset(key)};
     if (offsets.empty())
     {
+        spdlog::warn("No offset for key={} in index", key.m_key);
         return {};
     }
 
@@ -247,18 +286,96 @@ regular_segment_t::regular_segment_t(
     return result;
 }
 
-auto regular_segment_t::record(const hashindex::hashindex_t::offset_t &offset)
+auto regular_segment_t::record(const hashindex::hashindex_t::offset_t &offset) const
     -> std::optional<record_t>
 {
-    std::fstream ss{get_path(), std::ios::in | std::fstream::binary};
-    ss.seekg(offset);
+    const auto file{fs::random_access_file::random_access_file_builder_t{}.build(
+        get_path(), posix_wrapper::open_flag_k::kReadOnly
+    )};
+    if (!file.has_value())
+    {
+        spdlog::error(
+            "Failed to open segment file for reading record. Error={}, path={}",
+            file.error().message,
+            get_path().string()
+        );
+        return std::nullopt;
+    }
 
-    // TODO(lnikon): Use binary_buffer_reader_t here
-    // memtable_t::record_t record;
-    // record.read(ss);
-    // return std::make_optional(std::move(record));
+    const auto fileSizeOpt{file->size()};
+    if (!fileSizeOpt.has_value())
+    {
+        spdlog::error(
+            "Failed to get segment file size. Error={}, path={}",
+            file.error().message,
+            get_path().string()
+        );
+        return std::nullopt;
+    }
+    const auto fileSize{fileSizeOpt.value()};
+    if (fileSize == 0)
+    {
+        spdlog::error("Segment file size is zero. Path={}", get_path().string());
+        return std::nullopt;
+    }
 
-    return std::nullopt;
+    const auto fdOpt{file->fd()};
+    if (!fdOpt.has_value())
+    {
+        spdlog::error(
+            "Segment file has an invalid file descriptor. Error={}, path={}",
+            file.error().message,
+            get_path().string()
+        );
+        return std::nullopt;
+    }
+    const auto fd{fdOpt.value()};
+
+    void *mmapPtr{mmap(nullptr, fileSize, PROT_READ, MAP_PRIVATE, fd, 0)};
+    if (mmapPtr == MAP_FAILED)
+    {
+        // TODO(lnikon): Should fallback to read() + buffer?
+        spdlog::error(
+            "Failed to mmap segment file. Error={}, path={}", strerror(errno), get_path().string()
+        );
+        return std::nullopt;
+    }
+
+    madvise(mmapPtr, fileSize, MADV_RANDOM);
+
+    std::span<std::byte> mmapSpan{static_cast<std::byte *>(mmapPtr) + offset, fileSize - offset};
+
+    serialization::buffer_reader_t reader{mmapSpan};
+
+    std::string                key;
+    serialization::le_uint64_t sequenceNumber{0};
+    std::string                value;
+    serialization::le_uint64_t timestamp{0};
+
+    if (auto error = reader.read_string(key)
+                         .read_endian_integer(sequenceNumber)
+                         .read_string(value)
+                         .read_endian_integer(timestamp);
+        error.has_error())
+    {
+        spdlog::error(
+            "Unable to reader a record from a segment file. Error={}, path={}",
+            magic_enum::enum_name(reader.error().value()),
+            get_path().string()
+        );
+        return std::nullopt;
+    }
+
+    memtable_t::record_t record{
+        memtable_t::record_t::key_t{std::move(key)},
+        memtable_t::record_t::value_t{std::move(value)},
+        sequenceNumber.get(),
+        memtable_t::record_t::timestamp_t{memtable_t::record_t::timestamp_t::time_point_t{
+            std::chrono::nanoseconds{timestamp.get()}
+        }}
+    };
+
+    return std::make_optional(std::move(record));
 }
 
 void regular_segment_t::flush()
@@ -283,18 +400,32 @@ void regular_segment_t::flush()
         return;
     }
 
-    std::ofstream binaryStream(get_path(), std::ios::binary);
-    if (!binaryStream.is_open())
+    auto file{fs::random_access_file::random_access_file_builder_t{}.build(
+        get_path(), posix_wrapper::open_flag_k::kReadWrite | posix_wrapper::open_flag_k::kCreate
+
+    )};
+    if (!file.has_value())
     {
-        spdlog::error(
-            "Unable to open binary stream to write segment. Path={}", get_path().string()
+        spdlog::critical(
+            "Failed to open the file. Error={}, path={}", file.error().message, get_path().string()
+        );
+    }
+
+    if (const auto result = file->write(
+            std::string_view(
+                reinterpret_cast<const char *>(bufferOpt.value().data()), bufferOpt.value().size()
+            ),
+            0
+        );
+        !result.has_value())
+    {
+        spdlog::critical(
+            "Failed to write serialized binary data into the file. Error={}, path={}",
+            result.error().message,
+            get_path().string()
         );
         return;
     }
-
-    binaryStream.write(
-        reinterpret_cast<const char *>(bufferOpt.value().data()), bufferOpt.value().size()
-    );
 }
 
 void regular_segment_t::remove_from_disk() const noexcept
@@ -375,50 +506,183 @@ void regular_segment_t::restore()
     }
 }
 
-// TODO(lnikon): Add validations on file size. Need 'RandomAccessFile'.
 void regular_segment_t::restore_index()
 {
-    std::fstream sst(m_path, std::fstream::binary);
-    if (!sst.is_open())
+    // Open file
+    auto file{fs::random_access_file::random_access_file_builder_t{}.build(
+        get_path(), posix_wrapper::open_flag_k::kReadOnly
+    )};
+    if (!file.has_value())
     {
-        // TODO(lnikon): Better way to handle this case. Without exceptions.
-        throw std::runtime_error("unable to open SST " + m_path.string());
+        spdlog::critical(
+            "Failed to open the segment file. Error={}, path={}",
+            file.error().message,
+            get_path().string()
+        );
     }
 
-    // Seek to the beginning of the footer
-    sst.seekg(-footerSize - 1, std::ios_base::end);
-
-    // Read index block offset and size
-    std::size_t indexBlockOffset{0};
-    std::size_t indexBlockSize{0};
-    sst >> indexBlockOffset;
-    sst >> indexBlockSize;
-
-    // Seek to the begging of the index block
-    sst.seekg(indexBlockOffset, std::ios_base::beg);
-
-    // Start reading <key, offset> pairs
-    std::size_t bytesRead{0};
-    std::string key;
-    std::size_t offset{0};
-    std::string line;
-    while (bytesRead <= indexBlockSize - 1 && std::getline(sst, line))
+    // Get file size
+    const auto expectedFileSize = file->size();
+    if (!expectedFileSize.has_value())
     {
-        std::istringstream lineStream{line};
-        //        auto start = sst.tellg();
-        lineStream >> key;
-        //        auto end = sst.tellg();
-        //        bytesRead += end - start;
+        spdlog::critical("Failed to get segment file size. Path={}", get_path().string());
+        return;
+    }
+    const auto fileSize{expectedFileSize.value()};
 
-        //        start = sst.tellg();
-        lineStream >> offset;
-        //        end = sst.tellg();
-        //        bytesRead += end - start;
-        bytesRead += line.size() + 1;
+    // Allocate the buffer
+    // TODO(lnikon): May be optimized using mmap
+    // TODO(lnikon): Allocate enough bytes to read the header. Don't read entire file, as we need to
+    //               restore the index only
+    std::vector<std::byte> buffer(fileSize);
+    spdlog::info("buffer size={}", buffer.size());
 
-        m_hashIndex.emplace(
-            structures::lsmtree::record_t{key_t{key}, value_t{}, sequence_number_t{}}, offset
+    // Read file into the buffer
+    const auto readResult{file->read(0, reinterpret_cast<char *>(&buffer.front()), fileSize)};
+    if (!readResult.has_value())
+    {
+        spdlog::error(
+            "Failed to read segment file. Error={}, path={}",
+            readResult.error().message,
+            get_path().string()
         );
+        return;
+    }
+
+    if (readResult.value() != fileSize)
+    {
+        spdlog::error(
+            "Failed to read segment file. Expected size={}, read size={}, path={}",
+            fileSize,
+            readResult.value(),
+            get_path().string()
+        );
+        return;
+    }
+
+    spdlog::info("buffer size={}", buffer.size());
+
+    // Read the header
+    struct header_t final
+    {
+        serialization::le_uint32_t magic{0};
+        serialization::le_uint32_t version{0};
+        serialization::le_uint32_t bodyOffset{0};
+        serialization::le_uint32_t indexOffset{0};
+        serialization::le_uint32_t size{0};
+        serialization::le_uint32_t crc32{0};
+    } header;
+
+    serialization::buffer_reader_t reader{buffer};
+    if (auto error = reader.read_endian_integer(header.magic)
+                         .read_endian_integer(header.version)
+                         .read_endian_integer(header.bodyOffset)
+                         .read_endian_integer(header.indexOffset)
+                         .read_endian_integer(header.size)
+                         .read_endian_integer(header.crc32)
+                         .error();
+        error.has_value())
+    {
+        spdlog::error(
+            "Failed to read segment header. Error={}, path={}",
+            magic_enum::enum_name(error.value()),
+            get_path().string()
+        );
+        return;
+    }
+
+    spdlog::info(
+        "read header: magic={} version={} bodyOffset={} indexOffset={} size={} crc32={}",
+        header.magic.get(),
+        header.version.get(),
+        header.bodyOffset.get(),
+        header.indexOffset.get(),
+        header.size.get(),
+        header.crc32.get()
+    );
+
+    // Validate segment magic number
+    if (header.magic.get() != SEGMENT_HEADER_MAGIC_NUMBER)
+    {
+        spdlog::error(
+            "Segment header magic mismatch. Expected={}, got={}, path={}",
+            SEGMENT_HEADER_MAGIC_NUMBER,
+            header.magic.get(),
+            get_path().string()
+        );
+        return;
+    }
+
+    // Validate segment version number
+    if (header.version.get() != SEGMENT_VERSION_NUMBER)
+    {
+        spdlog::error(
+            "Segment version mismatch. Expected={}, got={}, path={}",
+            SEGMENT_VERSION_NUMBER,
+            header.version.get(),
+            get_path().string()
+        );
+        return;
+    }
+
+    // Validate segment size
+    if (header.size.get() != fileSize)
+    {
+        spdlog::error(
+            "Segment size mismatch. Expected={}, got={}, path={}",
+            fileSize,
+            header.size.get(),
+            get_path().string()
+        );
+        return;
+    }
+
+    // Validate CRC32
+    const auto calculatedCrc{
+        serialization::crc32_t{}
+            .update(
+                std::span(buffer.data(), calculate_header_size_bytes() - sizeof(std::uint32_t))
+
+            )
+            .update(
+                std::span(
+                    buffer.data() + header.bodyOffset.get(), buffer.size() - header.bodyOffset.get()
+                )
+            )
+            .finalize()
+    };
+    if (calculatedCrc != header.crc32.get())
+    {
+        spdlog::error(
+            "Segment checksum mismatch. Expected={}, got={}, path={}",
+            header.crc32.get(),
+            calculatedCrc,
+            get_path().string()
+        );
+        return;
+    }
+
+    // Read the index
+    serialization::buffer_reader_t indexReader{std::span(
+        buffer.data() + header.indexOffset.get(), buffer.size() - header.indexOffset.get()
+    )};
+    while (!indexReader.eof())
+    {
+        std::string                key;
+        serialization::le_uint32_t entryOffset{0};
+
+        if (auto error = indexReader.read_string(key).read_endian_integer(entryOffset).error();
+            error.has_value())
+        {
+            spdlog::error(
+                "Failed to read segment index. Error={}, path={}",
+                magic_enum::enum_name(error.value()),
+                get_path().string()
+            );
+            return;
+        }
+
+        m_hashIndex.emplace(std::move(key), entryOffset.get());
     }
 
     if (m_hashIndex.empty())

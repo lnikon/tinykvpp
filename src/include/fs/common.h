@@ -32,6 +32,7 @@ enum class file_error_code_k : int8_t
     seek_failed,
     truncate_failed,
     flush_failed,
+    invalid_file_descriptor
 };
 
 struct file_error_t
