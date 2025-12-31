@@ -30,9 +30,6 @@ class memtable_t
             auto operator>(const key_t &other) const -> bool;
             auto operator==(const key_t &other) const -> bool;
 
-            template <typename TSTream> void write(TSTream &outStream) const;
-            template <typename TSTream> void read(TSTream &outStream);
-
             [[nodiscard]] auto size() const -> std::size_t;
 
             storage_type_t m_key;
@@ -46,9 +43,6 @@ class memtable_t
             value_t() noexcept = default;
 
             auto operator==(const value_t &other) const -> bool;
-
-            template <typename TSTream> void write(TSTream &outStream) const;
-            template <typename TSTream> void read(TSTream &outStream);
 
             [[nodiscard]] auto size() const -> std::size_t;
 
@@ -65,8 +59,7 @@ class memtable_t
             timestamp_t() noexcept;
             explicit timestamp_t(time_point_t timePoint) noexcept;
 
-            template <typename TSTream> void write(TSTream &outStream) const;
-            template <typename TSTream> void read(TSTream &outStream);
+            static auto from_representation(precision_t::rep rep) noexcept -> timestamp_t;
 
             time_point_t m_value;
         };
@@ -85,9 +78,6 @@ class memtable_t
         auto operator==(const record_t &record) const -> bool;
 
         [[nodiscard]] auto size() const -> std::size_t;
-
-        template <typename TSTream> void write(TSTream &outStream) const;
-        template <typename TSTream> void read(TSTream &outStream);
 
         key_t             m_key;
         value_t           m_value;
@@ -112,75 +102,25 @@ class memtable_t
     using const_iterator = typename storage_t::const_iterator;
     using value_type = typename storage_t::value_type;
 
-    /**
-     * @brief
-     *
-     * @param record
-     */
     void emplace(record_t record);
 
-    /**
-     * @brief
-     *
-     * @param key
-     */
     [[nodiscard]] auto find(const record_t::key_t &key) const noexcept -> std::optional<record_t>;
 
-    /**
-     * @brief
-     */
     [[nodiscard]] auto size() const -> std::size_t;
-
-    /**
-     * @brief
-     */
     [[nodiscard]] auto num_of_bytes_used() const -> std::size_t;
 
-    /**
-     * @brief
-     */
     [[nodiscard]] auto count() const -> std::size_t;
-
-    /**
-     * @brief
-     */
     [[nodiscard]] auto empty() const -> bool;
 
-    /**
-     * @brief
-     */
     [[nodiscard]] auto begin() const -> typename storage_t::const_iterator;
-
-    /**
-     * @brief
-     */
     [[nodiscard]] auto end() const -> typename storage_t::const_iterator;
 
-    /**
-     * @brief
-     */
     [[nodiscard]] auto min() const noexcept -> std::optional<record_t::key_t>;
-
-    /**
-     * @brief
-     */
     [[nodiscard]] auto max() const noexcept -> std::optional<record_t::key_t>;
 
-    /**
-     * @brief
-     */
     [[nodiscard]] auto moved_records() -> std::vector<memtable_t::record_t>;
 
-    /**
-     * @brief
-     *
-     * @param other
-     * @return
-     */
     auto operator<(const memtable_t &other) const -> bool;
-
-    template <typename TSTream> void write(TSTream &outStream) const;
-    template <typename TSTream> void read(TSTream &outStream);
 
   private:
     storage_t   m_data;
@@ -188,86 +128,6 @@ class memtable_t
     std::size_t m_count{0};
     std::size_t m_num_of_bytes{0};
 };
-
-// ------------------------------------------------
-// memtable_t::record_t::key_t
-// ------------------------------------------------
-template <typename TStream> void memtable_t::record_t::key_t::write(TStream &outStream) const
-{
-    outStream << m_key.size() << ' ' << m_key;
-}
-
-template <typename TSTream> void memtable_t::record_t::key_t::read(TSTream &outStream)
-{
-    std::size_t size{0};
-    outStream >> size;
-    m_key.resize(size);
-    outStream >> m_key;
-}
-
-// ------------------------------------------------
-// memtable_t::record_t::value_t
-// ------------------------------------------------
-template <typename TSTream> void memtable_t::record_t::value_t::write(TSTream &outStream) const
-{
-    outStream << size() << ' ' << m_value;
-}
-
-template <typename TSTream> void memtable_t::record_t::value_t::read(TSTream &outStream)
-{
-    std::size_t size{0};
-    outStream >> size;
-    m_value.reserve(size);
-    outStream >> m_value;
-}
-
-// ------------------------------------------------
-// memtable_t::record_t::timestamp_t
-// ------------------------------------------------
-template <typename TSTream> void memtable_t::record_t::timestamp_t::write(TSTream &outStream) const
-{
-    outStream << static_cast<std::uint64_t>(m_value.time_since_epoch().count());
-}
-
-template <typename TSTream> void memtable_t::record_t::timestamp_t::read(TSTream &outStream)
-{
-    clock_t::rep count = 0;
-    outStream >> count;
-    m_value = clock_t::time_point{clock_t::duration{count}};
-}
-
-// ------------------------------------------------
-// memtable_t::record_t
-// ------------------------------------------------
-template <typename TSTream> void memtable_t::record_t::write(TSTream &outStream) const
-{
-    m_key.write(outStream);
-    outStream << ' ';
-    m_value.write(outStream);
-    outStream << ' ';
-    m_timestamp.write(outStream);
-}
-
-template <typename TSTream> void memtable_t::record_t::read(TSTream &outStream)
-{
-    m_key.read(outStream);
-    m_value.read(outStream);
-    m_timestamp.read(outStream);
-}
-
-template <typename TSTream> void memtable_t::write(TSTream &outStream) const
-{
-    for (auto rec : *this)
-    {
-        rec.write(outStream);
-        outStream << std::endl;
-    }
-}
-
-template <typename TSTream> void memtable_t::read(TSTream &outStream)
-{
-    (void)outStream;
-}
 
 } // namespace structures::memtable
 

@@ -59,7 +59,7 @@ gtest_discover_tests(VarintTest)
 
 # CRC32
 add_executable(CRC32Test crc32_test.cpp)
-set_target_properties(VarintTest PROPERTIES CXX_STANDARD 23)
+set_target_properties(CRC32Test PROPERTIES CXX_STANDARD 23)
 target_link_libraries(
     CRC32Test
     gtest::gtest

@@ -24,6 +24,7 @@ enum NodeState {
 message LogEntry {
   uint32 term = 1;
   uint32 index = 2;
+  reserved 3;
   bytes payload = 4;
 }
 
@@ -54,14 +55,14 @@ message RequestVoteRequest {
 
 message RequestVoteResponse {
   uint32 term = 1;
-  uint32 vote_granted = 2;
+  bool vote_granted = 2;
   uint32 responder_id = 3;
 }
 
 message ReplicateRequest {
   uint32 term = 1;
   uint32 sender_id = 2;
-  repeated string payloads = 3;
+  repeated bytes payloads = 3;
 }
 
 message ReplicateResponse {

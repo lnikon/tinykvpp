@@ -1,12 +1,7 @@
-#include <algorithm>
 #include <filesystem>
-#include <iterator>
 #include <random>
-#include <array>
 
 #include <fmt/core.h>
-
-#include "common/uuid.h"
 
 namespace common
 {
@@ -17,27 +12,22 @@ auto generateRandomNumber(
     const TNumber max = std::numeric_limits<TNumber>::max()
 ) noexcept -> TNumber
 {
-    std::mt19937 rng{std::random_device{}()};
-    if constexpr (std::is_same_v<int, TNumber>)
+    static thread_local std::mt19937 rng{std::random_device{}()};
+
+    if constexpr (std::is_integral_v<TNumber>)
     {
         return std::uniform_int_distribution<TNumber>(min, max)(rng);
     }
-    else if (std::is_same_v<std::size_t, TNumber>)
+    else if constexpr (std::is_floating_point_v<TNumber>)
     {
-        return std::uniform_int_distribution<TNumber>(min, max)(rng);
-    }
-    else if (std::is_same_v<double, TNumber>)
-    {
-        return std::uniform_real_distribution<double>(min, max)(rng);
-    }
-    else if (std::is_same_v<float, TNumber>)
-    {
-        return std::uniform_real_distribution<float>(min, max)(rng);
+        return std::uniform_real_distribution<TNumber>(min, max)(rng);
     }
     else
     {
-        // TODO(vahag): better handle this case
-        return 0;
+        static_assert(
+            std::is_integral_v<TNumber> || std::is_floating_point_v<TNumber>,
+            "TNumber must be an integral or floating-point type"
+        );
     }
 }
 

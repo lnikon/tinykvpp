@@ -126,7 +126,7 @@ static const nlohmann::json database_config_schema = R"(
   "$defs": {
     "serverTransport": {
       "type": "string",
-      "enum": ["grpc", "tcp"]
+      "enum": ["grpc"]
     },
     "loggingLevel": {
       "type": "string",
@@ -241,7 +241,7 @@ void configureLogging(const std::string &loggingLevel)
     }
     else
     {
-        throw std::runtime_error(fmt::format("Unknown logging level: %s", loggingLevel));
+        throw std::runtime_error(fmt::format("Unknown logging level: {}", loggingLevel));
     }
 }
 
@@ -437,7 +437,7 @@ auto loadServerConfig(const nlohmann::json &configJson, config::shared_ptr_t dbC
     }
     else
     {
-        throw std::runtime_error("\"id\" is not specified in the config");
+        throw std::runtime_error("\"peers\" is not specified in the config");
     }
 }
 

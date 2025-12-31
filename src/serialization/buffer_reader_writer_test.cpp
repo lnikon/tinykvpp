@@ -35,7 +35,9 @@ TEST(EndianInteger, FromBytes)
     const std::int8_t podInt8{12};
     const le_int8_t   expectedInt8{podInt8};
 
-    EXPECT_EQ(expectedInt8.get(), podInt8);
+    const auto reconstructred{le_int8_t::from_bytes(expectedInt8.bytes())};
+
+    EXPECT_EQ(reconstructred.get(), podInt8);
 }
 
 TEST(BufferReaderWriterTest, ReadYourWrites)

@@ -25,7 +25,7 @@ struct config_t
 
 using shared_ptr_t = std::shared_ptr<config_t>;
 
-template <typename... Args> auto make_shared(Args... args)
+template <typename... Args> auto make_shared(Args &&...args)
 {
     return std::make_shared<config_t>(std::forward(args)...);
 }

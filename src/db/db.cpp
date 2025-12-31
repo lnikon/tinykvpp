@@ -355,7 +355,7 @@ void db_t::monitorPendingRequests()
 
         if (!timedOut.empty())
         {
-            absl::ReaderMutexLock locker{&m_pendingMutex};
+            absl::WriterMutexLock locker{&m_pendingMutex};
             for (auto id : timedOut)
             {
                 requestFailed(id);

@@ -454,7 +454,7 @@ auto consensus_module_t::RequestVote(
     );
 
     pResponse->set_term(m_currentTerm);
-    pResponse->set_vote_granted(0);
+    pResponse->set_vote_granted(false);
     pResponse->set_responder_id(m_nodeConfig.m_id);
 
     // Become follower if candidates has higher term
@@ -484,12 +484,12 @@ auto consensus_module_t::RequestVote(
             if (!updatePersistentState(std::nullopt, pRequest->candidate_id()))
             {
                 spdlog::error(
-                    "Node={} is unable to persist votedFor", m_nodeConfig.m_id, m_votedFor
+                    "Node={} is unable to persist votedFor={}", m_nodeConfig.m_id, m_votedFor
                 );
             }
 
             pResponse->set_term(m_currentTerm);
-            pResponse->set_vote_granted(1);
+            pResponse->set_vote_granted(true);
         }
     }
 

@@ -179,17 +179,15 @@ template <typename TRecord, typename TComparator> class skiplist_t
         if (current == nullptr || current->record.m_key != record.m_key)
         {
             // Insert new node
-            node_shared_ptr_t newNode =
-                std::make_shared<node_t>(std::forward<TRecord>(record), m_level);
+            auto newNode = std::make_shared<node_t>(std::forward<TRecord>(record), m_level);
             for (std::int64_t i{0}; i <= newLevel; i++)
             {
                 newNode->forward[i] = to_be_updated[i]->forward[i];
                 to_be_updated[i]->forward[i] = newNode;
             }
-
             m_size++;
         }
-        else if (current->record.m_key == record.m_key)
+        else
         {
             // Update value of the existing node
             current->record = std::forward<TRecord>(record);

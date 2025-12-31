@@ -184,4 +184,14 @@ auto memtable_t::operator<(const memtable_t &other) const -> bool
     return max() < other.min();
 }
 
+auto memtable_t::record_t::timestamp_t::from_representation(precision_t::rep rep) noexcept
+    -> timestamp_t
+{
+    return memtable_t::record_t::timestamp_t{memtable_t::record_t::timestamp_t::time_point_t{
+        memtable_t::record_t::timestamp_t::precision_t{
+            memtable_t::record_t::timestamp_t::precision_t::rep{rep}
+        }
+    }};
+}
+
 } // namespace structures::memtable

@@ -15,10 +15,10 @@ HEADER (24 bytes):
 +--------+--------+--------+--------+--------+--------+
 
 BODY (variable):
-+----------+-----+----------+-----+-----------+
-| key_len  | key | val_len  | val | timestamp |
-| (varint) | var | (varint) | var | (u32)     |
-+----------+-----+----------+-----+-----------+
++----------+-----+----------+----------+-----+-----------+
+| key_len  | key | seq_num  | val_len  | val | timestamp |
+| (varint) | var | (u64)    | (varint) | var | (u32)     |
++----------+-----+----------+----------+-----+-----------+
 Repeated for each entry
 
 INDEX (variable):
@@ -51,6 +51,7 @@ Body {
   for each entry in table:
       varint key_len
       u8[key_len] key
+      u64 seq_num
       varint value_len
       u8[value_len] value
       u32 timestamp
@@ -90,37 +91,4 @@ CRC32 calculated based on the whole file excluding the checksum field itself.
 
 6. **Payload Size Mismatch**: If `payload_size != (file_size - 24)`,
    file may be truncated or corrupted, throw error "Payload size mismatch".
-
-## Example
-
-  **Input Table:**
-  - Entry 1: key="foo", value="bar", timestamp=100
-  - Entry 2: key="x", value="yz", timestamp=200
-
-  **Binary Output (hex dump):**
-
-```
-  HEADER (bytes 0-23):
-    EF BE AD DE 01 00 00 00 18 00 00 00 2E 00 00 00 24 00 00 00 08 E2 98 1F
-    ^magic      ^version   ^body_off   ^index_off  ^payload_sz ^checksum
-
-  BODY (bytes 24-45, 22 bytes total):
-    03 66 6F 6F 03 62 61 72 64 00 00 00 01 78 02 79 7A C8 00 00 00
-    ^key_len(3) ^"foo"     ^val_len(3) ^"bar"     ^ts(100)  ^key_len(1) ^"x" ^val_len(2) ^"yz" ^ts(200)
-
-  INDEX (bytes 46-59, 14 bytes total):
-    03 66 6F 6F 00 00 00 00 01 78 0D 00 00 00
-    ^key_len(3) ^"foo"     ^offset(0) ^key_len(1) ^"x" ^offset(13)
-
-  **Offset Summary:**
-  | Section | Offset | Size | End  |
-  |---------|--------|------|------|
-  | Header  | 0      | 24   | 23   |
-  | Body    | 24     | 22   | 45   |
-  | Index   | 46     | 14   | 59   |
-  | **Total** | **0** | **60** | **59** |
-
-  **CRC32 Calculation:**
-  Computed over bytes 0-19 (header without checksum) + 24-59 (body + index) = 0x1F98E208
-```
 

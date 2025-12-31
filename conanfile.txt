@@ -16,6 +16,7 @@ libassert/2.1.4
 magic_enum/0.9.7
 liburing/2.11
 ms-gsl/4.2.0
+libuuid/1.0.3
 
 [tool_requires]
 protobuf/5.27.0

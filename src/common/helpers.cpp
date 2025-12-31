@@ -1,5 +1,11 @@
-#include "common/helpers.h"
+#include <algorithm>
+#include <iterator>
+#include <array>
+
 #include <spdlog/spdlog.h>
+
+#include "common/uuid.h"
+#include "common/helpers.h"
 
 namespace common
 {
@@ -31,7 +37,7 @@ auto segment_path(const std::filesystem::path &datadir, const std::string &name)
 auto generateRandomString(std::size_t length) noexcept -> std::string
 {
     std::mt19937_64                         gen(std::random_device{}());
-    std::uniform_int_distribution<uint64_t> dis(1, 255);
+    std::uniform_int_distribution<uint64_t> dis(0, 255);
 
     std::string result;
     result.reserve(length);

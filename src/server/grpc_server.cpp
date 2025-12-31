@@ -36,9 +36,10 @@ auto tinykvpp_service_impl_t::Put(
                    ? grpc::Status::OK
                    : grpc::Status{grpc::StatusCode::INTERNAL, result.message};
     }
-    catch (std::exception &e)
+    catch (const std::exception &e)
     {
-        return grpc::Status::CANCELLED;
+        spdlog::error("Excetion in Put operation: {}", e.what());
+        return grpc::Status{grpc::INTERNAL, e.what()};
     }
 }
 
@@ -57,9 +58,10 @@ auto tinykvpp_service_impl_t::Get(
                    ? grpc::Status::OK
                    : grpc::Status{grpc::StatusCode::INTERNAL, result.message};
     }
-    catch (std::exception &e)
+    catch (const std::exception &e)
     {
-        return grpc::Status::CANCELLED;
+        spdlog::error("Excetion in Get operation: {}", e.what());
+        return grpc::Status{grpc::INTERNAL, e.what()};
     }
 }
 
@@ -74,19 +76,19 @@ void grpc_communication_t::start(db::shared_ptr_t database) noexcept
     if (!m_service && m_server)
     {
         spdlog::error("gRPC service is not initialized");
-        exit(EXIT_FAILURE);
+        return;
     }
 
     if (!m_server && m_service)
     {
         spdlog::error("gRPC server is not initialized");
-        exit(EXIT_FAILURE);
+        return;
     }
 
     if (!database)
     {
         spdlog::error("Database is not initialized");
-        exit(EXIT_FAILURE);
+        return;
     }
 
     spdlog::info("Starting gRPC communication...");
@@ -107,16 +109,15 @@ void grpc_communication_t::start(db::shared_ptr_t database) noexcept
         if (!m_server)
         {
             spdlog::error("Failed to create gRPC server on {}", serverAddress);
-            exit(EXIT_FAILURE);
+            return;
         }
 
         spdlog::info("Server listening on {}", serverAddress);
         m_server->Wait();
     }
-    catch (std::exception &e)
+    catch (const std::exception &e)
     {
         spdlog::error("Excetion occured while creating gRPC server. {}", e.what());
-        exit(EXIT_FAILURE);
     }
 }
 
@@ -124,13 +125,17 @@ void grpc_communication_t::shutdown() noexcept
 {
     try
     {
+        if (!m_server)
+        {
+            spdlog::warn("gRPC server is not running. Nothing to shutdown");
+            return;
+        }
+
         m_server->Shutdown();
     }
-    catch (std::exception &e)
+    catch (const std::exception &e)
     {
-
         spdlog::error("Excetion occured while shutting down gRPC server. {}", e.what());
-        exit(EXIT_FAILURE);
     }
 }
 

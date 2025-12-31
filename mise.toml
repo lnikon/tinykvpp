@@ -5,19 +5,19 @@ buf = "latest"
 
 [env]
 PROFILE = "debug"
-COMPILER = "clang"
+COMPILER = "gcc"
 JOBS = "24"
-IMAGE = "silkeh/clang"
+IMAGE = "gcc"
 IMAGE_VERSION = "latest"
 
 [tasks.conan]
 run = [
-  "conan install . --output-folder=build --build=missing --profile=./conan/profiles/$PROFILE-$COMPILER",
-  "cmake --preset conan-$PROFILE",
+  "conan install . --output-folder=build --build=missing --profile=./conan/profiles/{{env.PROFILE}}-{{env.COMPILER}}",
+  "cmake --preset conan-{{env.PROFILE}}",
 ]
 
 [tasks.build]
-run = ["cmake --build ./build -j$JOBS"]
+run = ["cmake --build ./build -j{{env.JOBS}}"]
 
 [tasks.image]
 run = """

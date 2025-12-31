@@ -43,7 +43,7 @@ level_t::level_t(
 ) noexcept
     : m_levelIndex{levelIndex},
       m_pConfig{std::move(pConfig)},
-      m_manifest{std::move(std::move(manifest))}
+      m_manifest{std::move(manifest)}
 {
 }
 

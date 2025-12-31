@@ -50,8 +50,10 @@ template <typename T, std::endian Target = std::endian::little> class endian_int
 
     static auto from_bytes(std::span<const std::byte> bytes) -> endian_integer
     {
+        assert(bytes.size() == sizeof(T));
+
         endian_integer result{0};
-        std::memcpy(result.m_bytes.data(), bytes.data(), bytes.size());
+        std::memcpy(result.m_bytes.data(), bytes.data(), sizeof(T));
         return result;
     }
 

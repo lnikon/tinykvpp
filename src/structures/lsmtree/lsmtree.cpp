@@ -281,10 +281,10 @@ auto lsmtree_builder_t::build_levels_from_manifest(
                         pLevels->level(record.level)
                             ->emplace(
                                 segments::factories::lsmtree_segment_factory(
-                                    record.name,
                                     segments::helpers::segment_path(
                                         pConfig->datadir_path(), record.name
                                     ),
+                                    record.name,
                                     memtable_t{}
                                 )
                             );

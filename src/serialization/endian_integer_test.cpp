@@ -1,3 +1,4 @@
+#include <bit>
 #include <type_traits>
 
 #include "gtest/gtest.h"
@@ -10,6 +11,10 @@ template <typename T>
     requires std::is_integral_v<T>
 auto to_bytes(T value) noexcept -> std::array<std::byte, sizeof(T)>
 {
+    if constexpr (std::endian::native != std::endian::little)
+    {
+        value = std::byteswap(value);
+    }
     std::array<std::byte, sizeof(T)> bytes;
     std::memcpy(bytes.data(), &value, sizeof(T));
     return bytes;

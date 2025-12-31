@@ -2,7 +2,7 @@
 
 #include <algorithm>
 
-#include "structures/lsmtree/lsmtree.h"
+#include "structures/skiplist/skiplist.h"
 
 using namespace structures;
 
@@ -53,7 +53,6 @@ TEST(SkipListTest, CalcSizeWithIters)
     auto size{0U};
     for (auto begin{sl.begin()}; begin != sl.end(); ++begin)
     {
-        spdlog::info("key={} info={}", begin->m_key, begin->m_value);
         size++;
     }
 

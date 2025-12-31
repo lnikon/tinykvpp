@@ -20,7 +20,7 @@ using segment_operation_k = db::manifest::manifest_t::segment_record_t::operatio
 
 levels_t::levels_t(config::shared_ptr_t pConfig, db::manifest::shared_ptr_t pManifest) noexcept
     : m_pConfig{std::move(pConfig)},
-      m_pManifest{std::move(std::move(pManifest))},
+      m_pManifest{std::move(pManifest)},
       m_compaction_thread([this](std::stop_token stoken) { compaction_task(stoken); })
 {
     // TODO(lnikon): Make number of levels configurable
@@ -182,7 +182,7 @@ auto levels_t::size() const noexcept -> levels_t::levels_storage_t::size_type
 
     absl::MutexLock lock{&m_mutex};
 
-    assert(m_levels[0]);
+    ASSERT(m_levels[0]);
 
     // Generate name for the segment and add it to the manifest
     auto name{fmt::format("{}_{}", segments::helpers::segment_name(), 0)};

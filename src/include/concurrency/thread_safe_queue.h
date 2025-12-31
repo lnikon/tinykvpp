@@ -26,8 +26,8 @@ template <typename TItem> class thread_safe_queue_t
     thread_safe_queue_t(const thread_safe_queue_t &) = delete;
     auto operator=(const thread_safe_queue_t &) -> thread_safe_queue_t & = delete;
 
-    thread_safe_queue_t(thread_safe_queue_t &&other) noexcept;
-    auto operator=(thread_safe_queue_t &&other) noexcept -> thread_safe_queue_t &;
+    thread_safe_queue_t(thread_safe_queue_t &&other) noexcept = delete;
+    auto operator=(thread_safe_queue_t &&other) noexcept -> thread_safe_queue_t & = delete;
 
     ~thread_safe_queue_t() noexcept = default;
 
@@ -66,30 +66,6 @@ template <typename TItem>
 inline thread_safe_queue_t<TItem>::thread_safe_queue_t() noexcept
     : m_reservedIndex{std::nullopt}
 {
-}
-
-template <typename TItem>
-inline thread_safe_queue_t<TItem>::thread_safe_queue_t(thread_safe_queue_t &&other) noexcept
-    : m_queue{
-          [&other]() -> queue_t
-          {
-              absl::WriterMutexLock lock{&other.m_mutex};
-              return std::move(other.m_queue);
-          }
-      }
-{
-}
-
-template <typename TItem>
-inline auto thread_safe_queue_t<TItem>::operator=(thread_safe_queue_t &&other) noexcept
-    -> thread_safe_queue_t &
-{
-    if (this != &other)
-    {
-        absl_dual_mutex_lock_guard lock{m_mutex, other.m_mutex};
-        m_queue = std::move(other.m_queue);
-    }
-    return *this;
 }
 
 template <typename TItem> inline auto thread_safe_queue_t<TItem>::push(TItem item) -> bool
@@ -185,7 +161,7 @@ inline auto thread_safe_queue_t<TItem>::find(const TKey &recordKey) const noexce
 
     if (m_queue.empty())
     {
-        spdlog::info("MEMTABLES ARE EMPTY");
+        return;
     }
 
     for (const auto &memtable : m_queue)

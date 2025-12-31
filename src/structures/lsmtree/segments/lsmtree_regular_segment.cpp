@@ -1,4 +1,3 @@
-#include <cassert>
 #include <cstdint>
 #include <expected>
 #include <optional>
@@ -51,7 +50,7 @@ calculate_body_size_bytes(const structures::memtable::memtable_t &memtable) noex
         memtableSize += sizeof(std::uint64_t); // sequence_number
         memtableSize += serialization::varint_size(record.m_value.m_value.length());
         memtableSize += record.m_value.m_value.length();
-        memtableSize += sizeof(std::uint64_t); // u64 timestamp
+        memtableSize += sizeof(std::int64_t); // u64 timestamp
     }
     return memtableSize;
 }
@@ -127,7 +126,7 @@ calculate_index_size_bytes(const structures::memtable::memtable_t &memtable) noe
                 .write_endian_integer(serialization::le_uint64_t{record.m_sequenceNumber})
                 .write_string(record.m_value.m_value)
                 .write_endian_integer(
-                    serialization::le_uint64_t{static_cast<std::uint32_t>(
+                    serialization::le_int64_t{static_cast<std::int64_t>(
                         record.m_timestamp.m_value.time_since_epoch().count()
                     )}
                 )
@@ -141,7 +140,7 @@ calculate_index_size_bytes(const structures::memtable::memtable_t &memtable) noe
                 record.m_key.m_key,
                 record.m_value.m_value,
                 record.m_sequenceNumber,
-                static_cast<std::uint32_t>(record.m_timestamp.m_value.time_since_epoch().count())
+                static_cast<std::int64_t>(record.m_timestamp.m_value.time_since_epoch().count())
             );
             return writer.error();
         }
@@ -175,7 +174,7 @@ calculate_index_size_bytes(const structures::memtable::memtable_t &memtable) noe
             serialization::varint_size(record.m_key.m_key.length()) + record.m_key.m_key.length() +
             sizeof(std::uint64_t) /* seq_num */ +
             serialization::varint_size(record.m_value.m_value.length()) +
-            record.m_value.m_value.length() + sizeof(std::uint64_t) /* timestamp */;
+            record.m_value.m_value.length() + sizeof(std::int64_t) /* timestamp */;
     }
     return std::nullopt;
 }
@@ -266,7 +265,7 @@ regular_segment_t::regular_segment_t(
     {
         spdlog::warn("Hash index is empty for segment {}", m_path.c_str());
         restore_index();
-        assert(!m_hashIndex.empty());
+        ASSERT(!m_hashIndex.empty());
     }
 
     const auto offsets{m_hashIndex.offset(key)};
@@ -318,6 +317,13 @@ auto regular_segment_t::record(const hashindex::hashindex_t::offset_t &offset) c
         spdlog::error("Segment file size is zero. Path={}", get_path().string());
         return std::nullopt;
     }
+    if (offset >= fileSize)
+    {
+        spdlog::error(
+            "Invalid offset {} exceeds file size {}. Path={}", offset, fileSize, get_path().string()
+        );
+        return std::nullopt;
+    }
 
     const auto fdOpt{file->fd()};
     if (!fdOpt.has_value())
@@ -350,7 +356,7 @@ auto regular_segment_t::record(const hashindex::hashindex_t::offset_t &offset) c
     std::string                key;
     serialization::le_uint64_t sequenceNumber{0};
     std::string                value;
-    serialization::le_uint64_t timestamp{0};
+    serialization::le_int64_t  timestamp{0};
 
     if (auto error = reader.read_string(key)
                          .read_endian_integer(sequenceNumber)
@@ -370,9 +376,7 @@ auto regular_segment_t::record(const hashindex::hashindex_t::offset_t &offset) c
         memtable_t::record_t::key_t{std::move(key)},
         memtable_t::record_t::value_t{std::move(value)},
         sequenceNumber.get(),
-        memtable_t::record_t::timestamp_t{memtable_t::record_t::timestamp_t::time_point_t{
-            std::chrono::nanoseconds{timestamp.get()}
-        }}
+        memtable_t::record_t::timestamp_t::from_representation(timestamp.get())
     };
 
     return std::make_optional(std::move(record));
@@ -457,7 +461,7 @@ std::optional<record_t::key_t> regular_segment_t::max() const noexcept
 
 auto regular_segment_t::num_of_bytes_used() const -> std::size_t
 {
-    assert(m_memtable.has_value());
+    ASSERT(m_memtable.has_value());
     return m_hashIndex.num_of_bytes_used() + m_memtable->num_of_bytes_used();
 }
 
@@ -535,7 +539,6 @@ void regular_segment_t::restore_index()
     // TODO(lnikon): Allocate enough bytes to read the header. Don't read entire file, as we need to
     //               restore the index only
     std::vector<std::byte> buffer(fileSize);
-    spdlog::info("buffer size={}", buffer.size());
 
     // Read file into the buffer
     const auto readResult{file->read(0, reinterpret_cast<char *>(&buffer.front()), fileSize)};
@@ -559,8 +562,6 @@ void regular_segment_t::restore_index()
         );
         return;
     }
-
-    spdlog::info("buffer size={}", buffer.size());
 
     // Read the header
     struct header_t final
@@ -590,16 +591,6 @@ void regular_segment_t::restore_index()
         );
         return;
     }
-
-    spdlog::info(
-        "read header: magic={} version={} bodyOffset={} indexOffset={} size={} crc32={}",
-        header.magic.get(),
-        header.version.get(),
-        header.bodyOffset.get(),
-        header.indexOffset.get(),
-        header.size.get(),
-        header.crc32.get()
-    );
 
     // Validate segment magic number
     if (header.magic.get() != SEGMENT_HEADER_MAGIC_NUMBER)
@@ -681,14 +672,13 @@ void regular_segment_t::restore_index()
             );
             return;
         }
-
         m_hashIndex.emplace(std::move(key), entryOffset.get());
     }
 
     if (m_hashIndex.empty())
     {
         spdlog::warn("(restore_index): Hash index is empty for segment {}", m_path.c_str());
-        assert(!m_hashIndex.empty());
+        ASSERT(!m_hashIndex.empty());
     }
 }
 
