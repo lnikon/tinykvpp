@@ -184,7 +184,11 @@ func printResults(result *core.IntegrationTestResult) {
 	fmt.Printf("Total scenarios: %d\n", result.Total)
 	fmt.Printf("Passed: %d\n", result.Passed)
 	fmt.Printf("Failed: %d\n", result.Failed)
-	fmt.Printf("Success rate: %.1f%%\n", float64(result.Passed)/float64(result.Total)*100)
+	if result.Total != 0 {
+		fmt.Printf("Success rate: %.1f%%\n", float64(result.Passed)/float64(result.Total)*100)
+	} else {
+		fmt.Printf("Success rate: 0\n")
+	}
 
 	if len(result.Results) > 0 {
 		fmt.Printf("\n=== Scenario Details ===\n")

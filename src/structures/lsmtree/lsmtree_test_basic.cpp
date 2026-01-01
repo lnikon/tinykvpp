@@ -335,12 +335,12 @@ int main(int argc, char **argv)
 {
     spdlog::set_level(spdlog::level::debug);
 
-    // std::filesystem::create_directory("./segments");
+    std::filesystem::create_directory("./segments");
 
     testing::InitGoogleTest(&argc, argv);
     auto res{RUN_ALL_TESTS()};
 
-    // std::filesystem::remove_all("./segments");
+    std::filesystem::remove_all("./segments");
 
     return res;
 }

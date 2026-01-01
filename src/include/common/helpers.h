@@ -1,5 +1,8 @@
+#pragma once
+
 #include <filesystem>
 #include <random>
+#include <vector>
 
 #include <fmt/core.h>
 

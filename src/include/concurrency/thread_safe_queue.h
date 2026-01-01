@@ -161,7 +161,7 @@ inline auto thread_safe_queue_t<TItem>::find(const TKey &recordKey) const noexce
 
     if (m_queue.empty())
     {
-        return;
+        return std::nullopt;
     }
 
     for (const auto &memtable : m_queue)

@@ -53,7 +53,7 @@ auto fs::append_only_file_t::append(std::string_view data) noexcept
 }
 
 auto fs::append_only_file_t::read(ssize_t offset, char *buffer, size_t size) noexcept
-    -> std::expected<ssize_t, file_error_t>
+    -> std::expected<std::size_t, file_error_t>
 {
     return m_fd.read(offset, buffer, size);
 }

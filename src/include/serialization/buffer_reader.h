@@ -80,7 +80,7 @@ class buffer_reader_t
             return *this;
         }
 
-        std::uint64_t count{0};
+        std::size_t count{0};
         (void)read_varint(count);
         if (m_error)
         {

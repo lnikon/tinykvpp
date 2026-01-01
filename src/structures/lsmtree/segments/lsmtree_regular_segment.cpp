@@ -239,7 +239,7 @@ calculate_index_size_bytes(const structures::memtable::memtable_t &memtable) noe
     }
     (void)writer.set_cursor(previousCursor);
 
-    ASSERT(writer.bytes_written(), bufferSize);
+    ASSERT(writer.bytes_written() == bufferSize);
 
     return buffer;
 }
@@ -413,6 +413,7 @@ void regular_segment_t::flush()
         spdlog::critical(
             "Failed to open the file. Error={}, path={}", file.error().message, get_path().string()
         );
+        return;
     }
 
     if (const auto result = file->write(
@@ -523,6 +524,7 @@ void regular_segment_t::restore_index()
             file.error().message,
             get_path().string()
         );
+        return;
     }
 
     // Get file size

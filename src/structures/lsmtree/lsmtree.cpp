@@ -261,9 +261,15 @@ auto lsmtree_builder_t::build_levels_from_manifest(
     using level_operation_k = db::manifest::manifest_t::level_record_t::operation_k;
     using segment_operation_k = db::manifest::manifest_t::segment_record_t::operation_k;
 
+    // Do not update manifest during the recovery, otherwise it will be duplicated
     pManifest->disable();
 
+    // Storage of LSMTree levels
     auto pLevels = std::make_unique<levels::levels_t>(pConfig, pManifest);
+
+    // Error tracking
+    std::size_t lastLevelIndex{0};
+    bool        failedToRecreateLevel{false};
 
     const auto &records{pManifest->records()};
     for (const auto &record : records)
@@ -274,6 +280,8 @@ auto lsmtree_builder_t::build_levels_from_manifest(
                 using T = std::decay_t<decltype(record)>;
                 if constexpr (std::is_same_v<T, db::manifest::manifest_t::segment_record_t>)
                 {
+                    lastLevelIndex = record.level;
+
                     switch (record.op)
                     {
                     case segment_operation_k::add_segment_k:
@@ -320,12 +328,16 @@ auto lsmtree_builder_t::build_levels_from_manifest(
                 }
                 else if constexpr (std::is_same_v<T, db::manifest::manifest_t::level_record_t>)
                 {
+                    lastLevelIndex = record.level;
+
                     switch (record.op)
                     {
                     case level_operation_k::add_level_k:
                     {
-                        pLevels->level();
-                        spdlog::debug("Level {} created during recovery", record.level);
+                        const auto pLevel{pLevels->level()};
+
+                        failedToRecreateLevel = (pLevel == nullptr);
+
                         break;
                     }
                     case level_operation_k::compact_level_k:
@@ -365,6 +377,12 @@ auto lsmtree_builder_t::build_levels_from_manifest(
             },
             record
         );
+
+        if (failedToRecreateLevel)
+        {
+            spdlog::error("Failed to recreate level {}", lastLevelIndex);
+            break;
+        }
     }
 
     spdlog::debug("Restoring levels");

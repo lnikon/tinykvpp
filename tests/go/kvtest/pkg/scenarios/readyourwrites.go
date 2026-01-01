@@ -50,7 +50,7 @@ func (s *ReadYourWritesScenario) Execute(ctx *core.TestContext) error {
 
 		value, err := ctx.KV.Get(ctx.Context(), []byte(key))
 		if err != nil {
-			return nil
+			return err
 		}
 
 		if !bytes.Equal(expectedValue, value) {

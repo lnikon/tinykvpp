@@ -70,7 +70,7 @@ func (tc *TestContext) GetRandomExistingKey() string {
 		return tc.GenerateKey()
 	}
 
-	keys := make([]string, 0, len(tc.writtenData))
+	keys := make([]string, 0, len(tc.generatedKeys))
 	for key := range tc.writtenData {
 		keys = append(keys, key)
 	}

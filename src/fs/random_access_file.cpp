@@ -144,7 +144,7 @@ auto random_access_file_t::fd() const noexcept -> std::expected<int, file_error_
         return std::unexpected(
             file_error_t{
                 .code = file_error_code_k::invalid_file_descriptor,
-                .system_errno = errno,
+                .system_errno = 0,
                 .message = fmt::format("Invalid file descriptor. fd={}", m_fd),
             }
         );
@@ -263,7 +263,7 @@ auto random_access_file_builder_t::build(fs::path_t path, posix_wrapper::open_fl
         return std::unexpected(
             file_error_t{
                 .code = file_error_code_k::open_failed,
-                .system_errno = errno,
+                .system_errno = 0,
                 .message = fmt::format("Provided file path is empty. errno={}", strerror(errno)),
             }
         );

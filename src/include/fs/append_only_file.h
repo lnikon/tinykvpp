@@ -31,7 +31,7 @@ class append_only_file_t
         -> std::expected<ssize_t, file_error_t>;
 
     [[nodiscard]] auto read(ssize_t offset, char *buffer, size_t size) noexcept
-        -> std::expected<ssize_t, file_error_t>;
+        -> std::expected<std::size_t, file_error_t>;
 
     [[nodiscard]] auto size() const noexcept -> std::expected<std::size_t, file_error_t>;
 

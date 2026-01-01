@@ -19,7 +19,7 @@ namespace db::manifest
 
 struct manifest_t
 {
-    using level_index_t = std::size_t;
+    using level_index_t = std::uint64_t;
     using segment_name_t = std::string;
 
     enum record_type_k : int8_t
