@@ -1,3 +1,4 @@
+#include <cerrno>
 #include <filesystem>
 #include <fstream>
 
@@ -8,6 +9,9 @@
 #include <nlohmann/json-schema.hpp>
 
 #include "config/config.h"
+#include "fs/random_access_file.h"
+#include "fs/types.h"
+#include "posix_wrapper/open_flag.h"
 #include "wal/common.h"
 #include "structures/lsmtree/segments/helpers.h"
 
@@ -166,31 +170,53 @@ static const nlohmann::json database_config_schema = R"(
 {
     const auto current_path{DatabaseConfig.DatabasePath / ManifestCurrentFilename};
 
-    std::ifstream current(current_path);
-    if (!current.is_open())
+    auto manifestFileExclusive{fs::random_access_file::random_access_file_builder_t{}.build(
+        current_path,
+        posix_wrapper::open_flag_k::kCreate | posix_wrapper::open_flag_k::kExclusive |
+            posix_wrapper::open_flag_k::kReadWrite
+    )};
+    if (!manifestFileExclusive.has_value() &&
+        manifestFileExclusive.error().code == fs::file_error_code_k::excl_file_exists)
     {
-        // File doesn't exist, create it
-        std::ofstream current_out(current_path);
-        if (!current_out.is_open())
+        auto manifestFile{fs::random_access_file::random_access_file_builder_t{}.build(
+            current_path, posix_wrapper::open_flag_k::kReadOnly
+        )};
+
+        const auto latest_filename_size{manifestFile.value().size()};
+        if (!latest_filename_size.has_value())
         {
-            throw std::runtime_error("unable to create \"current\" " + current_path.string());
+            return fs::path_t{};
         }
+        std::string latest_filename(latest_filename_size.value(), '\0');
 
-        const auto new_filename{
-            DatabaseConfig.DatabasePath /
-            fmt::format("manifest_{}", structures::lsmtree::segments::helpers::uuid())
+        const auto readResult{
+            manifestFile->read(0, latest_filename.data(), latest_filename_size.value())
         };
-        current_out << new_filename.string() << '\n';
-        current_out.flush();
-        current_out.close();
-
-        return new_filename;
+        if (!readResult.has_value())
+        {
+            return fs::path_t{};
+        }
+        return latest_filename;
     }
 
-    std::string latest_filename;
-    if (!(current >> latest_filename) || latest_filename.empty())
+    if (!manifestFileExclusive.has_value())
     {
-        throw std::runtime_error("invalid or empty manifest filename in \"current\" file");
+        return fs::path_t{};
+    }
+
+    auto latest_filename{
+        DatabaseConfig.DatabasePath /
+        fmt::format("manifest_{}", structures::lsmtree::segments::helpers::uuid())
+    };
+
+    auto writeResult{manifestFileExclusive->write(latest_filename.string(), 0)};
+    if (!writeResult.has_value())
+    {
+        return fs::path_t{};
+    }
+    if (writeResult.value() != latest_filename.string().size())
+    {
+        return fs::path_t{};
     }
 
     return latest_filename;

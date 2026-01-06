@@ -1,3 +1,4 @@
+#include <cerrno>
 #include <cstdio>
 #include <cstring>
 #include <fcntl.h>
@@ -64,7 +65,7 @@ random_access_file_t::~random_access_file_t() noexcept
 }
 
 auto random_access_file_t::write(std::string_view data, ssize_t offset) noexcept
-    -> std::expected<ssize_t, file_error_t>
+    -> std::expected<std::size_t, file_error_t>
 {
     io_uring_sqe *sqe = io_uring_get_sqe(&m_ring);
     if (sqe == nullptr)
@@ -274,7 +275,8 @@ auto random_access_file_builder_t::build(fs::path_t path, posix_wrapper::open_fl
     {
         return std::unexpected(
             file_error_t{
-                .code = file_error_code_k::open_failed,
+                .code = errno == EEXIST ? file_error_code_k::excl_file_exists
+                                        : file_error_code_k::open_failed,
                 .system_errno = errno,
                 .message = fmt::format(
                     "Failed to open file. errno={}, path={}", strerror(errno), path.c_str()

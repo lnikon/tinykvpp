@@ -29,6 +29,8 @@ namespace
 [[nodiscard]] auto maybe_create_manifest(const fs::path_t &path)
     -> std::optional<db::manifest::manifest_t>
 {
+    ASSERT(!path.empty());
+
     auto maybeWal =
         wal::wal_builder_t{}.set_file_path(path).build<db::manifest::manifest_t::record_t>(
             wal::log_storage_type_k::file_based_persistent_k
