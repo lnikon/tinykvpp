@@ -23,7 +23,6 @@ target_link_libraries(
         abseil::abseil
         libassert::assert
         magic_enum::magic_enum
-        libuuid::libuuid
         Microsoft.GSL::GSL
         Concurrency
         WAL

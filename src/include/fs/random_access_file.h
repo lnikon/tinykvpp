@@ -27,7 +27,7 @@ class random_access_file_t
     [[nodiscard]] auto write(std::string_view data, ssize_t offset) noexcept
         -> std::expected<std::size_t, file_error_t>;
 
-    [[nodiscard]] auto read(ssize_t offset, char *buffer, size_t size) noexcept
+    [[nodiscard]] auto read(ssize_t offset, char *buffer, size_t size) const noexcept
         -> std::expected<std::size_t, file_error_t>;
 
     [[nodiscard]] auto size() const noexcept -> std::expected<std::size_t, file_error_t>;

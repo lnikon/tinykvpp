@@ -40,20 +40,16 @@ find_package(nlohmann_json_schema_validator REQUIRED)
 find_package(cxxopts REQUIRED)
 find_package(benchmark REQUIRED)
 find_package(absl CONFIG REQUIRED)
-find_package(Celero CONFIG REQUIRED)
 find_package(protobuf CONFIG REQUIRED)
 find_package(gRPC CONFIG REQUIRED)
 find_package(GTest CONFIG REQUIRED)
-find_package(prometheus-cpp REQUIRED)
 find_package(libassert REQUIRED)
 find_package(magic_enum REQUIRED)
 find_package(liburing REQUIRED)
 find_package(Microsoft.GSL REQUIRED)
-find_package(libuuid REQUIRED)
 
 add_subdirectory(proto)
 add_subdirectory(src)
-# add_subdirectory(bench)
 
 # Custom targets to build docker images and run tests
 add_custom_target(

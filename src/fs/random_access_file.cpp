@@ -103,7 +103,7 @@ auto random_access_file_t::write(std::string_view data, ssize_t offset) noexcept
     return res;
 }
 
-auto random_access_file_t::read(ssize_t offset, char *buffer, size_t size) noexcept
+auto random_access_file_t::read(ssize_t offset, char *buffer, size_t size) const noexcept
     -> std::expected<std::size_t, file_error_t>
 {
     ssize_t res = pread(m_fd, buffer, size, offset);

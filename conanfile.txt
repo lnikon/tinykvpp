@@ -6,17 +6,14 @@ cxxopts/3.2.0
 nlohmann_json/3.11.3
 json-schema-validator/2.3.0
 benchmark/1.8.4
-abseil/20240116.2
-celero/2.9.0
-protobuf/5.27.0
-grpc/1.67.1
+abseil/20250127.0
 gtest/1.15.0
-prometheus-cpp/1.3.0
 libassert/2.1.4
 magic_enum/0.9.7
 liburing/2.11
 ms-gsl/4.2.0
-libuuid/1.0.3
+protobuf/5.27.0
+grpc/1.72.0
 
 [tool_requires]
 protobuf/5.27.0

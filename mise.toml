@@ -5,14 +5,15 @@ buf = "latest"
 
 [env]
 PROFILE = "debug"
-COMPILER = "gcc"
+COMPILER = "clang"
 JOBS = "24"
-IMAGE = "gcc"
+#IMAGE = "gcc"
+IMAGE = "silkeh/clang"
 IMAGE_VERSION = "latest"
 
 [tasks.conan]
 run = [
-  "conan install . --output-folder=build --build=missing --profile=./conan/profiles/{{env.PROFILE}}-{{env.COMPILER}}",
+  "conan install . --output-folder=build --build=missing --profile:build=./conan/profiles/{{env.PROFILE}}-{{env.COMPILER}} --profile:host=./conan/profiles/{{env.PROFILE}}-{{env.COMPILER}}",
   "cmake --preset conan-{{env.PROFILE}}",
 ]
 
@@ -22,9 +23,9 @@ run = ["cmake --build ./build -j{{env.JOBS}}"]
 [tasks.image]
 run = """
   podman build \
-  --build-arg TARGET=$IMAGE:$IMAGE_VERSION \
-  --build-arg COMPILER=$COMPILER \
-  --build-arg BUILD_TYPE=$PROFILE . --file Dockerfile --tag tinykvpp-$COMPILER
+  --build-arg TARGET={{env.IMAGE}}:{{env.IMAGE_VERSION}} \
+  --build-arg COMPILER={{env.COMPILER}} \
+  --build-arg BUILD_TYPE={{env.PROFILE}} . --file Dockerfile --tag tinykvpp-{{env.COMPILER}}
   """
 
 [tasks.up_standalone]
