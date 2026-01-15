@@ -1,0 +1,19 @@
+[requires]
+# Runtime dependencies
+liburing/2.13
+grpc/1.72.0
+protobuf/5.27.0
+zstd/1.5.7
+lz4/1.10.0
+openssl/3.6.0
+
+# Development dependencies
+gtest/1.17.0
+benchmark/1.9.4
+
+[generators]
+CMakeDeps
+CMakeToolchain
+
+[layout]
+cmake_layout
