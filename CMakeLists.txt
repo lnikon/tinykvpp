@@ -43,7 +43,7 @@ find_package(benchmark REQUIRED)
 find_package(GTest REQUIRED)
 
 add_library(frankie_lib INTERFACE)
-target_sources(frankie_lib INTERFACE src/storage/skiplist.cpp)
+target_sources(frankie_lib INTERFACE src/core/arena.cpp src/storage/skiplist.cpp)
 target_include_directories(
     frankie_lib
     INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/src

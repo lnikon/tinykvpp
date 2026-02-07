@@ -7,6 +7,7 @@
 
 namespace bm = benchmark;
 
+using namespace frankie::core;
 using namespace frankie::storage;
 using namespace frankie::testing;
 
@@ -21,7 +22,9 @@ static void skiplist_insertion(bm::State& state) {
     value_pool.push_back(random_string_rng(rng, 128));
   }
 
-  skiplist* sl = create_skiplist(DEFAULT_MAX_HEIGHT, DEFAULT_BRANCHING_FACTOR);
+  arena arena;
+  skiplist* sl =
+      create_skiplist(&arena, DEFAULT_MAX_HEIGHT, DEFAULT_BRANCHING_FACTOR);
   std::uint64_t idx = 0;
   for (auto _ : state) {
     skiplist_insert(sl, key_pool[idx % pool_size], value_pool[idx % pool_size]);
