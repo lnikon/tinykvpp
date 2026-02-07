@@ -1,17 +1,26 @@
-#include "storage/memtable.h"
+#include "storage/memtable.hpp"
 
-bool frankie::storage::memtable_put(memtable* memtable, std::string key,
-                                    std::string value) noexcept {
-  return memtable->table_.emplace(key, value).second;
+#include "storage/skiplist.hpp"
+
+namespace frankie::storage {
+
+memtable* create_memtable() noexcept {
+  memtable* mt = new memtable;
+  mt->sl = create_skiplist(DEFAULT_MAX_HEIGHT, DEFAULT_BRANCHING_FACTOR);
+  return mt;
 }
 
-bool frankie::storage::memtable_get(memtable* memtable, const std::string& key,
-                                    std::string& value) noexcept {
-  if (const auto it = memtable->table_.find(key);
-      it != memtable->table_.end()) {
-    value = it->second;
-    return true;
+bool memtable_put(memtable* mt, std::string key, std::string value) noexcept {
+  return skiplist_insert(mt->sl, key, value) == nullptr;
+}
+
+std::optional<std::string> memtable_get(memtable* memtable,
+                                        const std::string& key) noexcept {
+  skiplist_node* node = skiplist_search(memtable->sl, key);
+  if (node != nullptr) {
+    return node->value_;
   }
-  return false;
+  return std::nullopt;
 }
 
+}  // namespace frankie::storage

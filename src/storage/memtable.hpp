@@ -1,18 +1,22 @@
 #pragma once
 
-#include <map>
+#include <optional>
 #include <string>
+
+#include "storage/skiplist.hpp"
 
 namespace frankie::storage {
 
 struct memtable {
-  std::map<std::string, std::string> table_;
+  skiplist* sl{nullptr};
 };
+
+memtable* create_memtable() noexcept;
 
 bool memtable_put(memtable* memtable, std::string key,
                   std::string value) noexcept;
 
-bool memtable_get(memtable* memtable, const std::string& key,
-                  std::string& value) noexcept;
+std::optional<std::string> memtable_get(memtable* memtable,
+                                        const std::string& key) noexcept;
 
 }  // namespace frankie::storage

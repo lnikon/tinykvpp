@@ -7,9 +7,6 @@
 #include <type_traits>
 #include <utility>
 
-// DELETE ME
-#include <print>
-
 // ================================================================================
 // Configuration
 // ================================================================================
@@ -121,7 +118,7 @@ struct expression_value {
   constexpr auto operator op(R&& rhs) const noexcept {                    \
     return binary_expression<expression_value<T>, expression_value<R>,    \
                              struct op_name>{                             \
-        *this, expression_value<R>(std::forward<R>(rhs), value_ op rhs)}; \
+        *this, expression_value<R>{std::forward<R>(rhs)}, value_ op rhs}; \
   }
 
   struct op_eq {};
@@ -132,6 +129,11 @@ struct expression_value {
   struct op_ge {};
 
   FR_ASSERT_DEFINE_BINARY_OP(==, op_eq)
+  FR_ASSERT_DEFINE_BINARY_OP(!=, op_ne)
+  FR_ASSERT_DEFINE_BINARY_OP(<, op_lt)
+  FR_ASSERT_DEFINE_BINARY_OP(<=, op_le)
+  FR_ASSERT_DEFINE_BINARY_OP(>, op_gt)
+  FR_ASSERT_DEFINE_BINARY_OP(>=, op_ge)
 
 #undef FR_ASSERT_DEFINE_BINARY_OP
 };
@@ -174,16 +176,15 @@ struct binary_expression {
     rhs.print_to(rhs_buf, sizeof(rhs_buf));
     std::snprintf(buf, size, "\tLHS: %s\n\tRHS: %s", lhs_buf, rhs_buf);
   }
-
-  // Captures left side of an expression
-  struct decomposer {
-    template <typename T>
-    constexpr auto operator<<(T&& value) const noexcept {
-      return expression_value<T>{std::forward<T>(value)};
-    }
-  };
 };
 
+// Captures left side of an expression
+struct decomposer {
+  template <typename T>
+  constexpr auto operator<<(T&& value) const noexcept {
+    return expression_value<T>{std::forward<T>(value)};
+  }
+};
 // ================================================================================
 // Assertion level
 // ================================================================================
@@ -351,7 +352,7 @@ inline void check_assertion_msg(assert_level level, const Expr& expression,
 #define FR_ASSERT_STRINGIFY(x) FR_ASSERT_STRINGIFY_IMPL(x)
 
 // Expression decomposer wrapper
-#define FR_DECOMPOSE_EXPRESSION(expr) (::assert_detail::decomposer{} << expr
+#define FR_DECOMPOSE_EXPRESSION(expr) (assert_detail::decomposer{} << expr)
 
 // DEBUG_ASSERT - only active when ASSERT_LEVEL >= 3
 #if FR_ASSERT_LEVEL >= 3
@@ -371,15 +372,15 @@ inline void check_assertion_msg(assert_level level, const Expr& expression,
 
 // ASSUME - only active when ASSERT_LEVEL >= 2
 #if FR_ASSERT_LEVEL >= 2
-#define FR_ASSUME(expr)                               \
-  ::frankie::assert_detail::check_assertion(          \
-      ::frankie::assert_detail::assert_level::assume, \
-      FR_DECOMPOSE_EXPRESSION(expr), FR_ASSERT_STRINGIFY(expr))
+#define FR_ASSUME(expr)                                               \
+  assert_detail::check_assertion(assert_detail::assert_level::assume, \
+                                 FR_DECOMPOSE_EXPRESSION(expr),       \
+                                 FR_ASSERT_STRINGIFY(expr))
 
-#define FR_ASSUME_MSG(expr, msg)                      \
-  ::frankie::assert_detail::check_assertion(          \
-      ::frankie::assert_detail::assert_level::assume, \
-      FR_DECOMPOSE_EXPRESSION(expr), FR_ASSERT_STRINGIFY(expr), msg)
+#define FR_ASSUME_MSG(expr, msg)                                      \
+  assert_detail::check_assertion(assert_detail::assert_level::assume, \
+                                 FR_DECOMPOSE_EXPRESSION(expr),       \
+                                 FR_ASSERT_STRINGIFY(expr), msg)
 #else
 #define ASSUME(expr) ((void)0)
 #define ASSUME(expr, msg) ((void)0)

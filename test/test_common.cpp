@@ -25,24 +25,29 @@ namespace frankie::testing {
 //   return result;
 // }
 
-std::string random_string(std::uint64_t length) noexcept {
+std::string random_string_rng(std::mt19937_64& rng,
+                              std::uint64_t length) noexcept {
   static constexpr char charset[] =
       "0123456789"
       "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
       "abcdefghijklmnopqrstuvwxyz";
   static constexpr auto charset_size = sizeof(charset) - 1;
 
-  std::mt19937_64 gen(std::random_device{}());
   std::uniform_int_distribution<std::size_t> dist(0, charset_size - 1);
 
   std::string result;
   result.reserve(length);
 
   for (std::uint64_t i = 0; i < length; ++i) {
-    result += charset[dist(gen)];
+    result += charset[dist(rng)];
   }
 
   return result;
+}
+
+std::string random_string(std::uint64_t length) noexcept {
+  std::mt19937_64 rng(std::random_device{}());
+  return random_string_rng(rng, length);
 }
 
 std::uint64_t random_u64(std::uint64_t min, std::uint64_t max) noexcept {
