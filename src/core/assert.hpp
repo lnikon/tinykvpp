@@ -382,8 +382,8 @@ inline void check_assertion_msg(assert_level level, const Expr& expression,
                                  FR_DECOMPOSE_EXPRESSION(expr),       \
                                  FR_ASSERT_STRINGIFY(expr), msg)
 #else
-#define ASSUME(expr) ((void)0)
-#define ASSUME(expr, msg) ((void)0)
+#define FR_ASSUME(expr) ((void)0)
+#define FR_ASSUME_MSG(expr, msg) ((void)0)
 #endif
 
 // ASSUME - only active when ASSERT_LEVEL >= 2
