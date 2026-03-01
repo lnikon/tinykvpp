@@ -14,6 +14,16 @@ if(GTest_FOUND)
     target_include_directories(skiplist_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
     add_test(NAME SkiplistTest COMMAND skiplist_test)
 
+    add_executable(skiplist_pmr_test skiplist_pmr_test.cpp test_common.cpp)
+    target_link_libraries(skiplist_pmr_test PRIVATE frankie_lib GTest::gtest_main)
+    target_include_directories(skiplist_pmr_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
+    add_test(NAME SkiplistPmrTest COMMAND skiplist_pmr_test)
+
+    add_executable(skiplist_arena_test skiplist_arena_test.cpp test_common.cpp)
+    target_link_libraries(skiplist_arena_test PRIVATE frankie_lib GTest::gtest_main)
+    target_include_directories(skiplist_arena_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
+    add_test(NAME SkiplistArenaTest COMMAND skiplist_arena_test)
+
     message(STATUS "GTest found - testing enabled")
 else()
     message(STATUS "GTest not found - testing disabled")
