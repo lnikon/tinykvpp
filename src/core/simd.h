@@ -1,7 +1,3 @@
-//
-// Created by nikon on 3/1/26.
-//
-
 #ifndef FRANKIE_SIMD_H
 #define FRANKIE_SIMD_H
 

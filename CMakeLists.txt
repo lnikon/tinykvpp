@@ -57,10 +57,9 @@ target_link_libraries(frankie_lib INTERFACE LZ4::lz4_static)
 target_link_libraries(frankie_lib INTERFACE openssl::openssl)
 
 add_executable(frankie ${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp
-        src/storage/skiplist_pmr.cpp
-        src/storage/skiplist_pmr.h
-        src/storage/skiplist_arena.h
-        src/core/simd.h)
+        src/storage/skiplist.hpp
+        src/core/simd.h
+        src/storage/skiplist.cpp)
 target_link_libraries(frankie frankie_lib)
 
 if (GTest_FOUND)

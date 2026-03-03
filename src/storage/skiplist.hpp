@@ -1,95 +1,265 @@
 #pragma once
 
-#include <cstdint>
+#include <cstring>
+#include <expected>
 #include <random>
+#include <span>
+#include <string_view>
 
 #include "core/arena.hpp"
+#include "core/simd.h"
 
 namespace frankie::storage {
 
-constexpr const std::uint32_t DEFAULT_MAX_HEIGHT = 12;
-constexpr const std::uint32_t DEFAULT_BRANCHING_FACTOR = 4;
+// ================================================================================
+// Error type
+// ================================================================================
+enum class error { not_found };
 
-///
-/// Memory layout:
-/// [key_size_|value_size_|height_|pad|fwd[0]..fwd[h-1]|key|value]
-///
-struct alignas(void*) skiplist_node {
-  std::uint32_t key_size_;
-  std::uint32_t value_size_;
-  std::uint32_t height_;
+// ================================================================================
+// Comparator concept
+// ================================================================================
+template <typename C>
+concept Comparator = requires(const C &cmp, std::string_view a, std::string_view b) {
+  { cmp(a, b) } -> std::convertible_to<int>;
+};
 
-  skiplist_node** forward() noexcept {
-    return reinterpret_cast<skiplist_node**>(reinterpret_cast<char*>(this) +
-                                             sizeof(skiplist_node));
-  }
-
-  std::string_view key() noexcept {
-    char* base = reinterpret_cast<char*>(forward() + height_);
-    return {base, key_size_};
-  }
-
-  std::string_view value() noexcept {
-    char* base = reinterpret_cast<char*>(forward() + height_) + key_size_;
-    return {base, value_size_};
+struct default_comparator {
+  constexpr int operator()(std::string_view a, std::string_view b) const noexcept {
+    auto cmp = a <=> b;
+    if (cmp < 0) return -1;
+    if (cmp > 0) return 1;
+    return 0;
   }
 };
-static_assert(alignof(skiplist_node) >= alignof(skiplist_node*));
+static_assert(Comparator<default_comparator>);
 
-///
-/// Stores (key, value) pairs. Ordered by key.
-/// Randomized balancing.
-/// Supports insertion, search, and iteration.
-/// Does not support deletion of a single node.
-/// Deallocated all at once.
-/// Requires arena allocator.
-/// Does not support update of existing key.
-///
-struct skiplist {
-  core::arena* arena_;
+struct simd_comparator {
+  constexpr int operator()(std::string_view a, std::string_view b) const noexcept {
+    return simd_compare_sse2(a.data(), b.data(), a.length() < b.length() ? a.length() : b.length());
+  }
+};
+static_assert(Comparator<simd_comparator>);
 
-  skiplist_node* head_;
+// ================================================================================
+// Node — flat allocation: [skiplist_node][forward ptrs][key bytes][value bytes]
+// ================================================================================
+class skiplist_node final {
+ public:
+  [[nodiscard]] static skiplist_node *create(core::arena *a, std::string_view key, std::string_view value,
+                                             std::uint32_t height) noexcept;
 
-  std::uint32_t max_height_;
-  std::uint32_t current_height_;
-  std::uint32_t branching_factor_;
-  std::uint32_t count_{0};
+  [[nodiscard]] std::span<skiplist_node *> forward() noexcept;
+
+  [[nodiscard]] std::span<const skiplist_node *const> forward() const noexcept;
+
+  [[nodiscard]] std::string_view key() const noexcept;
+
+  [[nodiscard]] std::string_view value() const noexcept;
+
+  [[nodiscard]] std::uint32_t height() const noexcept;
+
+ private:
+  std::uint32_t key_size_ = 0;
+  std::uint32_t value_size_ = 0;
+  std::uint32_t height_ = 0;
+
+  [[nodiscard]] static constexpr std::size_t layout_size(std::uint32_t h, std::size_t ksz, std::size_t vsz) noexcept;
+
+  [[nodiscard]] std::span<std::byte> key_bytes() noexcept;
+
+  [[nodiscard]] std::span<const std::byte> key_bytes() const noexcept;
+
+  [[nodiscard]] std::span<std::byte> value_bytes() noexcept;
+
+  [[nodiscard]] std::span<const std::byte> value_bytes() const noexcept;
+};
+
+constexpr std::size_t skiplist_node::layout_size(std::uint32_t h, std::size_t ksz, std::size_t vsz) noexcept {
+  return sizeof(skiplist_node) + h * sizeof(skiplist_node *) + ksz + vsz;
+}
+
+// ================================================================================
+// Skiplist — backed by frankie::core::arena (malloc/free, bump allocator)
+// ================================================================================
+template <Comparator Cmp = default_comparator>
+class skiplist final {
+ public:
+  static constexpr std::uint32_t kMaxHeight = 12;
+  static constexpr std::uint32_t kBranchingFactor = 4;
+
+  explicit skiplist(Cmp cmp = {}) noexcept;
+
+  ~skiplist();
+
+  skiplist(const skiplist &) = delete;
+  skiplist &operator=(const skiplist &) = delete;
+  skiplist(skiplist &&) = delete;
+  skiplist &operator=(skiplist &&) = delete;
+
+  // --- Mutations ---
+
+  void insert(std::string_view key, std::string_view value) noexcept;
+
+  // --- Lookups ---
+
+  [[nodiscard]] std::expected<std::string_view, error> get(std::string_view key) const noexcept;
+
+  // --- Capacity ---
+
+  [[nodiscard]] std::size_t size() const noexcept;
+  [[nodiscard]] std::uint64_t bytes_allocated() const noexcept;
+
+  // --- Range-for support via sentinel iterator ---
+
+  class iterator {
+   public:
+    using difference_type = std::ptrdiff_t;
+    using value_type = std::pair<std::string_view, std::string_view>;
+
+    iterator() = default;
+    explicit iterator(skiplist_node *n) : node_{n} {}
+
+    value_type operator*() const;
+
+    iterator &operator++();
+    iterator operator++(int);
+
+    bool operator==(std::default_sentinel_t) const;
+
+   private:
+    skiplist_node *node_ = nullptr;
+  };
+
+  [[nodiscard]] iterator begin() const;
+  [[nodiscard]] std::default_sentinel_t end() const;
+
+ private:
+  std::uint32_t random_height() noexcept;
+
+  core::arena arena_{};
+  skiplist_node *head_ = nullptr;
+  std::uint32_t current_height_ = 1;
+  std::size_t count_ = 0;
 
   std::mt19937 rng_{std::random_device{}()};
+  std::uniform_int_distribution<std::uint32_t> dist_{0, UINT32_MAX};
+  [[no_unique_address]] Cmp cmp_;
 };
 
-struct skiplist_iter {
-  skiplist_node* current_;
-};
+template <Comparator Cmp>
+skiplist<Cmp>::skiplist(Cmp cmp) noexcept : cmp_{cmp} {
+  head_ = skiplist_node::create(&arena_, {}, {}, kMaxHeight);
+}
 
-std::uint32_t random_height(skiplist* sl) noexcept;
+template <Comparator Cmp>
+skiplist<Cmp>::~skiplist() {
+  frankie::core::arena_destroy(&arena_);
+}
 
-skiplist_node* create_skiplist_node(core::arena* arena, std::string_view key,
-                                    std::string_view value,
-                                    std::uint32_t height) noexcept;
+template <Comparator Cmp>
+void skiplist<Cmp>::insert(std::string_view key, std::string_view value) noexcept {
+  skiplist_node *update[kMaxHeight];
+  auto *current = head_;
 
-skiplist* create_skiplist(core::arena* arena, std::uint32_t max_height,
-                          std::uint32_t branching_factor) noexcept;
+  for (int level = static_cast<int>(current_height_) - 1; level >= 0; --level) {
+    auto lvl = static_cast<std::size_t>(level);
+    while (current->forward()[lvl] && cmp_(current->forward()[lvl]->key(), key) < 0) {
+      current = current->forward()[lvl];
+    }
+    update[level] = current;
+  }
 
-skiplist_node* skiplist_search(skiplist* sl, std::string_view key) noexcept;
+  auto *existing = current->forward()[0];
+  if (existing && cmp_(existing->key(), key) == 0) {
+    auto h = existing->height();
+    auto *replacement = skiplist_node::create(&arena_, key, value, h);
+    for (std::uint32_t i = 0; i < h; ++i) {
+      replacement->forward()[i] = existing->forward()[i];
+      update[i]->forward()[i] = replacement;
+    }
+    return;
+  }
 
-skiplist_node* skiplist_insert(skiplist* sl, std::string_view key,
-                               std::string_view value) noexcept;
+  auto height = random_height();
+  if (height > current_height_) {
+    for (auto i = current_height_; i < height; ++i) update[i] = head_;
+    current_height_ = height;
+  }
 
-skiplist_iter skiplist_seek(skiplist* sl, std::string_view key) noexcept;
+  auto *node = skiplist_node::create(&arena_, key, value, height);
+  for (std::uint32_t i = 0; i < height; ++i) {
+    node->forward()[i] = update[i]->forward()[i];
+    update[i]->forward()[i] = node;
+  }
+  ++count_;
+}
 
-bool skiplist_empty(skiplist* sl) noexcept;
+template <Comparator Cmp>
+std::expected<std::string_view, error> skiplist<Cmp>::get(std::string_view key) const noexcept {
+  const auto *current = head_;
 
-std::uint32_t skiplist_count(skiplist* sl) noexcept;
+  for (int level = static_cast<int>(current_height_) - 1; level >= 0; --level) {
+    auto lvl = static_cast<std::size_t>(level);
+    while (current->forward()[lvl] && cmp_(current->forward()[lvl]->key(), key) < 0) {
+      current = current->forward()[lvl];
+    }
+  }
 
-skiplist_iter create_skiplist_iter(skiplist_node* node) noexcept;
+  const auto *candidate = current->forward()[0];
+  if (candidate && cmp_(candidate->key(), key) == 0) return candidate->value();
 
-bool skiplist_iter_valid(skiplist_iter* sl) noexcept;
+  return std::unexpected(error::not_found);
+}
 
-void skiplist_iter_next(skiplist_iter* sl) noexcept;
+template <Comparator Cmp>
+std::size_t skiplist<Cmp>::size() const noexcept {
+  return count_;
+}
 
-std::string_view skiplist_iter_key(skiplist_iter* sl) noexcept;
+template <Comparator Cmp>
+std::uint64_t skiplist<Cmp>::bytes_allocated() const noexcept {
+  return arena_.bytes_allocated_;
+}
 
-std::string_view skiplist_iter_value(skiplist_iter* sl) noexcept;
+template <Comparator Cmp>
+skiplist<Cmp>::iterator::value_type skiplist<Cmp>::iterator::operator*() const {
+  return {node_->key(), node_->value()};
+}
 
-}  // namespace frankie::storage
+template <Comparator Cmp>
+skiplist<Cmp>::iterator &skiplist<Cmp>::iterator::operator++() {
+  node_ = node_->forward()[0];
+  return *this;
+}
+
+template <Comparator Cmp>
+skiplist<Cmp>::iterator skiplist<Cmp>::iterator::operator++(int) {
+  auto tmp = *this;
+  ++*this;
+  return tmp;
+}
+
+template <Comparator Cmp>
+bool skiplist<Cmp>::iterator::operator==(std::default_sentinel_t) const {
+  return node_ == nullptr;
+}
+
+template <Comparator Cmp>
+skiplist<Cmp>::iterator skiplist<Cmp>::begin() const {
+  return iterator{head_->forward()[0]};
+}
+
+template <Comparator Cmp>
+std::default_sentinel_t skiplist<Cmp>::end() const {
+  return {};
+}
+
+template <Comparator Cmp>
+std::uint32_t skiplist<Cmp>::random_height() noexcept {
+  std::uint32_t h = 1;
+  while (h < kMaxHeight && (dist_(rng_) % kBranchingFactor) == 0) ++h;
+  return h;
+}
+
+}  // namespace frankie::storage::custom_arena

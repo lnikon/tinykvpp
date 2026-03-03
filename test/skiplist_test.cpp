@@ -2,212 +2,241 @@
 
 #include <gtest/gtest.h>
 
+#include <set>
+#include <vector>
+
 #include "test_common.hpp"
 
-using namespace frankie::core;
 using namespace frankie::storage;
 using namespace frankie::testing;
 
-TEST(SkiplistTest, SkiplistCreate) {
-  const std::uint32_t height = 5;
-  const std::uint32_t branching_factor = 5;
+using comparator = simd_comparator;
 
-  arena arena;
-
-  skiplist* sl = create_skiplist(&arena, height, branching_factor);
-  EXPECT_EQ(sl->max_height_, height);
-  EXPECT_EQ(sl->current_height_, 0);
-  EXPECT_EQ(sl->branching_factor_, branching_factor);
-  EXPECT_EQ(sl->count_, 0);
-  EXPECT_EQ(skiplist_count(sl), 0);
-  EXPECT_TRUE(skiplist_empty(sl));
-  EXPECT_NE(sl->head_, nullptr);
-  EXPECT_EQ(sl->head_->key(), "");
-  EXPECT_EQ(sl->head_->value(), "");
-  EXPECT_EQ(sl->head_->height_, height);
+TEST(SkiplistArenaTest, SkiplistCreate) {
+  skiplist<comparator> sl;
+  EXPECT_EQ(sl.size(), 0);
+  EXPECT_GT(sl.bytes_allocated(), 0);  // Head node is allocated
 }
 
-TEST(SkiplistTest, SkiplistInsertSingleNode) {
-  const std::uint32_t height = 5;
-  const std::uint32_t branching_factor = 5;
+TEST(SkiplistArenaTest, SkiplistInsertSingleNode) {
+  skiplist<comparator> sl;
+
   std::string key{"hello"};
   std::string value{"world"};
 
-  arena arena;
+  sl.insert(key, value);
 
-  skiplist* sl = create_skiplist(&arena, height, branching_factor);
+  EXPECT_EQ(sl.size(), 1);
 
-  skiplist_node* node = skiplist_insert(sl, key, value);
-  EXPECT_NE(node, nullptr);
-  EXPECT_EQ(node->key(), key);
-  EXPECT_EQ(node->value(), value);
+  auto result = sl.get(key);
+  ASSERT_TRUE(result.has_value());
+  EXPECT_EQ(result.value(), value);
 }
 
-TEST(SkiplistTest, SkiplistSearch) {
-  const std::uint32_t height = 5;
-  const std::uint32_t branching_factor = 5;
+TEST(SkiplistArenaTest, SkiplistSearch) {
+  skiplist<comparator> sl;
+
   std::string key{"hello"};
   std::string value{"world"};
 
-  arena arena;
+  sl.insert(key, value);
 
-  skiplist* sl = create_skiplist(&arena, height, branching_factor);
+  auto result = sl.get(key);
+  ASSERT_TRUE(result.has_value());
+  EXPECT_EQ(result.value(), value);
 
-  skiplist_node* inserted_node = skiplist_insert(sl, key, value);
-  skiplist_node* found_node = skiplist_search(sl, key);
-  EXPECT_NE(inserted_node, nullptr);
-  EXPECT_NE(found_node, nullptr);
-  EXPECT_EQ(inserted_node->key(), found_node->key());
-  EXPECT_EQ(inserted_node->value(), found_node->value());
-
-  EXPECT_EQ(skiplist_count(sl), 1);
-  EXPECT_FALSE(skiplist_empty(sl));
+  EXPECT_EQ(sl.size(), 1);
 }
 
-TEST(SkiplistTest, SkiplistInsertMultipleNodes) {
-  const std::uint32_t height = 10;
-  const std::uint32_t branching_factor = 7;
+TEST(SkiplistArenaTest, SkiplistSearchNotFound) {
+  skiplist<comparator> sl;
+
+  sl.insert("key1", "value1");
+
+  auto result = sl.get("nonexistent");
+  ASSERT_FALSE(result.has_value());
+  EXPECT_EQ(result.error(), error::not_found);
+}
+
+TEST(SkiplistArenaTest, SkiplistInsertMultipleNodes) {
+  skiplist<comparator> sl;
+
   const std::uint32_t count = 1024;
   const std::uint64_t min_len = 1;
   const std::uint64_t max_len = 128;
 
-  arena arena;
+  std::vector<std::pair<std::string, std::string>> entries;
+  std::set<std::string> unique_keys;
 
-  skiplist* sl = create_skiplist(&arena, height, branching_factor);
-
-  std::vector<skiplist_node*> nodes_inserted;
-  std::set<skiplist_node*> nodes_unique;
   for (std::uint64_t i = 0; i < count; i++) {
     std::string key =
         random_string(random_u64(min_len, max_len)) + std::to_string(i);
     std::string value =
         random_string(random_u64(min_len, max_len)) + std::to_string(i);
 
-    skiplist_node* node = skiplist_insert(sl, key, value);
-    EXPECT_NE(node, nullptr);
-    EXPECT_EQ(node->key(), key);
-    EXPECT_EQ(node->value(), value);
-    nodes_inserted.push_back(node);
-
-    nodes_unique.emplace(node);
+    sl.insert(key, value);
+    entries.emplace_back(key, value);
+    unique_keys.insert(key);
   }
 
-  EXPECT_EQ(skiplist_count(sl), nodes_unique.size());
-  EXPECT_FALSE(skiplist_empty(sl));
+  EXPECT_EQ(sl.size(), unique_keys.size());
 
-  std::vector<skiplist_node*> nodes_found;
-  for (std::uint64_t i = 0; i < nodes_inserted.size(); i++) {
-    skiplist_node* node = skiplist_search(sl, nodes_inserted[i]->key());
-    EXPECT_NE(node, nullptr);
-    nodes_found.push_back(node);
-  }
-
-  EXPECT_EQ(nodes_inserted.size(), nodes_found.size());
-  for (std::uint64_t i = 0; i < nodes_found.size(); i++) {
-    EXPECT_EQ(nodes_found[i]->key().size(), nodes_inserted[i]->key().size());
-    EXPECT_EQ(nodes_found[i]->key(), nodes_inserted[i]->key());
-    EXPECT_EQ(nodes_found[i]->value().size(),
-              nodes_inserted[i]->value().size());
-    EXPECT_EQ(nodes_found[i]->value(), nodes_inserted[i]->value());
+  for (const auto& [key, value] : entries) {
+    auto result = sl.get(key);
+    ASSERT_TRUE(result.has_value()) << "Key not found: " << key;
+    EXPECT_EQ(result.value(), value);
   }
 }
 
-TEST(SkiplistTest, SkiplistDoesNotUpdateExistingValue) {
-  arena arena;
+TEST(SkiplistArenaTest, SkiplistUpdatesExistingValue) {
+  skiplist<comparator> sl;
 
-  skiplist* sl =
-      create_skiplist(&arena, DEFAULT_MAX_HEIGHT, DEFAULT_BRANCHING_FACTOR);
-  EXPECT_NE(sl, nullptr);
+  sl.insert("key1", "value1");
+  sl.insert("key3", "value3");
+  sl.insert("key2", "value2");
 
-  skiplist_insert(sl, "key1", "value1");
-  skiplist_insert(sl, "key3", "value3");
-  skiplist_insert(sl, "key2", "value2");
-  skiplist_node* node = skiplist_search(sl, "key1");
-  EXPECT_NE(node, nullptr);
-  EXPECT_EQ(node->key(), "key1");
-  EXPECT_EQ(node->value(), "value1");
+  auto result = sl.get("key1");
+  ASSERT_TRUE(result.has_value());
+  EXPECT_EQ(result.value(), "value1");
 
-  skiplist_insert(sl, "key1", "value4");
-  EXPECT_NE(node, nullptr);
-  EXPECT_EQ(node->key(), "key1");
-  EXPECT_EQ(node->value(), "value1");
+  sl.insert("key1", "value4");
+
+  result = sl.get("key1");
+  ASSERT_TRUE(result.has_value());
+  EXPECT_EQ(result.value(), "value4");
+
+  EXPECT_EQ(sl.size(), 3);
 }
 
-TEST(SkiplistTest, SkiplistSeekOnEmptyList) {
-  arena arena;
+TEST(SkiplistArenaTest, SkiplistSearchOnEmptyList) {
+  skiplist<comparator> sl;
 
-  skiplist* sl =
-      create_skiplist(&arena, DEFAULT_MAX_HEIGHT, DEFAULT_BRANCHING_FACTOR);
-  EXPECT_NE(sl, nullptr);
-
-  skiplist_iter iter = skiplist_seek(sl, "key1");
-  EXPECT_FALSE(skiplist_iter_valid(&iter));
-  ASSERT_DEATH({ skiplist_iter_key(&iter); }, "\\w");
+  auto result = sl.get("key1");
+  ASSERT_FALSE(result.has_value());
+  EXPECT_EQ(result.error(), error::not_found);
 }
 
-TEST(SkiplistTest, SkiplistSeekToNonExistingKey) {
-  arena arena;
+TEST(SkiplistArenaTest, BytesAllocatedGrowsOnInsert) {
+  skiplist<comparator> sl;
 
-  skiplist* sl =
-      create_skiplist(&arena, DEFAULT_MAX_HEIGHT, DEFAULT_BRANCHING_FACTOR);
-  EXPECT_NE(sl, nullptr);
+  EXPECT_GT(sl.bytes_allocated(), 0);
 
-  skiplist_insert(sl, "key1", "value1");
-  skiplist_insert(sl, "key3", "value3");
-  skiplist_insert(sl, "key2", "value2");
+  auto initial = sl.bytes_allocated();
 
-  skiplist_iter iter = skiplist_seek(sl, "key4");
-  EXPECT_FALSE(skiplist_iter_valid(&iter));
-  ASSERT_DEATH({ skiplist_iter_key(&iter); }, "\\w");
+  sl.insert("key1", "value1");
+  EXPECT_GT(sl.bytes_allocated(), initial);
+
+  auto after_one = sl.bytes_allocated();
+
+  sl.insert("key2", "value2");
+  EXPECT_GT(sl.bytes_allocated(), after_one);
 }
 
-TEST(SkiplistTest, SkiplistSeekToExistingKey) {
-  arena arena;
+TEST(SkiplistArenaTest, LargeKeysAndValues) {
+  skiplist<comparator> sl;
 
-  skiplist* sl =
-      create_skiplist(&arena, DEFAULT_MAX_HEIGHT, DEFAULT_BRANCHING_FACTOR);
-  EXPECT_NE(sl, nullptr);
+  std::string large_key(1024, 'k');
+  std::string large_value(4096, 'v');
 
-  skiplist_insert(sl, "key1", "value1");
-  skiplist_insert(sl, "key3", "value3");
-  skiplist_insert(sl, "key2", "value2");
+  sl.insert(large_key, large_value);
 
-  skiplist_iter iter = skiplist_seek(sl, "key2");
-  EXPECT_TRUE(skiplist_iter_valid(&iter));
-  EXPECT_EQ(skiplist_iter_key(&iter), "key2");
-  EXPECT_EQ(skiplist_iter_value(&iter), "value2");
-
-  skiplist_iter_next(&iter);
-  EXPECT_TRUE(skiplist_iter_valid(&iter));
-  EXPECT_EQ(skiplist_iter_key(&iter), "key3");
-  EXPECT_EQ(skiplist_iter_value(&iter), "value3");
+  auto result = sl.get(large_key);
+  ASSERT_TRUE(result.has_value());
+  EXPECT_EQ(result.value(), large_value);
 }
 
-TEST(SkiplistIteratorTest, CreateNullIterator) {
-  skiplist_iter iter = create_skiplist_iter(nullptr);
-  EXPECT_FALSE(skiplist_iter_valid(&iter));
+TEST(SkiplistArenaTest, CustomComparator) {
+  struct reverse_comparator {
+    constexpr int operator()(std::string_view a, std::string_view b) const noexcept {
+      auto cmp = b <=> a;
+      if (cmp < 0) return -1;
+      if (cmp > 0) return 1;
+      return 0;
+    }
+  };
 
-  ASSERT_DEATH({ skiplist_iter_next(&iter); }, "\\w");
+  skiplist<reverse_comparator> sl;
+
+  sl.insert("aaa", "value_a");
+  sl.insert("ccc", "value_c");
+  sl.insert("bbb", "value_b");
+
+  std::vector<std::string> keys;
+  for (const auto& [key, value] : sl) {
+    keys.emplace_back(key);
+  }
+
+  ASSERT_EQ(keys.size(), 3);
+  EXPECT_EQ(keys[0], "ccc");
+  EXPECT_EQ(keys[1], "bbb");
+  EXPECT_EQ(keys[2], "aaa");
 }
 
-TEST(SkiplistIteratorTest, SkiplistIteratorBasicTest) {
-  arena arena;
+// ---------------------------------------------------------------------------
+// Iterator tests
+// ---------------------------------------------------------------------------
 
-  skiplist* sl =
-      create_skiplist(&arena, DEFAULT_MAX_HEIGHT, DEFAULT_BRANCHING_FACTOR);
-  EXPECT_NE(sl, nullptr);
+TEST(SkiplistArenaIteratorTest, IteratorOnEmptyList) {
+  skiplist<comparator> sl;
 
-  skiplist_insert(sl, "key1", "value1");
-  skiplist_insert(sl, "key3", "value3");
-  skiplist_insert(sl, "key2", "value2");
+  auto it = sl.begin();
+  EXPECT_EQ(it, sl.end());
+}
 
-  skiplist_iter iter = create_skiplist_iter(sl->head_->forward()[0]);
+TEST(SkiplistArenaIteratorTest, IteratorBasicTest) {
+  skiplist<comparator> sl;
+
+  sl.insert("key1", "value1");
+  sl.insert("key3", "value3");
+  sl.insert("key2", "value2");
+
+  std::vector<std::string> keys;
   std::vector<std::string> values;
-  while (skiplist_iter_valid(&iter)) {
-    values.push_back(std::string(skiplist_iter_value(&iter)));
-    skiplist_iter_next(&iter);
+
+  for (const auto& [key, value] : sl) {
+    keys.emplace_back(key);
+    values.emplace_back(value);
   }
 
-  EXPECT_EQ(skiplist_count(sl), values.size());
-  EXPECT_TRUE(std::is_sorted(values.begin(), values.end()));
+  EXPECT_EQ(sl.size(), keys.size());
+  EXPECT_TRUE(std::is_sorted(keys.begin(), keys.end()));
+}
+
+TEST(SkiplistArenaIteratorTest, IteratorPostIncrement) {
+  skiplist<comparator> sl;
+
+  sl.insert("key1", "value1");
+  sl.insert("key2", "value2");
+
+  auto it = sl.begin();
+  auto prev = it++;
+
+  auto [key1, val1] = *prev;
+  auto [key2, val2] = *it;
+
+  EXPECT_EQ(key1, "key1");
+  EXPECT_EQ(key2, "key2");
+}
+
+TEST(SkiplistArenaIteratorTest, IteratorTraversesAllInOrder) {
+  skiplist<comparator> sl;
+
+  const std::uint32_t count = 256;
+  std::vector<std::string> inserted_keys;
+
+  for (std::uint32_t i = 0; i < count; ++i) {
+    std::string key = "key" + std::to_string(i);
+    sl.insert(key, "val" + std::to_string(i));
+    inserted_keys.push_back(key);
+  }
+
+  std::sort(inserted_keys.begin(), inserted_keys.end());
+
+  std::vector<std::string> iterated_keys;
+  for (const auto& [key, value] : sl) {
+    iterated_keys.emplace_back(key);
+  }
+
+  EXPECT_EQ(iterated_keys.size(), count);
+  EXPECT_EQ(iterated_keys, inserted_keys);
 }
