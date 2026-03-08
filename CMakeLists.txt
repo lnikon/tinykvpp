@@ -14,7 +14,7 @@ if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
             -Wpedantic
             -Werror
             -Wconversion
-#            -Wsign-conversion
+            #            -Wsign-conversion
             -Wshadow
             -Wnon-virtual-dtor
             -Wold-style-cast
@@ -44,7 +44,11 @@ find_package(benchmark REQUIRED)
 find_package(GTest REQUIRED)
 
 add_library(frankie_lib INTERFACE)
-target_sources(frankie_lib INTERFACE src/core/arena.cpp src/storage/skiplist.cpp)
+target_sources(frankie_lib INTERFACE
+        src/core/arena.cpp
+        src/core/simd.cpp
+        src/storage/skiplist.cpp
+        src/storage/memtable.cpp)
 target_include_directories(
         frankie_lib
         INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/src
@@ -56,10 +60,7 @@ target_link_libraries(frankie_lib INTERFACE zstd::libzstd_static)
 target_link_libraries(frankie_lib INTERFACE LZ4::lz4_static)
 target_link_libraries(frankie_lib INTERFACE openssl::openssl)
 
-add_executable(frankie ${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp
-        src/storage/skiplist.hpp
-        src/core/simd.h
-        src/storage/skiplist.cpp)
+add_executable(frankie ${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp)
 target_link_libraries(frankie frankie_lib)
 
 if (GTest_FOUND)

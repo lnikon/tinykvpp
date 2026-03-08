@@ -5,3 +5,8 @@ This is my second attempt to build a distributed key-value store. The latest ver
 
 ## Build
 
+## ToDo
+- [ ] skiplist to support insert(node), opaque to allocator
+- [ ] Memory leak tracing allocator
+- [ ] SIMD comparator ordering different from memcmp
+- [ ] Shared arena between memtable and skiplist
