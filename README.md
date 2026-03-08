@@ -6,6 +6,7 @@ This is my second attempt to build a distributed key-value store. The latest ver
 ## Build
 
 ## ToDo
+- [ ] Fast rng without kernel that is goood enough
 - [ ] skiplist to support insert(node), opaque to allocator
 - [ ] Memory leak tracing allocator
 - [ ] SIMD comparator ordering different from memcmp

@@ -46,6 +46,7 @@ find_package(GTest REQUIRED)
 add_library(frankie_lib INTERFACE)
 target_sources(frankie_lib INTERFACE
         src/core/arena.cpp
+        src/core/scratch_arena.cpp
         src/core/simd.cpp
         src/storage/skiplist.cpp
         src/storage/memtable.cpp)

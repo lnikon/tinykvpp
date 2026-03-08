@@ -21,7 +21,7 @@ class arena final {
 
   void destroy() noexcept;
 
-  [[nodiscard]] std::uint64_t  bytes_allocated() const noexcept;
+  [[nodiscard]] std::uint64_t bytes_allocated() const noexcept;
 
  private:
   arena_block *current_ = nullptr;

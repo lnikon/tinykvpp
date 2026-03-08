@@ -4,28 +4,45 @@ namespace frankie::storage {
 
 void memtable::put(std::string_view key, const std::string_view value, const std::uint64_t sequence,
                    const bool is_tombstone) noexcept {
-  kv_entry entry;
-  entry.key_ = key;
-  entry.value_ = value;
-  entry.sequence_ = sequence;
-  entry.timestamp_ = sequence;  // NOTE: Use monotonic timestamp in epoch format with ms precision
-  entry.tombstone_ = is_tombstone;
+  // kv_entry entry;
+  // entry.key_ = key;
+  // entry.value_ = value;
+  // entry.sequence_ = sequence;
+  // entry.timestamp_ = sequence;  // NOTE: Use monotonic timestamp in epoch format with ms precision
+  // entry.tombstone_ = is_tombstone;
+  //
+  // std::array<char, 8> sequence_bytes;
+  // std::array<char, 8> timestamp_bytes;
+  //
+  // std::memcpy(sequence_bytes.data(), &sequence, sizeof(sequence));
+  // std::memcpy(timestamp_bytes.data(), &sequence, sizeof(sequence));
+  // char tombstone_byte = static_cast<char>(is_tombstone);
+  //
+  // std::string_view parts[] = {
+  //   key,
+  //   {sequence_bytes.data(), sizeof(sequence)},
+  //   {timestamp_bytes.data(), sizeof(sequence)},
+  //   {&tombstone_byte, 1},
+  // };
+  //
+  // skiplist_.insert(parts, entry.value());
 
-  std::array<char, 8> sequence_bytes;
-  std::array<char, 8> timestamp_bytes;
+  scratch_arena_.reset();
 
-  std::memcpy(sequence_bytes.data(), &sequence, sizeof(sequence));
-  std::memcpy(timestamp_bytes.data(), &sequence, sizeof(sequence));
-  char tombstone_byte = static_cast<char>(is_tombstone);
+  const std::uint64_t total = key.size(); // + 8 + 8 + 1;
+  char *buf = scratch_arena_.allocate(total);
 
-  std::string_view parts[] = {
-    key,
-    {sequence_bytes.data(), sizeof(sequence)},
-    {timestamp_bytes.data(), sizeof(sequence)},
-    {&tombstone_byte, 1},
-  };
-
-  skiplist_.insert(parts, entry.value());
+  char *p = buf;
+  std::memcpy(p, key.data(), key.size());
+  // p += key.size();
+  // std::memcpy(p, &sequence, 8);
+  // p += 8;
+  // std::memcpy(p, &sequence, 8);
+  // p += 8;  // timestamp
+  // *p++ = static_cast<char>(is_tombstone);
+  (void)sequence; (void)is_tombstone;
+  const std::string_view internal_key{buf, total};
+  skiplist_.insert(internal_key, value);
   count_++;
 }
 

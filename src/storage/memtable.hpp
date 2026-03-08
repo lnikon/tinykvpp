@@ -3,6 +3,7 @@
 #include <optional>
 #include <format>
 
+#include "core/scratch_arena.h"
 #include "storage/skiplist.hpp"
 
 namespace frankie::storage {
@@ -40,6 +41,7 @@ class memtable final {
   [[nodiscard]] std::uint64_t count() const noexcept;
 
  private:
+  core::scratch_arena scratch_arena_{};
   core::arena arena_{};
   skiplist<> skiplist_;
 

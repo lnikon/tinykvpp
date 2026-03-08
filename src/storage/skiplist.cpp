@@ -2,31 +2,20 @@
 
 namespace frankie::storage {
 
-auto skiplist_node::create(core::arena *arena, std::span<const std::string_view> key_parts, std::string_view value,
-                           const std::uint32_t height) noexcept -> skiplist_node * {
-  std::uint64_t total_key_size = 0;
-  for (const auto &key : key_parts) {
-    total_key_size += key.size();
-  }
-
-  const std::size_t size = layout_size(height, total_key_size, value.size());
-  void *mem = arena->allocate(static_cast<std::uint64_t>(size), alignof(skiplist_node));
+skiplist_node *skiplist_node::create(core::arena *a, std::string_view key, std::string_view value,
+                                     std::uint32_t height) noexcept {
+  const auto size = layout_size(height, key.size(), value.size());
+  void *mem = a->allocate(static_cast<std::uint64_t>(size), alignof(skiplist_node));
   std::memset(mem, 0, size);
 
   auto *node = ::new (mem) skiplist_node{};
-  node->key_size_ = static_cast<std::uint32_t>(total_key_size);
+  node->key_size_ = static_cast<std::uint32_t>(key.size());
   node->value_size_ = static_cast<std::uint32_t>(value.size());
   node->height_ = height;
 
   std::ranges::fill(node->forward(), nullptr);
 
-  auto dst = node->key_bytes().data();
-  std::uint64_t offset = 0;
-  for (const auto &key_part : key_parts) {
-    std::memcpy(dst + offset, key_part.data(), key_part.size());
-    offset += key_part.size();
-  }
-
+  std::memcpy(node->key_bytes().data(), key.data(), key.size());
   std::memcpy(node->value_bytes().data(), value.data(), value.size());
 
   return node;

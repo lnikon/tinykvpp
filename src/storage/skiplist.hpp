@@ -35,48 +35,33 @@ static_assert(Comparator<memcmp_comparator>);
 
 struct simd_comparator {
   constexpr int operator()(const std::string_view a, const std::string_view b) const noexcept {
-    return simd_compare_sse2(a.data(), b.data(), a.length() < b.length() ? a.length() : b.length());
+    auto cmp = simd_compare_sse2(a.data(), b.data(), a.length() < b.length() ? a.length() : b.length());
+    if (cmp != 0) {
+      return cmp;
+    }
+    if (a.length() < b.length()) {
+      return -1;
+    }
+    if (a.length() > b.length()) {
+      return 1;
+    }
+    return 0;
   }
 };
 static_assert(Comparator<simd_comparator>);
 
 using default_comparator = simd_comparator;
 
-template <Comparator Cmp>
-int compare_against_parts(const std::string_view node_key, const std::span<const std::string_view> key_parts,
-                          Cmp cmp = default_comparator{}) noexcept {
-  const char *lhs = node_key.data();
-  std::size_t lhs_remaining = node_key.size();
-
-  for (const auto &part : key_parts) {
-    const std::size_t chunk = std::min(lhs_remaining, part.size());
-
-    if (chunk > 0) {
-      if (const int r = cmp(lhs, part.data()); r != 0) {
-        return r;
-      }
-
-      lhs += chunk;
-      lhs_remaining -= chunk;
-    }
-
-    // Consumed node_key, but some of the part left: A < B
-    if (lhs_remaining == 0 && chunk < part.size()) {
-      return -1;
-    }
-  }
-
-  // Consumed all parts. If some of node_key remains then A > B, otherwise A == B
-  return lhs_remaining > 0 ? 1 : 0;
-}
-
 // ================================================================================
-// Node — flat allocation: [skiplist_node][forward ptrs][key bytes][value bytes]
+// Node — flat allocation: [skiplist_node][forward ptrs][keys bytes][values bytes]
 // ================================================================================
 class skiplist_node final {
  public:
-  [[nodiscard]] static skiplist_node *create(core::arena *arena, std::span<const std::string_view> key_parts,
-                                             std::string_view value, std::uint32_t height) noexcept;
+  // [[nodiscard]] static skiplist_node *create(core::arena *arena, std::span<const std::string_view> key_parts,
+  //                                            std::string_view value, std::uint32_t height) noexcept;
+
+  [[nodiscard]] static skiplist_node *create(core::arena *arena, std::string_view key, std::string_view value,
+                                             std::uint32_t height) noexcept;
 
   [[nodiscard]] std::span<skiplist_node *> forward() noexcept;
 
@@ -130,7 +115,7 @@ class skiplist final {
   // --- Mutations ---
 
   void insert(std::string_view key, std::string_view value) noexcept;
-  void insert(std::span<const std::string_view> key_parts, std::string_view value) noexcept;
+  // void insert(std::span<const std::string_view> key_parts, std::string_view value) noexcept;
 
   // --- Lookups ---
 
@@ -168,19 +153,17 @@ class skiplist final {
  private:
   std::uint32_t random_height() noexcept;
 
-  core::arena arena_{core::arena::create(core::arena::kDefaultBlockSize)};
+  core::arena arena_{};
   skiplist_node *head_ = nullptr;
   std::uint32_t current_height_ = 1;
   std::size_t count_ = 0;
-
-  std::mt19937 rng_{std::random_device{}()};  // NOTE: Use custom rng
-  std::uniform_int_distribution<std::uint32_t> dist_{0, UINT32_MAX};
+  std::uint64_t rng_state_{std::random_device{}() | 1};  // NOTE: Use custom rng
   [[no_unique_address]] Cmp cmp_;
 };
 
 template <Comparator Cmp>
 skiplist<Cmp>::skiplist(Cmp cmp) noexcept : cmp_{cmp} {
-  head_ = skiplist_node::create(&arena_, {}, {}, kMaxHeight);
+  head_ = skiplist_node::create(&arena_, std::string_view{}, {}, kMaxHeight);
 }
 
 template <Comparator Cmp>
@@ -190,40 +173,35 @@ skiplist<Cmp>::~skiplist() {
 
 template <Comparator Cmp>
 void skiplist<Cmp>::insert(std::string_view key, std::string_view value) noexcept {
-  insert(std::span{&key, 1}, value);
-}
-
-template <Comparator Cmp>
-void skiplist<Cmp>::insert(const std::span<const std::string_view> key_parts, const std::string_view value) noexcept {
   skiplist_node *update[kMaxHeight];
   auto *current = head_;
 
   for (int level = static_cast<int>(current_height_) - 1; level >= 0; --level) {
-    const auto lvl = static_cast<std::size_t>(level);
-    while (current->forward()[lvl] && compare_against_parts(current->forward()[lvl]->key(), key_parts, cmp_) < 0) {
+    auto lvl = static_cast<std::size_t>(level);
+    while (current->forward()[lvl] && cmp_(current->forward()[lvl]->key(), key) < 0) {
       current = current->forward()[lvl];
     }
     update[level] = current;
   }
 
   auto *existing = current->forward()[0];
-  if (existing && compare_against_parts(existing->key(), key_parts, cmp_) == 0) {
-    const auto height = existing->height();
-    auto *replacement = skiplist_node::create(&arena_, key_parts, value, height);
-    for (std::uint32_t i = 0; i < height; ++i) {
+  if (existing && cmp_(existing->key(), key) == 0) {
+    auto h = existing->height();
+    auto *replacement = skiplist_node::create(&arena_, key, value, h);
+    for (std::uint32_t i = 0; i < h; ++i) {
       replacement->forward()[i] = existing->forward()[i];
       update[i]->forward()[i] = replacement;
     }
     return;
   }
 
-  const auto height = random_height();
+  auto height = random_height();
   if (height > current_height_) {
     for (auto i = current_height_; i < height; ++i) update[i] = head_;
     current_height_ = height;
   }
 
-  auto *node = skiplist_node::create(&arena_, key_parts, value, height);
+  auto *node = skiplist_node::create(&arena_, key, value, height);
   for (std::uint32_t i = 0; i < height; ++i) {
     node->forward()[i] = update[i]->forward()[i];
     update[i]->forward()[i] = node;
@@ -293,8 +271,17 @@ std::default_sentinel_t skiplist<Cmp>::end() const {
 
 template <Comparator Cmp>
 std::uint32_t skiplist<Cmp>::random_height() noexcept {
+  std::uint64_t x = rng_state_;
+  x ^= x << 13;
+  x ^= x >> 7;
+  x ^= x << 17;
+  rng_state_ = x;
+
   std::uint32_t h = 1;
-  while (h < kMaxHeight && (dist_(rng_) % kBranchingFactor) == 0) ++h;
+  while (h < kMaxHeight && (x & (kBranchingFactor - 1)) == 0) {
+    ++h;
+    x >>= 2;
+  }
   return h;
 }
 
