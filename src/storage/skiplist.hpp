@@ -57,9 +57,6 @@ using default_comparator = simd_comparator;
 // ================================================================================
 class skiplist_node final {
  public:
-  // [[nodiscard]] static skiplist_node *create(core::arena *arena, std::span<const std::string_view> key_parts,
-  //                                            std::string_view value, std::uint32_t height) noexcept;
-
   [[nodiscard]] static skiplist_node *create(core::arena *arena, std::string_view key, std::string_view value,
                                              std::uint32_t height) noexcept;
 
@@ -103,19 +100,11 @@ class skiplist final {
   static constexpr std::uint32_t kMaxHeight = 12;
   static constexpr std::uint32_t kBranchingFactor = 4;
 
-  explicit skiplist(Cmp cmp = {}) noexcept;
-
-  ~skiplist();
-
-  skiplist(const skiplist &) = delete;
-  skiplist &operator=(const skiplist &) = delete;
-  skiplist(skiplist &&) = delete;
-  skiplist &operator=(skiplist &&) = delete;
+  [[nodiscard]] static skiplist<Cmp> create(core::arena* arena, Cmp cmp) noexcept;
 
   // --- Mutations ---
 
   void insert(std::string_view key, std::string_view value) noexcept;
-  // void insert(std::span<const std::string_view> key_parts, std::string_view value) noexcept;
 
   // --- Lookups ---
 
@@ -153,26 +142,25 @@ class skiplist final {
  private:
   std::uint32_t random_height() noexcept;
 
-  core::arena arena_{};
+  core::arena* arena_{nullptr};
   skiplist_node *head_ = nullptr;
   std::uint32_t current_height_ = 1;
   std::size_t count_ = 0;
   std::uint64_t rng_state_{std::random_device{}() | 1};  // NOTE: Use custom rng
-  [[no_unique_address]] Cmp cmp_;
+  [[no_unique_address]] Cmp cmp_{};
 };
 
 template <Comparator Cmp>
-skiplist<Cmp>::skiplist(Cmp cmp) noexcept : cmp_{cmp} {
-  head_ = skiplist_node::create(&arena_, std::string_view{}, {}, kMaxHeight);
+skiplist<Cmp> skiplist<Cmp>::create(core::arena *arena, Cmp cmp) noexcept {
+  skiplist<Cmp> result;
+  result.head_ = skiplist_node::create(arena, std::string_view{}, {}, kMaxHeight);
+  result.arena_ = arena;
+  result.cmp_ = cmp;
+  return result;
 }
 
 template <Comparator Cmp>
-skiplist<Cmp>::~skiplist() {
-  arena_.destroy();
-}
-
-template <Comparator Cmp>
-void skiplist<Cmp>::insert(std::string_view key, std::string_view value) noexcept {
+void skiplist<Cmp>::insert(const std::string_view key, const std::string_view value) noexcept {
   skiplist_node *update[kMaxHeight];
   auto *current = head_;
 
@@ -186,8 +174,8 @@ void skiplist<Cmp>::insert(std::string_view key, std::string_view value) noexcep
 
   auto *existing = current->forward()[0];
   if (existing && cmp_(existing->key(), key) == 0) {
-    auto h = existing->height();
-    auto *replacement = skiplist_node::create(&arena_, key, value, h);
+    const auto h = existing->height();
+    auto *replacement = skiplist_node::create(arena_, key, value, h);
     for (std::uint32_t i = 0; i < h; ++i) {
       replacement->forward()[i] = existing->forward()[i];
       update[i]->forward()[i] = replacement;
@@ -195,13 +183,13 @@ void skiplist<Cmp>::insert(std::string_view key, std::string_view value) noexcep
     return;
   }
 
-  auto height = random_height();
+  const auto height = random_height();
   if (height > current_height_) {
     for (auto i = current_height_; i < height; ++i) update[i] = head_;
     current_height_ = height;
   }
 
-  auto *node = skiplist_node::create(&arena_, key, value, height);
+  auto * const node = skiplist_node::create(arena_, key, value, height);
   for (std::uint32_t i = 0; i < height; ++i) {
     node->forward()[i] = update[i]->forward()[i];
     update[i]->forward()[i] = node;
@@ -214,7 +202,7 @@ std::expected<std::string_view, error> skiplist<Cmp>::get(std::string_view key) 
   const auto *current = head_;
 
   for (int level = static_cast<int>(current_height_) - 1; level >= 0; --level) {
-    auto lvl = static_cast<std::size_t>(level);
+    const auto lvl = static_cast<std::size_t>(level);
     while (current->forward()[lvl] && cmp_(current->forward()[lvl]->key(), key) < 0) {
       current = current->forward()[lvl];
     }
@@ -233,7 +221,7 @@ std::size_t skiplist<Cmp>::size() const noexcept {
 
 template <Comparator Cmp>
 std::uint64_t skiplist<Cmp>::bytes_allocated() const noexcept {
-  return arena_.bytes_allocated();
+  return arena_->bytes_allocated();
 }
 
 template <Comparator Cmp>
