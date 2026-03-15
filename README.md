@@ -6,6 +6,17 @@ This is my second attempt to build a distributed key-value store. The latest ver
 ## Build
 
 ## ToDo
+- [ ] Implement simple memtable rotation and add tests, before moving to event loop'ed approach
+- [ ] monotonic clock for timestamp
+- [ ] code style document (function, class, file, dir naming), code organization
+- [ ] 'max_entries_' needed in memtable?
+- [ ] Common 'error' object with error_codes shared for all files
+- [ ] Shared linked-list allactor per-engine. Memtables allocate a whole node from it.
+- [ ] Update build section with mandatory and optional steps. Optimize the build duration. Build tests only when DBUILD_TESTS is set, same for benchmarks.
+- [ ] Keep CMake clean. -Wsign-conversion breaks simd.h build. Introduce per-profile flags, so that these '-O3 -g -fno-omit-frame-pointer' go into RelWithDebugInfo
+- [ ] One arena per engine OR <arena, memtable> pairs?
+- [ ] Separate 'engine' dir for engine/flush related stuff
+- [ ] Put/get/delete/scan inside engine interface
 - [ ] Memory leak tracing allocator
 - [ ] Shared arena between memtable and skiplist
 - [ ] Support tombstones

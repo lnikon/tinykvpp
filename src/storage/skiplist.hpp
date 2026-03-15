@@ -100,7 +100,7 @@ class skiplist final {
   static constexpr std::uint32_t kMaxHeight = 12;
   static constexpr std::uint32_t kBranchingFactor = 4;
 
-  [[nodiscard]] static skiplist<Cmp> create(core::arena* arena, Cmp cmp) noexcept;
+  [[nodiscard]] static skiplist<Cmp> create(core::arena *arena, Cmp cmp) noexcept;
 
   // --- Mutations ---
 
@@ -108,7 +108,8 @@ class skiplist final {
 
   // --- Lookups ---
 
-  [[nodiscard]] std::expected<std::string_view, error> get(std::string_view key) const noexcept;
+  [[nodiscard]] std::expected<std::pair<std::string_view, std::string_view>, error> get(
+      std::string_view key) const noexcept;
 
   // --- Capacity ---
 
@@ -142,11 +143,11 @@ class skiplist final {
  private:
   std::uint32_t random_height() noexcept;
 
-  core::arena* arena_{nullptr};
+  core::arena *arena_{nullptr};
   skiplist_node *head_ = nullptr;
   std::uint32_t current_height_ = 1;
   std::size_t count_ = 0;
-  std::uint64_t rng_state_{std::random_device{}() | 1};  // NOTE: Use custom rng
+  std::uint64_t rng_state_{std::random_device{}() | 1};
   [[no_unique_address]] Cmp cmp_{};
 };
 
@@ -189,7 +190,7 @@ void skiplist<Cmp>::insert(const std::string_view key, const std::string_view va
     current_height_ = height;
   }
 
-  auto * const node = skiplist_node::create(arena_, key, value, height);
+  auto *const node = skiplist_node::create(arena_, key, value, height);
   for (std::uint32_t i = 0; i < height; ++i) {
     node->forward()[i] = update[i]->forward()[i];
     update[i]->forward()[i] = node;
@@ -198,7 +199,8 @@ void skiplist<Cmp>::insert(const std::string_view key, const std::string_view va
 }
 
 template <Comparator Cmp>
-std::expected<std::string_view, error> skiplist<Cmp>::get(std::string_view key) const noexcept {
+std::expected<std::pair<std::string_view, std::string_view>, error> skiplist<Cmp>::get(
+    std::string_view key) const noexcept {
   const auto *current = head_;
 
   for (int level = static_cast<int>(current_height_) - 1; level >= 0; --level) {
@@ -209,7 +211,9 @@ std::expected<std::string_view, error> skiplist<Cmp>::get(std::string_view key) 
   }
 
   const auto *candidate = current->forward()[0];
-  if (candidate && cmp_(candidate->key(), key) == 0) return candidate->value();
+  if (candidate && cmp_(candidate->key(), key) == 0) {
+    return std::make_pair(candidate->key(), candidate->value());
+  }
 
   return std::unexpected(error::not_found);
 }

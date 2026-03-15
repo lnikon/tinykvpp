@@ -9,17 +9,20 @@
 
 using namespace frankie::storage;
 using namespace frankie::testing;
+using namespace frankie::core;
 
 using comparator = simd_comparator;
 
 TEST(SkiplistArenaTest, SkiplistCreate) {
-  skiplist<comparator> sl;
+  arena arena;
+  auto sl = skiplist<comparator>::create(&arena, comparator{});
   EXPECT_EQ(sl.size(), 0);
   EXPECT_GT(sl.bytes_allocated(), 0);  // Head node is allocated
 }
 
 TEST(SkiplistArenaTest, SkiplistInsertSingleNode) {
-  skiplist<comparator> sl;
+  arena arena;
+  auto sl = skiplist<comparator>::create(&arena, comparator{});
 
   std::string key{"hello"};
   std::string value{"world"};
@@ -30,11 +33,12 @@ TEST(SkiplistArenaTest, SkiplistInsertSingleNode) {
 
   auto result = sl.get(key);
   ASSERT_TRUE(result.has_value());
-  EXPECT_EQ(result.value(), value);
+  EXPECT_EQ(result.value().second, value);
 }
 
 TEST(SkiplistArenaTest, SkiplistSearch) {
-  skiplist<comparator> sl;
+  arena arena;
+  auto sl = skiplist<comparator>::create(&arena, comparator{});
 
   std::string key{"hello"};
   std::string value{"world"};
@@ -43,13 +47,14 @@ TEST(SkiplistArenaTest, SkiplistSearch) {
 
   auto result = sl.get(key);
   ASSERT_TRUE(result.has_value());
-  EXPECT_EQ(result.value(), value);
+  EXPECT_EQ(result.value().second, value);
 
   EXPECT_EQ(sl.size(), 1);
 }
 
 TEST(SkiplistArenaTest, SkiplistSearchNotFound) {
-  skiplist<comparator> sl;
+  arena arena;
+  auto sl = skiplist<comparator>::create(&arena, comparator{});
 
   sl.insert("key1", "value1");
 
@@ -59,7 +64,8 @@ TEST(SkiplistArenaTest, SkiplistSearchNotFound) {
 }
 
 TEST(SkiplistArenaTest, SkiplistInsertMultipleNodes) {
-  skiplist<comparator> sl;
+  arena arena;
+  auto sl = skiplist<comparator>::create(&arena, comparator{});
 
   const std::uint32_t count = 1024;
   const std::uint64_t min_len = 1;
@@ -69,10 +75,8 @@ TEST(SkiplistArenaTest, SkiplistInsertMultipleNodes) {
   std::set<std::string> unique_keys;
 
   for (std::uint64_t i = 0; i < count; i++) {
-    std::string key =
-        random_string(random_u64(min_len, max_len)) + std::to_string(i);
-    std::string value =
-        random_string(random_u64(min_len, max_len)) + std::to_string(i);
+    std::string key = random_string(random_u64(min_len, max_len)) + std::to_string(i);
+    std::string value = random_string(random_u64(min_len, max_len)) + std::to_string(i);
 
     sl.insert(key, value);
     entries.emplace_back(key, value);
@@ -81,15 +85,16 @@ TEST(SkiplistArenaTest, SkiplistInsertMultipleNodes) {
 
   EXPECT_EQ(sl.size(), unique_keys.size());
 
-  for (const auto& [key, value] : entries) {
+  for (const auto &[key, value] : entries) {
     auto result = sl.get(key);
     ASSERT_TRUE(result.has_value()) << "Key not found: " << key;
-    EXPECT_EQ(result.value(), value);
+    EXPECT_EQ(result.value().second, value);
   }
 }
 
 TEST(SkiplistArenaTest, SkiplistUpdatesExistingValue) {
-  skiplist<comparator> sl;
+  arena arena;
+  auto sl = skiplist<comparator>::create(&arena, comparator{});
 
   sl.insert("key1", "value1");
   sl.insert("key3", "value3");
@@ -97,19 +102,20 @@ TEST(SkiplistArenaTest, SkiplistUpdatesExistingValue) {
 
   auto result = sl.get("key1");
   ASSERT_TRUE(result.has_value());
-  EXPECT_EQ(result.value(), "value1");
+  EXPECT_EQ(result.value().second, "value1");
 
   sl.insert("key1", "value4");
 
   result = sl.get("key1");
   ASSERT_TRUE(result.has_value());
-  EXPECT_EQ(result.value(), "value4");
+  EXPECT_EQ(result.value().second, "value4");
 
   EXPECT_EQ(sl.size(), 3);
 }
 
 TEST(SkiplistArenaTest, SkiplistSearchOnEmptyList) {
-  skiplist<comparator> sl;
+  arena arena;
+  auto sl = skiplist<comparator>::create(&arena, comparator{});
 
   auto result = sl.get("key1");
   ASSERT_FALSE(result.has_value());
@@ -117,7 +123,8 @@ TEST(SkiplistArenaTest, SkiplistSearchOnEmptyList) {
 }
 
 TEST(SkiplistArenaTest, BytesAllocatedGrowsOnInsert) {
-  skiplist<comparator> sl;
+  arena arena;
+  auto sl = skiplist<comparator>::create(&arena, comparator{});
 
   EXPECT_GT(sl.bytes_allocated(), 0);
 
@@ -133,7 +140,8 @@ TEST(SkiplistArenaTest, BytesAllocatedGrowsOnInsert) {
 }
 
 TEST(SkiplistArenaTest, LargeKeysAndValues) {
-  skiplist<comparator> sl;
+  arena arena;
+  auto sl = skiplist<comparator>::create(&arena, comparator{});
 
   std::string large_key(1024, 'k');
   std::string large_value(4096, 'v');
@@ -142,7 +150,7 @@ TEST(SkiplistArenaTest, LargeKeysAndValues) {
 
   auto result = sl.get(large_key);
   ASSERT_TRUE(result.has_value());
-  EXPECT_EQ(result.value(), large_value);
+  EXPECT_EQ(result.value().second, large_value);
 }
 
 TEST(SkiplistArenaTest, CustomComparator) {
@@ -155,14 +163,15 @@ TEST(SkiplistArenaTest, CustomComparator) {
     }
   };
 
-  skiplist<reverse_comparator> sl;
+  arena arena;
+  auto sl = skiplist<reverse_comparator>::create(&arena, reverse_comparator{});
 
   sl.insert("aaa", "value_a");
   sl.insert("ccc", "value_c");
   sl.insert("bbb", "value_b");
 
   std::vector<std::string> keys;
-  for (const auto& [key, value] : sl) {
+  for (const auto &[key, value] : sl) {
     keys.emplace_back(key);
   }
 
@@ -177,14 +186,16 @@ TEST(SkiplistArenaTest, CustomComparator) {
 // ---------------------------------------------------------------------------
 
 TEST(SkiplistArenaIteratorTest, IteratorOnEmptyList) {
-  skiplist<comparator> sl;
+  arena arena;
+  auto sl = skiplist<comparator>::create(&arena, comparator{});
 
   auto it = sl.begin();
   EXPECT_EQ(it, sl.end());
 }
 
 TEST(SkiplistArenaIteratorTest, IteratorBasicTest) {
-  skiplist<comparator> sl;
+  arena arena;
+  auto sl = skiplist<comparator>::create(&arena, comparator{});
 
   sl.insert("key1", "value1");
   sl.insert("key3", "value3");
@@ -193,7 +204,7 @@ TEST(SkiplistArenaIteratorTest, IteratorBasicTest) {
   std::vector<std::string> keys;
   std::vector<std::string> values;
 
-  for (const auto& [key, value] : sl) {
+  for (const auto &[key, value] : sl) {
     keys.emplace_back(key);
     values.emplace_back(value);
   }
@@ -203,7 +214,8 @@ TEST(SkiplistArenaIteratorTest, IteratorBasicTest) {
 }
 
 TEST(SkiplistArenaIteratorTest, IteratorPostIncrement) {
-  skiplist<comparator> sl;
+  arena arena;
+  auto sl = skiplist<comparator>::create(&arena, comparator{});
 
   sl.insert("key1", "value1");
   sl.insert("key2", "value2");
@@ -219,7 +231,8 @@ TEST(SkiplistArenaIteratorTest, IteratorPostIncrement) {
 }
 
 TEST(SkiplistArenaIteratorTest, IteratorTraversesAllInOrder) {
-  skiplist<comparator> sl;
+  arena arena;
+  auto sl = skiplist<comparator>::create(&arena, comparator{});
 
   const std::uint32_t count = 256;
   std::vector<std::string> inserted_keys;
@@ -233,7 +246,7 @@ TEST(SkiplistArenaIteratorTest, IteratorTraversesAllInOrder) {
   std::sort(inserted_keys.begin(), inserted_keys.end());
 
   std::vector<std::string> iterated_keys;
-  for (const auto& [key, value] : sl) {
+  for (const auto &[key, value] : sl) {
     iterated_keys.emplace_back(key);
   }
 

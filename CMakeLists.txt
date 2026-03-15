@@ -7,26 +7,28 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     add_compile_options(
-            -Wall
-            -Wextra
-            -Wpedantic
-            -Werror
-            -Wconversion
-            #            -Wsign-conversion
-            -Wshadow
-            -Wnon-virtual-dtor
-            -Wold-style-cast
-            -Wcast-align
-            -Wunused
-            -Woverloaded-virtual
-            -Wnull-dereference
-            -Wdouble-promotion
-            -Wformat=2
-            -O3 -g -fno-omit-frame-pointer
+        -Wall
+        -Wextra
+        -Wpedantic
+        -Werror
+        -Wconversion
+        #            -Wsign-conversion
+        -Wshadow
+        -Wnon-virtual-dtor
+        -Wold-style-cast
+        -Wcast-align
+        -Wunused
+        -Woverloaded-virtual
+        -Wnull-dereference
+        -Wdouble-promotion
+        -Wformat=2
+        -O3
+        -g
+        -fno-omit-frame-pointer
     )
-endif ()
+endif()
 
 # target_link_libraries(YOUR_TARGET gtest::gtest)
 # target_link_libraries(YOUR_TARGET benchmark::benchmark_main)
@@ -43,28 +45,26 @@ find_package(OpenSSL REQUIRED)
 find_package(benchmark REQUIRED)
 find_package(GTest REQUIRED)
 
-add_library(frankie_lib INTERFACE)
-target_sources(frankie_lib INTERFACE
-        src/core/arena.cpp
-        src/core/scratch_arena.cpp
-        src/core/simd.cpp
-        src/storage/skiplist.cpp
-        src/storage/memtable.cpp)
+set(CORE_SRC src/core/arena.cpp src/core/scratch_arena.cpp src/core/simd.cpp)
+set(STORAGE_SRC src/storage/skiplist.cpp src/storage/memtable.cpp)
+set(ENGINE_SRC src/engine/engine.cpp)
+
+add_library(frankie_lib STATIC ${CORE_SRC} ${STORAGE_SRC} ${ENGINE_SRC})
 target_include_directories(
-        frankie_lib
-        INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/src
+    frankie_lib
+    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
-target_link_libraries(frankie_lib INTERFACE liburing::liburing)
-target_link_libraries(frankie_lib INTERFACE grpc::grpc)
-target_link_libraries(frankie_lib INTERFACE protobuf::protobuf)
-target_link_libraries(frankie_lib INTERFACE zstd::libzstd_static)
-target_link_libraries(frankie_lib INTERFACE LZ4::lz4_static)
-target_link_libraries(frankie_lib INTERFACE openssl::openssl)
+target_link_libraries(frankie_lib PUBLIC liburing::liburing)
+target_link_libraries(frankie_lib PUBLIC grpc::grpc)
+target_link_libraries(frankie_lib PUBLIC protobuf::protobuf)
+target_link_libraries(frankie_lib PUBLIC zstd::libzstd_static)
+target_link_libraries(frankie_lib PUBLIC LZ4::lz4_static)
+target_link_libraries(frankie_lib PUBLIC openssl::openssl)
 
 add_executable(frankie ${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp)
 target_link_libraries(frankie frankie_lib)
 
-if (GTest_FOUND)
+if(GTest_FOUND)
     enable_testing()
 
     # add_executable(main_test src/main_test.cpp)
@@ -74,15 +74,15 @@ if (GTest_FOUND)
     add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/test)
 
     message(STATUS "GTest found - testing enabled")
-else ()
+else()
     message(STATUS "GTest not found - testing disabled")
-endif ()
+endif()
 
-if (benchmark_FOUND)
+if(benchmark_FOUND)
     # add_executable(main_bench src/main_bench.cpp)
     # target_link_libraries(main_bench PRIVATE frankie_lib benchmark::benchmark)
 
     message(STATUS "GoogleBenchmark found - benchmarks are enabled")
-else ()
+else()
     message(STATUS "GoogleBenchmark not found - benchmarks are disabled")
-endif ()
+endif()
