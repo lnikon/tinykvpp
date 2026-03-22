@@ -41,6 +41,13 @@ struct wal_entry final {
 // TODO(lnikon): Should the arena be injected from the engine?
 class wal_writer final {
  public:
+  wal_writer() = default;
+  wal_writer(const wal_writer &) = delete;
+  wal_writer &operator=(const wal_writer &) = delete;
+  wal_writer(wal_writer &&) noexcept = default;
+  wal_writer &operator=(wal_writer &&) noexcept = default;
+  ~wal_writer() = default;
+
   [[nodiscard]] static wal_writer open(std::filesystem::path path, std::uint64_t capacity) noexcept;
 
   [[nodiscard]] bool append(wal_entry entry) noexcept;
@@ -55,11 +62,11 @@ class wal_writer final {
   core::arena arena_;
   std::uint64_t capacity_;
 
-  // To avoid temporary allocs on each encoding
   core::scratch_arena scratch_arena_;
 };
 
-void foo() {
+// TODO(lnikon): Remove this function
+inline void foo() {
   // TODO(lnikon): What if open fails? return std::expected?
   wal_writer wal = wal_writer::open("/path/to/wal", engine::kDefaultWalCapacity);
 

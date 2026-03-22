@@ -13,14 +13,14 @@ class engine final {
   static constexpr std::uint64_t kDefaultWalCapacity =
       kDefaultMemtableCapacity;  // Seems reasonable to fallback to memtable's capacity
 
-  [[nodiscard]] static engine create(std::uint64_t memtable_capacity = kDefaultMemtableCapacity) noexcept;
-
   engine() = default;
   engine(const engine &) = delete;
   engine &operator=(const engine &) = delete;
-  engine(engine &&) = default;
-  engine &operator=(engine &&) = default;
+  engine(engine &&) noexcept = default;
+  engine &operator=(engine &&) noexcept = default;
   ~engine() = default;
+
+  [[nodiscard]] static engine create(std::uint64_t memtable_capacity = kDefaultMemtableCapacity) noexcept;
 
   void put(std::string_view key, std::string_view value) noexcept;
 

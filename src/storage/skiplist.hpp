@@ -103,8 +103,8 @@ class skiplist final {
   skiplist() = default;
   skiplist(const skiplist &) = delete;
   skiplist &operator=(const skiplist &) = delete;
-  skiplist(skiplist &&) = default;
-  skiplist &operator=(skiplist &&) = default;
+  skiplist(skiplist &&) noexcept = default;
+  skiplist &operator=(skiplist &&) noexcept = default;
   ~skiplist() = default;
 
   [[nodiscard]] static skiplist<Cmp> create(core::arena *arena, Cmp cmp) noexcept;

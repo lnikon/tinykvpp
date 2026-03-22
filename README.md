@@ -6,6 +6,7 @@ This is my second attempt to build a distributed key-value store. The latest ver
 ## Build
 
 ## ToDo
+- [ ] Macros for fule-of-six?
 - [ ] Centrialized config struct with path info and the rest... e.g. what is the root? where is the wal?
 - [ ] Strong typing e.g. for foo(view a, view b) easy to call foo(b, a)
 - [ ] Specify copy/move semantics for classes to avoid bugs

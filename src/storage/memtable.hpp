@@ -62,8 +62,8 @@ class memtable final {
   memtable() = default;
   memtable(const memtable &) = delete;
   memtable &operator=(const memtable &) = delete;
-  memtable(memtable &&) = default;
-  memtable &operator=(memtable &&) = default;
+  memtable(memtable &&) noexcept = default;
+  memtable &operator=(memtable &&) noexcept = default;
   ~memtable() = default;
 
   [[nodiscard]] static memtable create(std::uint64_t capacity) noexcept;
