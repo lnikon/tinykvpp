@@ -7,8 +7,7 @@ namespace frankie::engine {
 // Worst-case per-entry overhead from skiplist node allocation:
 // sizeof(skiplist_node) + kMaxHeight * sizeof(pointer) + alignment padding
 static constexpr std::uint64_t kNodeOverheadEstimate =
-    sizeof(storage::skiplist_node) +
-    storage::skiplist<storage::internal_key_comparator>::kMaxHeight * sizeof(void *);
+    sizeof(storage::skiplist_node) + storage::skiplist<storage::internal_key_comparator>::kMaxHeight * sizeof(void *);
 
 engine engine::create(const std::uint64_t memtable_capacity) noexcept {
   engine result;
@@ -18,9 +17,8 @@ engine engine::create(const std::uint64_t memtable_capacity) noexcept {
 }
 
 void engine::put(std::string_view key, std::string_view value) noexcept {
-  const std::uint64_t entry_bytes = key.size() + value.size() +
-                                    storage::internal_key::kMetadataSize +
-                                    kNodeOverheadEstimate;
+  const std::uint64_t entry_bytes =
+      key.size() + value.size() + storage::internal_key::kMetadataSize + kNodeOverheadEstimate;
   maybe_rotate_memtable(entry_bytes);
   memtable_active_.put(key, value, sequence_++, false);
 }
@@ -35,9 +33,7 @@ std::optional<std::string_view> engine::get(std::string_view key) noexcept {
 }
 
 void engine::del(std::string_view key) noexcept {
-  const std::uint64_t entry_bytes = key.size() +
-                                    storage::internal_key::kMetadataSize +
-                                    kNodeOverheadEstimate;
+  const std::uint64_t entry_bytes = key.size() + storage::internal_key::kMetadataSize + kNodeOverheadEstimate;
   maybe_rotate_memtable(entry_bytes);
   memtable_active_.put(key, {}, sequence_++, true);
 }

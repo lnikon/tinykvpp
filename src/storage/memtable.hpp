@@ -59,6 +59,13 @@ struct kv_entry final {
 // ================================================================================
 class memtable final {
  public:
+  memtable() = default;
+  memtable(const memtable &) = delete;
+  memtable &operator=(const memtable &) = delete;
+  memtable(memtable &&) = default;
+  memtable &operator=(memtable &&) = default;
+  ~memtable() = default;
+
   [[nodiscard]] static memtable create(std::uint64_t capacity) noexcept;
 
   void put(std::string_view key, std::string_view value, std::uint64_t sequence, bool is_tombstone) noexcept;
@@ -70,8 +77,8 @@ class memtable final {
   [[nodiscard]] std::uint64_t bytes_allocated() const noexcept;
 
  private:
-  mutable core::scratch_arena scratch_arena_{};
-  core::arena arena_{};
+  mutable core::scratch_arena scratch_arena_;
+  core::arena arena_;
   skiplist<internal_key_comparator> skiplist_;
 
   std::uint64_t count_{0};

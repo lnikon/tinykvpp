@@ -20,15 +20,12 @@ struct memtable {
   std::map<std::string, std::string> table_;
 };
 
-bool memtable_put(memtable* memtable, std::string key,
-                  std::string value) noexcept {
+bool memtable_put(memtable *memtable, std::string key, std::string value) noexcept {
   return memtable->table_.emplace(key, value).second;
 }
 
-bool memtable_get(memtable* memtable, const std::string& key,
-                  std::string& value) noexcept {
-  if (const auto it = memtable->table_.find(key);
-      it != memtable->table_.end()) {
+bool memtable_get(memtable *memtable, const std::string &key, std::string &value) noexcept {
+  if (const auto it = memtable->table_.find(key); it != memtable->table_.end()) {
     value = it->second;
     return true;
   }
@@ -41,11 +38,6 @@ bool memtable_get(memtable* memtable, const std::string& key,
 
 int main() {
   using namespace frankie;
-
-  storage::memtable table;
-  storage::memtable_put(&table, std::string{"key1"}, std::string{"value1"});
-  storage::memtable_put(&table, std::string{"key2"}, std::string{"value2"});
-  storage::memtable_put(&table, std::string{"key3"}, std::string{"value3"});
 
   return 0;
 }

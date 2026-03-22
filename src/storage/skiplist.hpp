@@ -100,23 +100,23 @@ class skiplist final {
   static constexpr std::uint32_t kMaxHeight = 12;
   static constexpr std::uint32_t kBranchingFactor = 4;
 
+  skiplist() = default;
+  skiplist(const skiplist &) = delete;
+  skiplist &operator=(const skiplist &) = delete;
+  skiplist(skiplist &&) = default;
+  skiplist &operator=(skiplist &&) = default;
+  ~skiplist() = default;
+
   [[nodiscard]] static skiplist<Cmp> create(core::arena *arena, Cmp cmp) noexcept;
 
-  // --- Mutations ---
-
   void insert(std::string_view key, std::string_view value) noexcept;
-
-  // --- Lookups ---
 
   [[nodiscard]] std::expected<std::pair<std::string_view, std::string_view>, error> get(
       std::string_view key) const noexcept;
 
-  // --- Capacity ---
-
   [[nodiscard]] std::size_t size() const noexcept;
-  [[nodiscard]] std::uint64_t bytes_allocated() const noexcept;
 
-  // --- Range-for support via sentinel iterator ---
+  [[nodiscard]] std::uint64_t bytes_allocated() const noexcept;
 
   class iterator {
    public:
@@ -138,6 +138,7 @@ class skiplist final {
   };
 
   [[nodiscard]] iterator begin() const;
+
   [[nodiscard]] std::default_sentinel_t end() const;
 
  private:

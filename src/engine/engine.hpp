@@ -13,6 +13,13 @@ class engine final {
 
   [[nodiscard]] static engine create(std::uint64_t memtable_capacity = kDefaultMemtableCapacity) noexcept;
 
+  engine() = default;
+  engine(const engine &) = delete;
+  engine &operator=(const engine &) = delete;
+  engine(engine &&) = default;
+  engine &operator=(engine &&) = default;
+  ~engine() = default;
+
   void put(std::string_view key, std::string_view value) noexcept;
 
   [[nodiscard]] std::optional<std::string_view> get(std::string_view key) noexcept;
@@ -26,9 +33,8 @@ class engine final {
   void maybe_rotate_memtable(std::uint64_t incoming_bytes) noexcept;
 
   std::uint64_t memtable_capacity_{kDefaultMemtableCapacity};
-
   storage::memtable memtable_active_;
-  std::optional<storage::memtable> memtable_immutable_{};
+  std::optional<storage::memtable> memtable_immutable_;
 
   std::uint64_t sequence_{0};
 

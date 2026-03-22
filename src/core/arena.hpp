@@ -1,19 +1,27 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 
 namespace frankie::core {
 
 struct arena_block {
-  arena_block *next_;
+  arena_block *next_{nullptr};
 
   char *data() noexcept { return reinterpret_cast<char *>(this) + sizeof(arena_block); }
 };
 
 class arena final {
  public:
-  static constexpr std::uint64_t kDefaultBlockSize = 4096 * 8;  // 32KB blocks
+  static constexpr std::uint64_t kDefaultBlockSize = static_cast<std::uint64_t>(4096) * 8;  // 32KB blocks
   static constexpr std::uint64_t kDefaultAlignment = 8;
+
+  arena() = default;
+  arena(const arena &) = delete;
+  arena &operator=(const arena &) = delete;
+  arena(arena &&) noexcept = default;
+  arena &operator=(arena &&) noexcept = default;
+  ~arena() noexcept = default;
 
   [[nodiscard]] static arena create(std::uint64_t capacity) noexcept;
 

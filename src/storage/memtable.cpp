@@ -1,5 +1,6 @@
-#include "storage/memtable.hpp"
 #include <cstring>
+
+#include "storage/memtable.hpp"
 
 namespace frankie::storage {
 
@@ -13,14 +14,14 @@ std::string_view internal_key::encode(core::scratch_arena &arena) const noexcept
   const std::uint64_t total = user_key.size() + kMetadataSize;
   char *buf = arena.allocate(total);
 
-  char *p = buf;
-  std::memcpy(p, user_key.data(), user_key.size());
-  p += user_key.size();
-  std::memcpy(p, &sequence, 8);
-  p += 8;
-  std::memcpy(p, &timestamp, 8);
-  p += 8;
-  *p++ = static_cast<char>(tombstone);
+  char *cursor = buf;
+  std::memcpy(cursor, user_key.data(), user_key.size());
+  cursor += user_key.size();
+  std::memcpy(cursor, &sequence, sizeof(sequence));
+  cursor += sizeof(sequence);
+  std::memcpy(cursor, &timestamp, sizeof(timestamp));
+  cursor += sizeof(timestamp);
+  *cursor++ = static_cast<char>(tombstone);
 
   return std::string_view{buf, total};
 }
@@ -31,9 +32,9 @@ internal_key internal_key::decode(const std::string_view encoded) noexcept {
 
   internal_key result;
   result.user_key = encoded.substr(0, user_key_size);
-  std::memcpy(&result.sequence, encoded.data() + user_key_size, 8);
-  std::memcpy(&result.timestamp, encoded.data() + user_key_size + 8, 8);
-  std::memcpy(&result.tombstone, encoded.data() + user_key_size + 8 + 8, 1);
+  std::memcpy(&result.sequence, encoded.data() + user_key_size, sizeof(sequence));
+  std::memcpy(&result.timestamp, encoded.data() + user_key_size + sizeof(sequence), sizeof(timestamp));
+  std::memcpy(&result.tombstone, encoded.data() + user_key_size + sizeof(sequence) + sizeof(timestamp), 1);
   return result;
 }
 
@@ -45,7 +46,9 @@ std::string_view kv_entry::user_key() const noexcept { return key_; }
 
 std::string_view kv_entry::value() const noexcept { return value_; }
 
-std::uint64_t kv_entry::bytes_allocated() const noexcept { return key_.size() + value_.size() + 8 + 8 + 1; }
+std::uint64_t kv_entry::bytes_allocated() const noexcept {
+  return key_.size() + value_.size() + internal_key::kMetadataSize;
+}
 
 // ================================================================================
 // memtable
@@ -72,20 +75,20 @@ void memtable::put(const std::string_view key, const std::string_view value, con
 }
 
 std::optional<kv_entry> memtable::get(const std::string_view key) const noexcept {
-  auto ikey = internal_key{
+  auto lookup_ikey = internal_key{
       .user_key = key,
       .sequence = 0,
       .timestamp = 0,
       .tombstone = false,
   };
-  if (auto ret = skiplist_.get(ikey.encode(scratch_arena_)); ret.has_value()) {
-    auto ik = internal_key::decode(ret->first);
+  if (auto kv_opt = skiplist_.get(lookup_ikey.encode(scratch_arena_)); kv_opt.has_value()) {
+    auto decoded_ikey = internal_key::decode(kv_opt->first);
     return kv_entry{
-        .key_ = ik.user_key,
-        .value_ = ret->second,
-        .sequence_ = ik.sequence,
-        .timestamp_ = ik.timestamp,
-        .tombstone_ = ik.tombstone,
+        .key_ = decoded_ikey.user_key,
+        .value_ = kv_opt->second,
+        .sequence_ = decoded_ikey.sequence,
+        .timestamp_ = decoded_ikey.timestamp,
+        .tombstone_ = decoded_ikey.tombstone,
     };
   }
   return std::nullopt;

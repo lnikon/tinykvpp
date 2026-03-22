@@ -17,6 +17,13 @@ char *scratch_arena::allocate(std::uint64_t size) noexcept {
 
 void scratch_arena::reset() noexcept { offset_ = 0; }
 
-scratch_arena::~scratch_arena() { std::free(buf_); }
+void scratch_arena::destroy() noexcept {
+  if (buf_ != nullptr) {
+    std::free(buf_);
+    buf_ = nullptr;
+    offset_ = 0;
+    capacity_ = 0;
+  }
+}
 
 }  // namespace frankie::core

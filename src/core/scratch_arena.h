@@ -7,11 +7,18 @@ namespace frankie::core {
 
 class scratch_arena final {
  public:
-  char *allocate(std::uint64_t size) noexcept;
+  scratch_arena() = default;
+  scratch_arena(const scratch_arena &) = delete;
+  scratch_arena &operator=(const scratch_arena &) = delete;
+  scratch_arena(scratch_arena &&) noexcept = default;
+  scratch_arena &operator=(scratch_arena &&) noexcept = default;
+  ~scratch_arena() noexcept = default;
+
+  [[nodiscard]] char *allocate(std::uint64_t size) noexcept;
 
   void reset() noexcept;
 
-  ~scratch_arena();
+  void destroy() noexcept;
 
  private:
   char *buf_ = nullptr;
