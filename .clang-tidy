@@ -1,0 +1,22 @@
+---
+Checks:          '*,-modernize-use-trailing-return-type,-llvm*,-fuchsia*,-altera*,-hicpp*,-cppcoreguidelines-pro-bounds-pointer-arithmetic'
+WarningsAsErrors: ''
+HeaderFileExtensions:
+  - ''
+  - h
+  - hh
+  - hpp
+  - hxx
+ImplementationFileExtensions:
+  - c
+  - cc
+  - cpp
+  - cxx
+HeaderFilterRegex: '.*'
+ExcludeHeaderFilterRegex: ''
+FormatStyle:     'file'
+User:            nikon
+CheckOptions:    {}
+SystemHeaders:   true
+...
+
