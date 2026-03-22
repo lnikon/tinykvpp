@@ -3,7 +3,7 @@
 #include <cassert>
 #include <optional>
 
-#include "core/scratch_arena.h"
+#include "core/scratch_arena.hpp"
 #include "storage/skiplist.hpp"
 
 namespace frankie::storage {

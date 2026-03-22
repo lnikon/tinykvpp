@@ -10,6 +10,8 @@ namespace frankie::engine {
 class engine final {
  public:
   static constexpr std::uint64_t kDefaultMemtableCapacity = 64ULL * 1024 * 1024;  // 64MB
+  static constexpr std::uint64_t kDefaultWalCapacity =
+      kDefaultMemtableCapacity;  // Seems reasonable to fallback to memtable's capacity
 
   [[nodiscard]] static engine create(std::uint64_t memtable_capacity = kDefaultMemtableCapacity) noexcept;
 

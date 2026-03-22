@@ -7,7 +7,7 @@
 #include <string_view>
 
 #include "core/arena.hpp"
-#include "core/simd.h"
+#include "core/simd.hpp"
 
 namespace frankie::storage {
 // ================================================================================

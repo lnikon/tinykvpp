@@ -1,4 +1,4 @@
-#include "scratch_arena.h"
+#include "scratch_arena.hpp"
 
 #include <algorithm>
 #include <cstdlib>

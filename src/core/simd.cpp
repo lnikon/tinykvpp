@@ -1,4 +1,4 @@
-#include "core/simd.h"
+#include "core/simd.hpp"
 
 #ifdef __AVX2__
 __attribute__((target("avx2"))) int simd_compare_avx2(const char *a, const char *b, size_t len) noexcept {
