@@ -1,8 +1,10 @@
 #pragma once
 
 #include <cstdint>
+#include <expected>
 #include <optional>
 
+#include "engine/wal.hpp"
 #include "storage/memtable.hpp"
 
 namespace frankie::engine {
@@ -20,7 +22,9 @@ class engine final {
   engine &operator=(engine &&) noexcept = default;
   ~engine() = default;
 
-  [[nodiscard]] static engine create(std::uint64_t memtable_capacity = kDefaultMemtableCapacity) noexcept;
+  [[nodiscard]] static std::optional<engine> create(std::filesystem::path wal_path,
+                                                    std::uint64_t memtable_capacity = kDefaultMemtableCapacity,
+                                                    std::uint64_t wal_capacity = kDefaultWalCapacity) noexcept;
 
   void put(std::string_view key, std::string_view value) noexcept;
 
@@ -40,8 +44,7 @@ class engine final {
 
   std::uint64_t sequence_{0};
 
-  // TODO(lnikon): In a far, far future...
-  // wal wal_;
+  wal_writer wal_;
 };
 
 }  // namespace frankie::engine

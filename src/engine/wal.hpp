@@ -2,11 +2,11 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <fstream>
 #include <string_view>
 
 #include "core/arena.hpp"
 #include "core/scratch_arena.hpp"
-#include "engine/engine.hpp"
 
 namespace frankie::engine {
 
@@ -21,12 +21,13 @@ struct wal_entry final {
   static constexpr const std::uint64_t kMetadataSize = 8 + 8 + 1 + 8 + 1 + 8 + 8;
 
   wal_operation operation_;
-  std::uint64_t sequence;
-  std::uint8_t tombstone;
-  std::uint64_t key_size;
-  std::uint64_t value_size;
+  std::uint64_t sequence_;
+  std::uint8_t tombstone_;
+  std::uint64_t key_size_;
+  std::uint64_t value_size_;
 
-  [[nodiscard]] static wal_entry create(core::arena &arena) noexcept;
+  [[nodiscard]] static wal_entry *create(core::arena &arena, wal_operation operation, std::uint64_t sequence,
+                                         std::uint8_t tombstone, std::string_view key, std::string_view value) noexcept;
 
   // TODO(lnikon): Return std::byte instead?
   [[nodiscard]] std::string_view encode(core::scratch_arena &arena) const noexcept;
@@ -36,6 +37,15 @@ struct wal_entry final {
   [[nodiscard]] std::string_view key() const noexcept;
 
   [[nodiscard]] std::string_view value() const noexcept;
+
+ private:
+  [[nodiscard]] std::span<std::byte> key_bytes() noexcept;
+
+  [[nodiscard]] std::span<const std::byte> key_bytes() const noexcept;
+
+  [[nodiscard]] std::span<std::byte> value_bytes() noexcept;
+
+  [[nodiscard]] std::span<const std::byte> value_bytes() const noexcept;
 };
 
 // TODO(lnikon): Should the arena be injected from the engine?
@@ -48,9 +58,10 @@ class wal_writer final {
   wal_writer &operator=(wal_writer &&) noexcept = default;
   ~wal_writer() = default;
 
-  [[nodiscard]] static wal_writer open(std::filesystem::path path, std::uint64_t capacity) noexcept;
+  [[nodiscard]] static std::optional<wal_writer> open(std::filesystem::path path, std::uint64_t capacity) noexcept;
 
-  [[nodiscard]] bool append(wal_entry entry) noexcept;
+  [[nodiscard]] bool append(wal_operation operation, std::uint64_t sequence, std::uint8_t tombstone,
+                            std::string_view key, std::string_view value) noexcept;
 
   [[nodiscard]] bool sync() noexcept;
 
@@ -58,31 +69,12 @@ class wal_writer final {
 
  private:
   std::filesystem::path path_;
+  std::fstream file_;
 
   core::arena arena_;
-  std::uint64_t capacity_;
+  std::uint64_t capacity_{0};
 
   core::scratch_arena scratch_arena_;
 };
-
-// TODO(lnikon): Remove this function
-inline void foo() {
-  // TODO(lnikon): What if open fails? return std::expected?
-  wal_writer wal = wal_writer::open("/path/to/wal", engine::kDefaultWalCapacity);
-
-  wal_entry e;
-  // TODO(lnikon): Need better error codes from core::error rather than bools
-  // TODO(lnikon): Sync on each append?
-  if (!wal.append(e)) {
-    // TODO(lnikon): how to handle failed append?
-  }
-
-  if (!wal.sync()) {
-    // TODO(lnikon): how to handle failed sync?
-  }
-
-  // TODO(lnikon): Can close fail?
-  wal.close();
-}
 
 }  // namespace frankie::engine

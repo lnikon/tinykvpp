@@ -47,13 +47,10 @@ find_package(GTest REQUIRED)
 
 set(CORE_SRC src/core/arena.cpp src/core/scratch_arena.cpp src/core/simd.cpp)
 set(STORAGE_SRC src/storage/skiplist.cpp src/storage/memtable.cpp)
-set(ENGINE_SRC src/engine/engine.cpp)
+set(ENGINE_SRC src/engine/engine.cpp src/engine/wal.cpp)
 
 add_library(frankie_lib STATIC ${CORE_SRC} ${STORAGE_SRC} ${ENGINE_SRC})
-target_include_directories(
-    frankie_lib
-    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src
-)
+target_include_directories(frankie_lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(frankie_lib PUBLIC liburing::liburing)
 target_link_libraries(frankie_lib PUBLIC grpc::grpc)
 target_link_libraries(frankie_lib PUBLIC protobuf::protobuf)

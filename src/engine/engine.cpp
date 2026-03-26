@@ -1,4 +1,5 @@
 #include "engine/engine.hpp"
+#include <optional>
 #include "storage/memtable.hpp"
 #include "storage/skiplist.hpp"
 
@@ -9,10 +10,19 @@ namespace frankie::engine {
 static constexpr std::uint64_t kNodeOverheadEstimate =
     sizeof(storage::skiplist_node) + storage::skiplist<storage::internal_key_comparator>::kMaxHeight * sizeof(void *);
 
-engine engine::create(const std::uint64_t memtable_capacity) noexcept {
+std::optional<engine> engine::create(std::filesystem::path wal_path, const std::uint64_t memtable_capacity,
+                                     const std::uint64_t wal_capacity) noexcept {
   engine result;
+
+  if (auto wal_writer_opt = wal_writer::open(std::move(wal_path), wal_capacity); wal_writer_opt.has_value()) {
+    result.wal_ = std::move(wal_writer_opt.value());
+  } else {
+    return std::nullopt;
+  }
+
   result.memtable_capacity_ = memtable_capacity;
   result.memtable_active_ = storage::memtable::create(memtable_capacity);
+
   return result;
 }
 

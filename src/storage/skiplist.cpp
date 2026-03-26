@@ -13,8 +13,6 @@ skiplist_node *skiplist_node::create(core::arena *a, std::string_view key, std::
   node->value_size_ = static_cast<std::uint32_t>(value.size());
   node->height_ = height;
 
-  std::ranges::fill(node->forward(), nullptr);
-
   std::memcpy(node->key_bytes().data(), key.data(), key.size());
   std::memcpy(node->value_bytes().data(), value.data(), value.size());
 
