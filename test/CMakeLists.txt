@@ -19,6 +19,11 @@ if(GTest_FOUND)
     target_include_directories(memtable_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
     add_test(NAME MemtableTest COMMAND memtable_test)
 
+    add_executable(wal_test wal_test.cpp)
+    target_link_libraries(wal_test PRIVATE frankie_lib GTest::gtest_main)
+    target_include_directories(wal_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
+    add_test(NAME WalTest COMMAND wal_test)
+
     message(STATUS "GTest found - testing enabled")
 else()
     message(STATUS "GTest not found - testing disabled")

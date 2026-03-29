@@ -45,7 +45,12 @@ find_package(OpenSSL REQUIRED)
 find_package(benchmark REQUIRED)
 find_package(GTest REQUIRED)
 
-set(CORE_SRC src/core/arena.cpp src/core/scratch_arena.cpp src/core/simd.cpp)
+set(CORE_SRC
+    src/core/arena.cpp
+    src/core/scratch_arena.cpp
+    src/core/simd.cpp
+    src/core/crc32.cpp
+)
 set(STORAGE_SRC src/storage/skiplist.cpp src/storage/memtable.cpp)
 set(ENGINE_SRC src/engine/engine.cpp src/engine/wal.cpp)
 

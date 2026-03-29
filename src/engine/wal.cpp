@@ -1,128 +1,234 @@
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <cassert>
 #include <cstring>
-#include <fstream>
 #include <optional>
 #include <print>
-#include "core/scratch_arena.hpp"
+#include <utility>
 
+#include "core/crc32.hpp"
+#include "core/scratch_arena.hpp"
 #include "engine/wal.hpp"
 
 namespace frankie::engine {
 
-wal_entry *wal_entry::create(core::arena &arena, const wal_operation operation, const std::uint64_t sequence,
-                             const std::uint8_t tombstone, const std::string_view key,
-                             const std::string_view value) noexcept {
-  const auto size = sizeof(wal_entry) + key.size() + value.size();
-  void *mem = arena.allocate(size, alignof(wal_entry));
-  std::memset(mem, 0, size);
-
-  auto *entry = ::new (mem) wal_entry{};
-  entry->operation_ = operation;
-  entry->sequence_ = sequence;
-  entry->tombstone_ = tombstone;
-  entry->key_size_ = key.size();
-  entry->value_size_ = value.size();
-
-  std::memcpy(entry->key_bytes().data(), key.data(), key.size());
-  std::memcpy(entry->value_bytes().data(), value.data(), value.size());
-
-  return entry;
-}
-
+// Wire format:
+// record_len: u32
+// crc32: u32
+// operation: u8
+// sequence: u64
+// tombstone: u8
+// key_len: u32
+// value_len: u32
+// key_bytes: u8[]
+// value_bytes: u8[]
 std::string_view wal_entry::encode(core::scratch_arena &arena) const noexcept {
   arena.reset();
 
-  const auto size = kMetadataSize + key_size_ + value_size_;
-  auto *buf = arena.allocate(size);
+  const auto key_size = static_cast<std::uint32_t>(key_.size());
+  const auto value_size = static_cast<std::uint32_t>(value_.size());
+
+  const std::uint32_t buffer_size = kMetadataSize + key_size + value_size;
+  auto *buf = arena.allocate(buffer_size);
+  std::memset(buf, 0, buffer_size);
+
+  // record_len counts evertyhing that comes after record_len(u32) + crc32(u32) fields.
+  const std::uint32_t record_len = buffer_size - static_cast<std::uint32_t>(sizeof(std::uint32_t)) -
+                                   static_cast<std::uint32_t>(sizeof(std::uint32_t));
+  // The actual record starts after record_len(u32) + crc32(u32) fields.
+  const std::uint32_t record_offset = sizeof(std::uint32_t) + sizeof(std::uint32_t);
 
   auto *cursor = buf;
+  std::memcpy(cursor, &record_len, sizeof(record_len));
+  cursor += sizeof(record_len);
+  cursor += sizeof(std::uint32_t);  // Skip CRC32 checksum. It is calculated when buffer is complete.
   std::memcpy(cursor, &operation_, sizeof(operation_));
   cursor += sizeof(operation_);
   std::memcpy(cursor, &sequence_, sizeof(sequence_));
   cursor += sizeof(sequence_);
   std::memcpy(cursor, &tombstone_, sizeof(tombstone_));
   cursor += sizeof(tombstone_);
-  std::memcpy(cursor, &key_size_, sizeof(key_size_));
-  cursor += sizeof(key_size_);
-  std::memcpy(cursor, &value_size_, sizeof(value_size_));
-  cursor += sizeof(value_size_);
-  std::memcpy(cursor, key().data(), key().size());
-  cursor += key_size_;
-  std::memcpy(cursor, value().data(), value().size());
-  cursor += value_size_;
+  std::memcpy(cursor, &key_size, sizeof(key_size));
+  cursor += sizeof(key_size);
+  std::memcpy(cursor, &value_size, sizeof(value_size));
+  cursor += sizeof(value_size);
+  std::memcpy(cursor, key_.data(), key_size);
+  cursor += key_size;
+  std::memcpy(cursor, value_.data(), value_size);
+  cursor += value_size;
 
-  return {buf, size};
+  const std::uint32_t crc32_checksum =
+      core::crc32{}
+          .update({reinterpret_cast<const std::byte *>(buf) + record_offset, buffer_size - record_offset})
+          .finalize();
+  std::memcpy(buf + sizeof(record_len), &crc32_checksum, sizeof(crc32_checksum));
+
+  return {buf, buffer_size};
 }
 
-[[nodiscard]] std::string_view wal_entry::key() const noexcept {
-  auto *base = reinterpret_cast<const char *>(this) + sizeof(wal_entry);
-  return {base, key_size_};
-}
-
-[[nodiscard]] std::string_view wal_entry::value() const noexcept {
-  auto *base = reinterpret_cast<const char *>(this) + sizeof(wal_entry) + key_size_;
-  return {base, value_size_};
-}
-
-[[nodiscard]] std::span<std::byte> wal_entry::key_bytes() noexcept {
-  auto *base = reinterpret_cast<std::byte *>(this) + sizeof(wal_entry);
-  return {base, key_size_};
-}
-
-[[nodiscard]] std::span<const std::byte> wal_entry::key_bytes() const noexcept {
-  auto *base = reinterpret_cast<const std::byte *>(this) + sizeof(wal_entry);
-  return {base, key_size_};
-}
-
-[[nodiscard]] std::span<std::byte> wal_entry::value_bytes() noexcept {
-  auto *base = reinterpret_cast<std::byte *>(this) + sizeof(wal_entry) + key_size_;
-  return {base, value_size_};
-}
-
-[[nodiscard]] std::span<const std::byte> wal_entry::value_bytes() const noexcept {
-  auto *base = reinterpret_cast<const std::byte *>(this) + sizeof(wal_entry) + key_size_;
-  return {base, value_size_};
-}
-
-std::optional<wal_writer> wal_writer::open(std::filesystem::path path, std::uint64_t capacity) noexcept {
-  wal_writer wal_writer;
-  wal_writer.path_ = std::move(path);
-  wal_writer.file_ = std::fstream(path);
-  if (!wal_writer.file_.is_open()) {
-    std::print("wal: failed to open wal. path={}", path.c_str());
+std::optional<wal_entry> wal_entry::decode(std::string_view encoded) noexcept {
+  if (encoded.size() < kMetadataSize) {
     return std::nullopt;
   }
 
-  wal_writer.arena_ = core::arena::create(capacity);
-  wal_writer.capacity_ = capacity;
-  // TODO(lnikon): Need to init scratch_arena? Maybe revisit its API
+  const auto *cursor = encoded.data();
 
-  return wal_writer;
+  std::uint32_t record_len{};
+  std::memcpy(&record_len, cursor, sizeof(record_len));
+  cursor += sizeof(record_len);
+
+  std::uint32_t stored_crc32{};
+  std::memcpy(&stored_crc32, cursor, sizeof(stored_crc32));
+  cursor += sizeof(stored_crc32);
+
+  const std::uint32_t record_offset = sizeof(record_len) + sizeof(stored_crc32);
+  if (record_len + record_offset > encoded.size()) {
+    std::println("wal_entry::decode: not enough bytes to encode. needed={}, given={}", record_len + record_offset,
+                 encoded.size());
+    return std::nullopt;
+  }
+
+  const std::uint32_t computed_crc32 =
+      core::crc32{}
+          .update({reinterpret_cast<const std::byte *>(encoded.data()) + record_offset, record_len})
+          .finalize();
+  if (stored_crc32 != computed_crc32) {
+    std::println("wal_entry::decode: crc32 mismatch. stored={}, computed={}", stored_crc32, computed_crc32);
+    return std::nullopt;
+  }
+
+  std::optional<wal_entry> result;
+  result.emplace();
+
+  std::memcpy(&result->operation_, cursor, sizeof(result->operation_));
+  cursor += sizeof(result->operation_);
+
+  std::memcpy(&result->sequence_, cursor, sizeof(result->sequence_));
+  cursor += sizeof(result->sequence_);
+
+  std::memcpy(&result->tombstone_, cursor, sizeof(result->tombstone_));
+  cursor += sizeof(result->tombstone_);
+
+  std::uint32_t key_len{};
+  std::memcpy(&key_len, cursor, sizeof(key_len));
+  cursor += sizeof(key_len);
+
+  std::uint32_t value_len{};
+  std::memcpy(&value_len, cursor, sizeof(value_len));
+  cursor += sizeof(value_len);
+
+  if (const char *payload_end = encoded.data() + record_offset + record_len;
+      cursor + key_len + value_len > payload_end) {
+    return std::nullopt;
+  }
+
+  result->key_ = {cursor, key_len};
+  cursor += key_len;
+
+  result->value_ = {cursor, value_len};
+
+  return result;
 }
 
-bool wal_writer::append(wal_operation operation, std::uint64_t sequence, std::uint8_t tombstone, std::string_view key,
-                        std::string_view value) noexcept {
-  auto *entry = wal_entry::create(arena_, operation, sequence, tombstone, key, value);
+wal_writer::wal_writer(wal_writer &&other) noexcept
+    : path_{std::exchange(other.path_, std::filesystem::path{})},
+      fd_{std::exchange(other.fd_, -1)},
+      capacity_{std::exchange(other.capacity_, 0)},
+      scratch_arena_{std::move(other.scratch_arena_)} {}
 
-  auto encoded_entry = entry->encode(scratch_arena_);
-  file_ << encoded_entry;
-  const auto sync_status = file_.sync();
+wal_writer &wal_writer::operator=(wal_writer &&other) noexcept {
+  if (this == &other) {
+    return *this;
+  }
 
-  return sync_status == 0;
+  if (fd_ != -1) {
+    if (!close()) {
+      std::println("wal: close failed during move-assign, fd={}, errno={}\n", fd_, strerror(errno));
+    }
+  }
+
+  path_ = std::exchange(other.path_, std::filesystem::path{});
+  fd_ = std::exchange(other.fd_, -1);
+  capacity_ = std::exchange(other.capacity_, 0);
+  scratch_arena_ = std::move(other.scratch_arena_);
+
+  return *this;
+}
+
+wal_writer::~wal_writer() noexcept {
+  if (fd_ != -1) {
+    if (!close()) {
+      std::println("wal: close failed during dtor, fd={}, errno={}\n", fd_, strerror(errno));
+    }
+  }
+}
+
+std::optional<wal_writer> wal_writer::open(std::filesystem::path path, std::uint64_t capacity) noexcept {
+  const std::int32_t fd = ::open(path.c_str(), O_WRONLY | O_CREAT | O_APPEND, 0644);
+  if (fd == -1) {
+    std::println("wal: failed to open file. path={}, fd={}, errno={}", path.c_str(), fd, strerror(errno));
+    return std::nullopt;
+  }
+
+  std::optional<wal_writer> result;
+  result.emplace();
+  result->path_ = std::move(path);
+  result->fd_ = fd;
+  result->capacity_ = capacity;
+  return result;
+}
+
+bool wal_writer::append(const wal_entry &entry) noexcept {
+  assert(fd_ != -1);
+
+  const auto encoded_entry = entry.encode(scratch_arena_);
+
+  const ssize_t written = ::write(fd_, encoded_entry.data(), encoded_entry.size());
+  if (written != static_cast<ssize_t>(encoded_entry.size())) {
+    std::println("wal: write failed. written={}", written);
+    return false;
+  }
+
+  const int rc = fdatasync(fd_);
+  if (rc != 0) {
+    std::println("wal: fdatasync failed. rc={}, errno={}", rc, strerror(errno));
+    return false;
+  }
+
+  return true;
 }
 
 bool wal_writer::sync() noexcept {
-  if (!file_.is_open()) {
+  assert(fd_ != -1);
+
+  const std::int32_t rc = fdatasync(fd_);
+  if (rc != 0) {
+    std::println("wal: fdatasync failed. rc={}, errno={}", rc, strerror(errno));
     return false;
   }
-  const auto sync_status = file_.sync();
-  return sync_status == 0;
+
+  return true;
 }
 
-void wal_writer::close() noexcept {
-  if (!file_.is_open()) {
-    return;
+bool wal_writer::close() noexcept {
+  assert(fd_ != -1);
+
+  // close() is a good example of why dealing with filesystems is a pain in the butt.
+  // It may fail, and has limited error codes to return.
+  // Thing is, the Linux implementation of close() frees fd early in the implementation,
+  // which means regardless of the close() failing, the fd is gone anyway.
+  // This makes retrying close(fd) impossible.
+  // A proper handling of close() boils down to two things (according to `man 2 close`):
+  // 1. Precede close() with an fsync() or succeed write() with an fsync() (which we do in append()),
+  // 2. Log on close() error.
+  const std::int32_t rc = ::close(fd_);
+  fd_ = -1;
+  if (rc != 0) {
+    std::println("wal: close failed. rc={}, errno={}", rc, strerror(errno));
+    return false;
   }
-  file_.close();
+  return true;
 }
 
 }  // namespace frankie::engine

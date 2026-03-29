@@ -10,9 +10,9 @@ class scratch_arena final {
   scratch_arena() = default;
   scratch_arena(const scratch_arena &) = delete;
   scratch_arena &operator=(const scratch_arena &) = delete;
-  scratch_arena(scratch_arena &&) noexcept = default;
-  scratch_arena &operator=(scratch_arena &&) noexcept = default;
-  ~scratch_arena() noexcept = default;
+  scratch_arena(scratch_arena &&) noexcept;
+  scratch_arena &operator=(scratch_arena &&) noexcept;
+  ~scratch_arena() noexcept;
 
   [[nodiscard]] char *allocate(std::uint64_t size) noexcept;
 
