@@ -211,6 +211,31 @@ bool wal_writer::sync() noexcept {
   return true;
 }
 
+bool wal_writer::truncate() noexcept {
+  assert(fd_ != -1);
+
+  if (fd_ == -1) {
+    std::println("wal_writer::truncate: invalid file description. path={}, fd={}", path_.c_str(), fd_);
+    return false;
+  }
+
+  const std::int32_t rc = ::truncate(path_.c_str(), 0);
+  if (rc == -1) {
+    std::println("wal_writer::truncate: failed to truncate wal. path={}, fd={}, errno={}", path_.c_str(), fd_,
+                 strerror(errno));
+    return false;
+  }
+
+  const off_t off = ::lseek(fd_, 0, SEEK_SET);
+  if (off == -1) {
+    std::println("wal_writer::truncate: failed to lseek wal. path={}, fd={}, errno={}", path_.c_str(), fd_,
+                 strerror(errno));
+    return false;
+  }
+
+  return true;
+}
+
 bool wal_writer::close() noexcept {
   assert(fd_ != -1);
 

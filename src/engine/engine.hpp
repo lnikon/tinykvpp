@@ -26,17 +26,18 @@ class engine final {
                                                     std::uint64_t memtable_capacity = kDefaultMemtableCapacity,
                                                     std::uint64_t wal_capacity = kDefaultWalCapacity) noexcept;
 
-  void put(std::string_view key, std::string_view value) noexcept;
+  [[nodiscard]] bool put(std::string_view key, std::string_view value) noexcept;
 
   [[nodiscard]] std::optional<std::string_view> get(std::string_view key) noexcept;
 
-  void del(std::string_view key) noexcept;
+  [[nodiscard]] bool del(std::string_view key) noexcept;
 
   // TODO(lnikon): Interface tdb
   void scan(std::string_view range_start_key, std::string_view range_end_key) noexcept;
 
  private:
   void maybe_rotate_memtable(std::uint64_t incoming_bytes) noexcept;
+  [[nodiscard]] std::uint64_t get_next_sequence() noexcept;
 
   std::uint64_t memtable_capacity_{kDefaultMemtableCapacity};
   storage::memtable memtable_active_;

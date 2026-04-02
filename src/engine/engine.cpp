@@ -1,5 +1,7 @@
-#include "engine/engine.hpp"
 #include <optional>
+#include <print>
+
+#include "engine/engine.hpp"
 #include "storage/memtable.hpp"
 #include "storage/skiplist.hpp"
 
@@ -26,26 +28,73 @@ std::optional<engine> engine::create(std::filesystem::path wal_path, const std::
   return result;
 }
 
-void engine::put(std::string_view key, std::string_view value) noexcept {
+bool engine::put(std::string_view key, std::string_view value) noexcept {
+  const auto sequence = get_next_sequence();
+
+  if (auto status = wal_.append({
+          .operation_ = wal_operation::put,
+          .sequence_ = sequence,
+          .key_ = key,
+          .value_ = value,
+          .tombstone_ = false,
+      });
+      status) {
+    std::println("engine::put: failed to append wal. key={}, value={}, sequence={}", key, value, sequence);
+    return false;
+  }
+
   const std::uint64_t entry_bytes =
       key.size() + value.size() + storage::internal_key::kMetadataSize + kNodeOverheadEstimate;
   maybe_rotate_memtable(entry_bytes);
-  memtable_active_.put(key, value, sequence_++, false);
+
+  memtable_active_.put(key, value, sequence, false);
+
+  return true;
 }
 
 std::optional<std::string_view> engine::get(std::string_view key) noexcept {
-  const auto &entry = memtable_active_.get(key);
+  auto entry = memtable_active_.get(key);
   if (entry.has_value() && !entry.value().tombstone_) {
     return entry.value().value();
   }
-  // TODO(lnikon): Also check memtable_immutable_ before returning nullopt
+
+  if (memtable_immutable_.has_value()) {
+    entry = memtable_immutable_->get(key);
+    if (entry.has_value() && !entry.value().tombstone_) {
+      return entry.value().value();
+    }
+  }
+
   return std::nullopt;
 }
 
-void engine::del(std::string_view key) noexcept {
+bool engine::del(std::string_view key) noexcept {
+  const auto sequence = get_next_sequence();
+
+  if (auto status = wal_.append({
+          .operation_ = wal_operation::del,
+          .sequence_ = sequence,
+          .key_ = key,
+          .value_ = "",
+          .tombstone_ = true,
+      });
+      status) {
+    std::println("engine::put: failed to append wal. key={} sequence={}", key, sequence);
+    return false;
+  }
+
   const std::uint64_t entry_bytes = key.size() + storage::internal_key::kMetadataSize + kNodeOverheadEstimate;
   maybe_rotate_memtable(entry_bytes);
-  memtable_active_.put(key, {}, sequence_++, true);
+
+  memtable_active_.put(key, {}, sequence, true);
+
+  return true;
+}
+
+// TODO(lnikon): Interface tdb
+void engine::scan(std::string_view range_start_key, std::string_view range_end_key) noexcept {
+  (void)range_start_key;
+  (void)range_end_key;
 }
 
 void engine::maybe_rotate_memtable(const std::uint64_t incoming_bytes) noexcept {
@@ -55,11 +104,14 @@ void engine::maybe_rotate_memtable(const std::uint64_t incoming_bytes) noexcept 
   memtable_immutable_.emplace(std::move(memtable_active_));
   memtable_active_ = storage::memtable::create(memtable_capacity_);
   // TODO(lnikon): Trigger flush of memtable_immutable_ to SST
+
+  if (!wal_.truncate()) {
+    std::println("engine::maybe_rotate_memtable: failed to truncate wal.");
+    // TODO(lnikon): Need a fallback strategy e.g. move current wal into wal.old1 and create a new wal
+    return;
+  }
 }
 
-// TODO(lnikon): Interface tdb
-void engine::scan(std::string_view range_start_key, std::string_view range_end_key) noexcept {
-  (void)range_start_key;
-  (void)range_end_key;
-}
+std::uint64_t engine::get_next_sequence() noexcept { return sequence_++; }
+
 }  // namespace frankie::engine

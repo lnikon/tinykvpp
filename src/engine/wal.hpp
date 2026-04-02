@@ -26,7 +26,7 @@ struct wal_entry final {
   std::uint64_t sequence_;
   std::string_view key_;
   std::string_view value_;
-  std::uint8_t tombstone_;
+  bool tombstone_;
 
   [[nodiscard]] std::string_view encode(core::scratch_arena &arena) const noexcept;
 
@@ -47,6 +47,8 @@ class wal_writer final {
   [[nodiscard]] bool append(const wal_entry &entry) noexcept;
 
   [[nodiscard]] bool sync() noexcept;
+
+  [[nodiscard]] bool truncate() noexcept;
 
   [[nodiscard]] bool close() noexcept;
 

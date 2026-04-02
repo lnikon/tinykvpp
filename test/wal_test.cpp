@@ -480,3 +480,97 @@ TEST_F(WalWriterTest, MoveConstructionLeavesSourceInert) {
 
   // The original goes out of scope — must not crash (fd_ is -1).
 }
+
+TEST_F(WalWriterTest, TruncateResetsFileToEmpty) {
+  auto path = tmp_dir_ / "truncate.wal";
+  auto writer = wal_writer::open(path, 4096);
+  ASSERT_TRUE(writer.has_value());
+
+  wal_entry entry{
+      .operation_ = wal_operation::put,
+      .sequence_ = 1,
+      .key_ = "key1",
+      .value_ = "val1",
+      .tombstone_ = 0,
+  };
+
+  EXPECT_TRUE(writer->append(entry));
+  EXPECT_GT(std::filesystem::file_size(path), 0u);
+
+  EXPECT_TRUE(writer->truncate());
+  EXPECT_EQ(std::filesystem::file_size(path), 0u);
+}
+
+TEST_F(WalWriterTest, TruncateThenAppendWritesFromBeginning) {
+  auto path = tmp_dir_ / "truncate_append.wal";
+  auto writer = wal_writer::open(path, 4096);
+  ASSERT_TRUE(writer.has_value());
+
+  wal_entry e1{
+      .operation_ = wal_operation::put,
+      .sequence_ = 1,
+      .key_ = "before",
+      .value_ = "truncate",
+      .tombstone_ = 0,
+  };
+  EXPECT_TRUE(writer->append(e1));
+
+  EXPECT_TRUE(writer->truncate());
+
+  wal_entry e2{
+      .operation_ = wal_operation::put,
+      .sequence_ = 2,
+      .key_ = "after",
+      .value_ = "truncate",
+      .tombstone_ = 0,
+  };
+  EXPECT_TRUE(writer->append(e2));
+
+  // File should contain only e2, not e1+e2.
+  const auto expected_size = wal_entry::kMetadataSize + 5 + 8;
+  EXPECT_EQ(std::filesystem::file_size(path), expected_size);
+
+  // Read back and verify CRC + decode of the single entry.
+  std::vector<char> contents(expected_size);
+  int fd = ::open(path.c_str(), O_RDONLY);
+  ASSERT_NE(fd, -1);
+  ASSERT_EQ(::read(fd, contents.data(), expected_size), static_cast<ssize_t>(expected_size));
+  ::close(fd);
+
+  auto decoded = wal_entry::decode({contents.data(), contents.size()});
+  ASSERT_TRUE(decoded.has_value());
+  EXPECT_EQ(decoded->sequence_, 2u);
+  EXPECT_EQ(decoded->key_, "after");
+  EXPECT_EQ(decoded->value_, "truncate");
+}
+
+TEST_F(WalWriterTest, TruncateOnEmptyFileSucceeds) {
+  auto path = tmp_dir_ / "truncate_empty.wal";
+  auto writer = wal_writer::open(path, 4096);
+  ASSERT_TRUE(writer.has_value());
+
+  EXPECT_EQ(std::filesystem::file_size(path), 0u);
+  EXPECT_TRUE(writer->truncate());
+  EXPECT_EQ(std::filesystem::file_size(path), 0u);
+}
+
+TEST_F(WalWriterTest, TruncateMultipleTimes) {
+  auto path = tmp_dir_ / "truncate_multi.wal";
+  auto writer = wal_writer::open(path, 4096);
+  ASSERT_TRUE(writer.has_value());
+
+  wal_entry entry{
+      .operation_ = wal_operation::put,
+      .sequence_ = 1,
+      .key_ = "k",
+      .value_ = "v",
+      .tombstone_ = 0,
+  };
+
+  for (int i = 0; i < 3; ++i) {
+    EXPECT_TRUE(writer->append(entry));
+    EXPECT_GT(std::filesystem::file_size(path), 0u);
+    EXPECT_TRUE(writer->truncate());
+    EXPECT_EQ(std::filesystem::file_size(path), 0u);
+  }
+}
