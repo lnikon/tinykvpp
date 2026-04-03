@@ -31,14 +31,13 @@ std::optional<engine> engine::create(std::filesystem::path wal_path, const std::
 bool engine::put(std::string_view key, std::string_view value) noexcept {
   const auto sequence = get_next_sequence();
 
-  if (auto status = wal_.append({
+  if (!wal_.append({
           .operation_ = wal_operation::put,
           .sequence_ = sequence,
           .key_ = key,
           .value_ = value,
           .tombstone_ = false,
-      });
-      status) {
+      })) {
     std::println("engine::put: failed to append wal. key={}, value={}, sequence={}", key, value, sequence);
     return false;
   }
@@ -71,14 +70,13 @@ std::optional<std::string_view> engine::get(std::string_view key) noexcept {
 bool engine::del(std::string_view key) noexcept {
   const auto sequence = get_next_sequence();
 
-  if (auto status = wal_.append({
+  if (!wal_.append({
           .operation_ = wal_operation::del,
           .sequence_ = sequence,
           .key_ = key,
           .value_ = "",
           .tombstone_ = true,
-      });
-      status) {
+      })) {
     std::println("engine::put: failed to append wal. key={} sequence={}", key, sequence);
     return false;
   }

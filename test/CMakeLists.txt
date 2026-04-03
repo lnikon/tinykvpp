@@ -24,6 +24,11 @@ if(GTest_FOUND)
     target_include_directories(wal_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
     add_test(NAME WalTest COMMAND wal_test)
 
+    add_executable(engine_test engine_test.cpp)
+    target_link_libraries(engine_test PRIVATE frankie_lib GTest::gtest_main)
+    target_include_directories(engine_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
+    add_test(NAME EngineTest COMMAND engine_test)
+
     message(STATUS "GTest found - testing enabled")
 else()
     message(STATUS "GTest not found - testing disabled")

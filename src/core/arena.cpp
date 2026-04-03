@@ -10,7 +10,7 @@ arena arena::create(const std::uint64_t capacity) noexcept {
   result.current_->next_ = nullptr;
   result.block_size_ = capacity;
   result.offset_ = 0;
-  result.bytes_allocated_ = 0;
+  result.bytes_allocated_ = sizeof(arena_block);
   return result;
 }
 
@@ -23,6 +23,7 @@ void *arena::allocate(const std::uint64_t size, std::uint64_t align) noexcept {
     block->next_ = current_;
     current_ = block;
     offset_ = 0;
+    bytes_allocated_ += sizeof(arena_block);
   }
 
   void *ptr = current_->data() + offset_;
