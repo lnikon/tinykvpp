@@ -219,7 +219,7 @@ bool wal_writer::truncate() noexcept {
     return false;
   }
 
-  const std::int32_t rc = ::truncate(path_.c_str(), 0);
+  const std::int32_t rc = ::ftruncate(fd_, 0);
   if (rc == -1) {
     std::println("wal_writer::truncate: failed to truncate wal. path={}, fd={}, errno={}", path_.c_str(), fd_,
                  strerror(errno));

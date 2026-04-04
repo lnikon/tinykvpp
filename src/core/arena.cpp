@@ -1,8 +1,30 @@
 #include "core/arena.hpp"
 
 #include <algorithm>
+#include <utility>
 
 namespace frankie::core {
+
+arena::arena(arena &&other) noexcept
+    : current_{std::exchange(other.current_, nullptr)},
+      block_size_{std::exchange(other.block_size_, 0)},
+      offset_{std::exchange(other.offset_, 0)},
+      bytes_allocated_{std::exchange(other.bytes_allocated_, 0)} {}
+
+arena &arena::operator=(arena &&other) noexcept {
+  if (this == &other) {
+    return *this;
+  }
+
+  destroy();
+
+  current_ = std::exchange(other.current_, nullptr);
+  block_size_ = std::exchange(other.block_size_, 0);
+  offset_ = std::exchange(other.offset_, 0);
+  bytes_allocated_ = std::exchange(other.bytes_allocated_, 0);
+
+  return *this;
+}
 
 arena arena::create(const std::uint64_t capacity) noexcept {
   arena result;

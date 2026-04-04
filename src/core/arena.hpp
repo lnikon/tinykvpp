@@ -19,8 +19,8 @@ class arena final {
   arena() = default;
   arena(const arena &) = delete;
   arena &operator=(const arena &) = delete;
-  arena(arena &&) noexcept = default;
-  arena &operator=(arena &&) noexcept = default;
+  arena(arena &&) noexcept;
+  arena &operator=(arena &&) noexcept;
   ~arena() noexcept = default;
 
   [[nodiscard]] static arena create(std::uint64_t capacity) noexcept;
