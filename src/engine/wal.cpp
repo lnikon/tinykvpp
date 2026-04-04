@@ -171,6 +171,21 @@ std::optional<wal_writer> wal_writer::open(std::filesystem::path path, std::uint
     return std::nullopt;
   }
 
+  // fsync() parent directory of the WAL to synchronize its metadata with its content
+  const auto &parent_dir_path = path.parent_path();
+  const std::int32_t parent_dir_fd = ::open(parent_dir_path.c_str(), O_RDONLY);
+  if (parent_dir_fd == -1) {
+    std::println("wal: failed to open parent dir. dir={}, fd={}, errno={}", parent_dir_path.c_str(), parent_dir_fd,
+                 strerror(errno));
+    return std::nullopt;
+  }
+  const int parent_rc = ::fsync(parent_dir_fd);
+  ::close(parent_dir_fd);
+  if (parent_rc != 0) {
+    std::println("wal: fsync failed. dir={}, rc={}, errno={}", parent_dir_path.c_str(), parent_rc, strerror(errno));
+    return std::nullopt;
+  }
+
   std::optional<wal_writer> result;
   result.emplace();
   result->path_ = std::move(path);
