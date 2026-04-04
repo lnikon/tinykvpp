@@ -1,5 +1,6 @@
 #include <cstring>
 
+#include "core/time.hpp"
 #include "storage/memtable.hpp"
 
 namespace frankie::storage {
@@ -67,7 +68,7 @@ void memtable::put(const std::string_view key, const std::string_view value, con
   auto ikey = internal_key{
       .user_key = key,
       .sequence = sequence,
-      .timestamp = sequence,  // NOTE: Use monotonic timestamp in epoch format with ms precision
+      .timestamp = core::wall_clock_ms(),
       .tombstone = is_tombstone,
   };
   skiplist_.insert(ikey.encode(scratch_arena_), value);
