@@ -186,6 +186,76 @@ TEST_F(EngineTest, DeleteInImmutableIsRespected) {
 }
 
 // ---------------------------------------------------------------------------
+// Ghost entry regression: deleted keys must not resurface after rotation
+// ---------------------------------------------------------------------------
+
+TEST_F(EngineTest, DeletedKeyInActiveDoesNotResurfaceAfterRotation) {
+  constexpr std::uint64_t kTinyCapacity = 512;
+  auto eng = engine::create(wal_path(), kTinyCapacity, 4 * 1024 * 1024);
+  ASSERT_TRUE(eng.has_value());
+
+  // Put and delete in the active memtable.
+  ASSERT_TRUE(eng->put("ghost", "boo"));
+  ASSERT_TRUE(eng->del("ghost"));
+  EXPECT_FALSE(eng->get("ghost").has_value());
+
+  // Force rotation — both put and tombstone move to immutable.
+  const std::string big(256, 'x');
+  ASSERT_TRUE(eng->put("filler", big));
+
+  // The tombstone in immutable must still suppress the value.
+  EXPECT_FALSE(eng->get("ghost").has_value());
+}
+
+TEST_F(EngineTest, DeleteInActiveOverridesPutInImmutable) {
+  constexpr std::uint64_t kTinyCapacity = 512;
+  auto eng = engine::create(wal_path(), kTinyCapacity, 4 * 1024 * 1024);
+  ASSERT_TRUE(eng.has_value());
+
+  // Put a key that will land in immutable after rotation.
+  ASSERT_TRUE(eng->put("key", "alive"));
+
+  // Force rotation — "key" is now in immutable.
+  const std::string big(256, 'x');
+  ASSERT_TRUE(eng->put("filler", big));
+
+  // Delete in active memtable must shadow the immutable entry.
+  ASSERT_TRUE(eng->del("key"));
+  EXPECT_FALSE(eng->get("key").has_value());
+}
+
+TEST_F(EngineTest, DeleteInImmutableDoesNotBlockNewPutInActive) {
+  constexpr std::uint64_t kTinyCapacity = 512;
+  auto eng = engine::create(wal_path(), kTinyCapacity, 4 * 1024 * 1024);
+  ASSERT_TRUE(eng.has_value());
+
+  // Put then delete — both will move to immutable.
+  ASSERT_TRUE(eng->put("key", "old"));
+  ASSERT_TRUE(eng->del("key"));
+
+  // Force rotation.
+  const std::string big(256, 'x');
+  ASSERT_TRUE(eng->put("filler", big));
+
+  // Re-insert in active memtable must take precedence over immutable tombstone.
+  ASSERT_TRUE(eng->put("key", "new"));
+  auto result = eng->get("key");
+  ASSERT_TRUE(result.has_value());
+  EXPECT_EQ(result.value(), "new");
+}
+
+TEST_F(EngineTest, MultipleDeletesDoNotResurrectKey) {
+  auto eng = engine::create(wal_path(), 1024 * 1024, 1024 * 1024);
+  ASSERT_TRUE(eng.has_value());
+
+  ASSERT_TRUE(eng->put("key", "value"));
+  ASSERT_TRUE(eng->del("key"));
+  ASSERT_TRUE(eng->del("key"));  // double delete
+
+  EXPECT_FALSE(eng->get("key").has_value());
+}
+
+// ---------------------------------------------------------------------------
 // Sequence numbers (observable via get ordering)
 // ---------------------------------------------------------------------------
 
