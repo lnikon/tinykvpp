@@ -63,6 +63,11 @@ memtable memtable::create(const std::uint64_t capacity) noexcept {
   return result;
 }
 
+memtable::~memtable() {
+  arena_.destroy();
+  scratch_arena_.destroy();
+}
+
 void memtable::put(const std::string_view key, const std::string_view value, const std::uint64_t sequence,
                    const bool is_tombstone) noexcept {
   auto ikey = internal_key{
