@@ -179,7 +179,7 @@ std::optional<wal_writer> wal_writer::open(std::filesystem::path path, std::uint
                  strerror(errno));
     return std::nullopt;
   }
-  const int parent_rc = ::fsync(parent_dir_fd);
+  const std::int32_t parent_rc = ::fsync(parent_dir_fd);
   ::close(parent_dir_fd);
   if (parent_rc != 0) {
     std::println("wal: fsync failed. dir={}, rc={}, errno={}", parent_dir_path.c_str(), parent_rc, strerror(errno));
