@@ -30,6 +30,7 @@ scratch_arena::~scratch_arena() noexcept { destroy(); }
 char *scratch_arena::allocate(std::uint64_t size) noexcept {
   if (offset_ + size > capacity_) {
     capacity_ = std::max(capacity_ * 2, offset_ + size);
+    // TODO(lnikon): realloc return NULL on error, add a handler here.
     buf_ = static_cast<char *>(std::realloc(buf_, capacity_));
   }
   char *ptr = buf_ + offset_;

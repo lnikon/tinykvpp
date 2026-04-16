@@ -1,5 +1,6 @@
 #include <optional>
 #include <print>
+#include <type_traits>
 
 #include "engine/engine.hpp"
 #include "storage/memtable.hpp"
@@ -16,14 +17,36 @@ std::optional<engine> engine::create(std::filesystem::path wal_path, const std::
                                      const std::uint64_t wal_capacity) noexcept {
   engine result;
 
+  result.memtable_capacity_ = memtable_capacity;
+  result.memtable_active_ = storage::memtable::create(memtable_capacity);
+
+  if (auto wal_reader = wal_reader::open(wal_path); wal_reader) {
+    for (auto entry = wal_reader->read(); entry.has_value(); entry = wal_reader->read()) {
+      if (!entry.has_value()) [[unlikely]] {
+        break;
+      }
+
+      const auto &wal_entry = entry.value();
+      switch (wal_entry.operation_) {
+        case wal_operation::put:
+          result.memtable_active_.put(wal_entry.key_, wal_entry.value_, wal_entry.sequence_, wal_entry.tombstone_);
+          break;
+        case wal_operation::del:
+          result.memtable_active_.put(wal_entry.key_, "", wal_entry.sequence_, wal_entry.tombstone_);
+          break;
+        default:
+          std::println("missing case handler for wal operation. op={}",
+                       static_cast<std::underlying_type_t<wal_operation>>(wal_entry.operation_));
+          break;
+      }
+    }
+  }
+
   if (auto wal_writer_opt = wal_writer::open(std::move(wal_path), wal_capacity); wal_writer_opt.has_value()) {
     result.wal_ = std::move(wal_writer_opt.value());
   } else {
     return std::nullopt;
   }
-
-  result.memtable_capacity_ = memtable_capacity;
-  result.memtable_active_ = storage::memtable::create(memtable_capacity);
 
   return result;
 }

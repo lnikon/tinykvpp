@@ -235,7 +235,8 @@ TEST_F(WalEntryTest, DecodeRejectsCorruptedCRC) {
   std::string corrupted(encoded);
   corrupted[4] = static_cast<char>(~corrupted[4]);
 
-  auto decoded = wal_entry::decode(corrupted);
+  std::string_view view(corrupted);
+  auto decoded = wal_entry::decode(view);
   EXPECT_FALSE(decoded.has_value());
 }
 
@@ -254,7 +255,8 @@ TEST_F(WalEntryTest, DecodeRejectsCorruptedPayload) {
   std::string corrupted(encoded);
   corrupted[10] = static_cast<char>(~corrupted[10]);
 
-  auto decoded = wal_entry::decode(corrupted);
+  std::string_view view(corrupted);
+  auto decoded = wal_entry::decode(view);
   EXPECT_FALSE(decoded.has_value());
 }
 
@@ -283,7 +285,8 @@ TEST_F(WalEntryTest, DecodeRejectsKeyValueOverflowingRecordLen) {
           .finalize();
   std::memcpy(buf.data() + 4, &new_crc, sizeof(new_crc));
 
-  auto decoded = wal_entry::decode(buf);
+  std::string_view view(buf);
+  auto decoded = wal_entry::decode(view);
   EXPECT_FALSE(decoded.has_value());
 }
 
@@ -303,6 +306,96 @@ TEST_F(WalEntryTest, DecodeTruncatedBufferReturnsNullopt) {
 
   auto decoded = wal_entry::decode(truncated);
   EXPECT_FALSE(decoded.has_value());
+}
+
+TEST_F(WalEntryTest, DecodeAdvancesViewOnSuccess) {
+  wal_entry entry{
+      .operation_ = wal_operation::put,
+      .sequence_ = 1,
+      .key_ = "k",
+      .value_ = "v",
+      .tombstone_ = 0,
+  };
+
+  auto encoded = entry.encode(arena_);
+
+  auto decoded = wal_entry::decode(encoded);
+  ASSERT_TRUE(decoded.has_value());
+  // A single-entry buffer is fully consumed after a successful decode.
+  EXPECT_EQ(encoded.size(), 0u);
+}
+
+TEST_F(WalEntryTest, DecodeLeavesViewUntouchedOnFailure) {
+  wal_entry entry{
+      .operation_ = wal_operation::put,
+      .sequence_ = 1,
+      .key_ = "k",
+      .value_ = "v",
+      .tombstone_ = 0,
+  };
+
+  auto encoded = entry.encode(arena_);
+  std::string corrupted(encoded);
+  corrupted[4] = static_cast<char>(~corrupted[4]);  // flip a CRC byte
+
+  std::string_view view(corrupted);
+  const auto *data_before = view.data();
+  const auto size_before = view.size();
+
+  auto decoded = wal_entry::decode(view);
+  EXPECT_FALSE(decoded.has_value());
+  // Failed decode must not advance the view — the caller needs the original
+  // bytes to report/recover from the corruption.
+  EXPECT_EQ(view.data(), data_before);
+  EXPECT_EQ(view.size(), size_before);
+}
+
+TEST_F(WalEntryTest, DecodeTwoEntriesFromSingleBuffer) {
+  wal_entry e1{
+      .operation_ = wal_operation::put,
+      .sequence_ = 1,
+      .key_ = "a",
+      .value_ = "b",
+      .tombstone_ = 0,
+  };
+  wal_entry e2{
+      .operation_ = wal_operation::del,
+      .sequence_ = 2,
+      .key_ = "cc",
+      .value_ = "",
+      .tombstone_ = 1,
+  };
+
+  // Concatenate the two encoded entries into a stable backing buffer. arena_
+  // gets reset between encodes, so we must copy the bytes out before the
+  // second encode overwrites them.
+  std::string combined;
+  {
+    auto enc1 = e1.encode(arena_);
+    combined.append(enc1);
+  }
+  {
+    auto enc2 = e2.encode(arena_);
+    combined.append(enc2);
+  }
+
+  std::string_view view(combined);
+
+  auto d1 = wal_entry::decode(view);
+  ASSERT_TRUE(d1.has_value());
+  EXPECT_EQ(d1->sequence_, 1u);
+  EXPECT_EQ(d1->key_, "a");
+  EXPECT_EQ(d1->value_, "b");
+
+  auto d2 = wal_entry::decode(view);
+  ASSERT_TRUE(d2.has_value());
+  EXPECT_EQ(d2->sequence_, 2u);
+  EXPECT_EQ(d2->key_, "cc");
+  EXPECT_EQ(d2->tombstone_, 1);
+
+  // View fully consumed — further decodes return nullopt.
+  EXPECT_EQ(view.size(), 0u);
+  EXPECT_FALSE(wal_entry::decode(view).has_value());
 }
 
 // --- wal_writer tests (use real files via tmp directory) ---
@@ -537,7 +630,8 @@ TEST_F(WalWriterTest, TruncateThenAppendWritesFromBeginning) {
   ASSERT_EQ(::read(fd, contents.data(), expected_size), static_cast<ssize_t>(expected_size));
   ::close(fd);
 
-  auto decoded = wal_entry::decode({contents.data(), contents.size()});
+  std::string_view view(contents.data(), contents.size());
+  auto decoded = wal_entry::decode(view);
   ASSERT_TRUE(decoded.has_value());
   EXPECT_EQ(decoded->sequence_, 2u);
   EXPECT_EQ(decoded->key_, "after");
@@ -573,4 +667,196 @@ TEST_F(WalWriterTest, TruncateMultipleTimes) {
     EXPECT_TRUE(writer->truncate());
     EXPECT_EQ(std::filesystem::file_size(path), 0u);
   }
+}
+
+// --- wal_reader tests (use real files via tmp directory) ---
+
+class WalReaderTest : public ::testing::Test {
+ protected:
+  std::filesystem::path tmp_dir_;
+
+  void SetUp() override {
+    tmp_dir_ = std::filesystem::temp_directory_path() / "frankie_wal_reader_test";
+    std::filesystem::create_directories(tmp_dir_);
+  }
+
+  void TearDown() override { std::filesystem::remove_all(tmp_dir_); }
+
+  // Helper: write `entries` to `path` via a fresh wal_writer and close it.
+  static void write_wal(const std::filesystem::path &path, const std::vector<wal_entry> &entries) {
+    auto writer = wal_writer::open(path, 4096);
+    ASSERT_TRUE(writer.has_value());
+    for (const auto &e : entries) {
+      EXPECT_TRUE(writer->append(e));
+    }
+    EXPECT_TRUE(writer->close());
+  }
+};
+
+TEST_F(WalReaderTest, OpenNonexistentFileFails) {
+  auto reader = wal_reader::open(tmp_dir_ / "does_not_exist.wal");
+  EXPECT_FALSE(reader.has_value());
+}
+
+TEST_F(WalReaderTest, OpenEmptyFileReturnsNullopt) {
+  // A freshly-opened-then-closed wal_writer leaves a 0-byte file behind. The
+  // reader treats EOF on initial read as "nothing to recover" and declines to
+  // construct.
+  auto path = tmp_dir_ / "empty.wal";
+  {
+    auto writer = wal_writer::open(path, 1024);
+    ASSERT_TRUE(writer.has_value());
+    EXPECT_TRUE(writer->close());
+  }
+  ASSERT_TRUE(std::filesystem::exists(path));
+  ASSERT_EQ(std::filesystem::file_size(path), 0u);
+
+  auto reader = wal_reader::open(path);
+  EXPECT_FALSE(reader.has_value());
+}
+
+TEST_F(WalReaderTest, ReadSingleEntryRoundTrip) {
+  auto path = tmp_dir_ / "single.wal";
+  write_wal(path, {wal_entry{
+                      .operation_ = wal_operation::put,
+                      .sequence_ = 7,
+                      .key_ = "hello",
+                      .value_ = "world",
+                      .tombstone_ = 0,
+                  }});
+
+  auto reader = wal_reader::open(path);
+  ASSERT_TRUE(reader.has_value());
+
+  auto decoded = reader->read();
+  ASSERT_TRUE(decoded.has_value());
+  EXPECT_EQ(decoded->operation_, wal_operation::put);
+  EXPECT_EQ(decoded->sequence_, 7u);
+  EXPECT_EQ(decoded->key_, "hello");
+  EXPECT_EQ(decoded->value_, "world");
+  EXPECT_EQ(decoded->tombstone_, 0);
+
+  // Buffer is now fully consumed — further reads return nullopt and stay
+  // idempotent across repeated calls.
+  EXPECT_FALSE(reader->read().has_value());
+  EXPECT_FALSE(reader->read().has_value());
+}
+
+TEST_F(WalReaderTest, ReadMultipleEntriesInOrder) {
+  auto path = tmp_dir_ / "multi.wal";
+  const std::vector<wal_entry> entries = {
+      wal_entry{.operation_ = wal_operation::put, .sequence_ = 1, .key_ = "a", .value_ = "1", .tombstone_ = 0},
+      wal_entry{.operation_ = wal_operation::put, .sequence_ = 2, .key_ = "bb", .value_ = "22", .tombstone_ = 0},
+      wal_entry{.operation_ = wal_operation::del, .sequence_ = 3, .key_ = "a", .value_ = "", .tombstone_ = 1},
+  };
+  write_wal(path, entries);
+
+  auto reader = wal_reader::open(path);
+  ASSERT_TRUE(reader.has_value());
+
+  for (const auto &expected : entries) {
+    auto actual = reader->read();
+    ASSERT_TRUE(actual.has_value());
+    EXPECT_EQ(actual->operation_, expected.operation_);
+    EXPECT_EQ(actual->sequence_, expected.sequence_);
+    EXPECT_EQ(actual->key_, expected.key_);
+    EXPECT_EQ(actual->value_, expected.value_);
+    EXPECT_EQ(actual->tombstone_, expected.tombstone_);
+  }
+
+  EXPECT_FALSE(reader->read().has_value());
+}
+
+TEST_F(WalReaderTest, ReadStopsAtFirstCorruptedEntry) {
+  auto path = tmp_dir_ / "corrupt.wal";
+  write_wal(path, {
+      wal_entry{.operation_ = wal_operation::put, .sequence_ = 1, .key_ = "a", .value_ = "b", .tombstone_ = 0},
+      wal_entry{.operation_ = wal_operation::put, .sequence_ = 2, .key_ = "c", .value_ = "d", .tombstone_ = 0},
+  });
+
+  // Flip a byte in the second entry's CRC field. Entry layout:
+  //   [record_len u32][crc32 u32][...payload...]
+  // so the CRC of the second entry sits at offset (first_entry_size + 4).
+  const off_t first_entry_size = wal_entry::kMetadataSize + 1 + 1;
+  const off_t second_crc_offset = first_entry_size + sizeof(std::uint32_t);
+  {
+    int fd = ::open(path.c_str(), O_RDWR);
+    ASSERT_NE(fd, -1);
+    char byte = 0;
+    ASSERT_EQ(::pread(fd, &byte, 1, second_crc_offset), 1);
+    byte = static_cast<char>(~byte);
+    ASSERT_EQ(::pwrite(fd, &byte, 1, second_crc_offset), 1);
+    ::close(fd);
+  }
+
+  auto reader = wal_reader::open(path);
+  ASSERT_TRUE(reader.has_value());
+
+  // First entry decodes cleanly.
+  auto first = reader->read();
+  ASSERT_TRUE(first.has_value());
+  EXPECT_EQ(first->sequence_, 1u);
+  EXPECT_EQ(first->key_, "a");
+
+  // Second entry fails CRC → reader returns nullopt and the buffer stays
+  // parked on the corrupt record (decode leaves the view untouched on failure).
+  EXPECT_FALSE(reader->read().has_value());
+  EXPECT_FALSE(reader->read().has_value());
+}
+
+TEST_F(WalReaderTest, MoveConstructionPreservesReadState) {
+  auto path = tmp_dir_ / "move_ctor.wal";
+  write_wal(path, {
+      wal_entry{.operation_ = wal_operation::put, .sequence_ = 1, .key_ = "k1", .value_ = "v1", .tombstone_ = 0},
+      wal_entry{.operation_ = wal_operation::put, .sequence_ = 2, .key_ = "k2", .value_ = "v2", .tombstone_ = 0},
+  });
+
+  auto reader = wal_reader::open(path);
+  ASSERT_TRUE(reader.has_value());
+
+  // Consume the first entry, then move-construct. The moved-to reader must
+  // continue from where the source left off.
+  auto first = reader->read();
+  ASSERT_TRUE(first.has_value());
+  EXPECT_EQ(first->sequence_, 1u);
+
+  wal_reader moved{std::move(*reader)};
+  auto second = moved.read();
+  ASSERT_TRUE(second.has_value());
+  EXPECT_EQ(second->sequence_, 2u);
+
+  EXPECT_FALSE(moved.read().has_value());
+}
+
+TEST_F(WalReaderTest, MoveAssignmentClosesOldFd) {
+  auto path1 = tmp_dir_ / "move_assign_1.wal";
+  auto path2 = tmp_dir_ / "move_assign_2.wal";
+  write_wal(path1, {wal_entry{
+                       .operation_ = wal_operation::put,
+                       .sequence_ = 1,
+                       .key_ = "x",
+                       .value_ = "y",
+                       .tombstone_ = 0,
+                   }});
+  write_wal(path2, {wal_entry{
+                       .operation_ = wal_operation::put,
+                       .sequence_ = 99,
+                       .key_ = "p",
+                       .value_ = "q",
+                       .tombstone_ = 0,
+                   }});
+
+  auto r1 = wal_reader::open(path1);
+  auto r2 = wal_reader::open(path2);
+  ASSERT_TRUE(r1.has_value());
+  ASSERT_TRUE(r2.has_value());
+
+  // Move-assign r2 into r1 — r1's previous fd must be closed by the assign,
+  // and the target must now read from path2's content.
+  *r1 = std::move(*r2);
+
+  auto entry = r1->read();
+  ASSERT_TRUE(entry.has_value());
+  EXPECT_EQ(entry->sequence_, 99u);
+  EXPECT_EQ(entry->key_, "p");
 }

@@ -1,6 +1,3 @@
-cmake_minimum_required(VERSION 3.25)
-project(frankie VERSION 0.1.0 LANGUAGES CXX)
-
 if(GTest_FOUND)
     enable_testing()
 
@@ -41,12 +38,24 @@ endif()
 
 if(benchmark_FOUND)
     add_executable(skiplist_benchmark skiplist_benchmark.cpp test_common.cpp)
-    target_link_libraries(skiplist_benchmark PRIVATE frankie_lib benchmark::benchmark_main)
-    target_include_directories(skiplist_benchmark PRIVATE ${CMAKE_SOURCE_DIR}/src)
+    target_link_libraries(
+        skiplist_benchmark
+        PRIVATE frankie_lib benchmark::benchmark_main
+    )
+    target_include_directories(
+        skiplist_benchmark
+        PRIVATE ${CMAKE_SOURCE_DIR}/src
+    )
 
     add_executable(memtable_benchmark memtable_benchmark.cpp)
-    target_link_libraries(memtable_benchmark PRIVATE frankie_lib benchmark::benchmark_main)
-    target_include_directories(memtable_benchmark PRIVATE ${CMAKE_SOURCE_DIR}/src)
+    target_link_libraries(
+        memtable_benchmark
+        PRIVATE frankie_lib benchmark::benchmark_main
+    )
+    target_include_directories(
+        memtable_benchmark
+        PRIVATE ${CMAKE_SOURCE_DIR}/src
+    )
 
     message(STATUS "GoogleBenchmark found - benchmarks are enabled")
 else()

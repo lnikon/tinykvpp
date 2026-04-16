@@ -44,17 +44,19 @@ __attribute__((target("sse2"))) int simd_compare_sse2(const char *a, const char 
     const int mask = _mm_movemask_epi8(eq);
 
     if (mask != 0xFFFF) {
-      const int first_diff = __builtin_ctz(~mask);
-      unsigned char ca = static_cast<unsigned char>(a[first_diff]);
-      unsigned char cb = static_cast<unsigned char>(b[first_diff]);
+      const int first_diff = __builtin_ctz(~static_cast<unsigned int>(mask));
+      auto ca = static_cast<unsigned char>(a[first_diff]);
+      auto cb = static_cast<unsigned char>(b[first_diff]);
       return (ca > cb) - (ca < cb);
     }
   }
 
   for (; a < end; ++a, ++b) {
-    const unsigned char ca = static_cast<unsigned char>(*a);
-    const unsigned char cb = static_cast<unsigned char>(*b);
-    if (ca != cb) return (ca > cb) - (ca < cb);
+    const auto ca = static_cast<unsigned char>(*a);
+    const auto cb = static_cast<unsigned char>(*b);
+    if (ca != cb) {
+      return (ca > cb) - (ca < cb);
+    }
   }
 
   return 0;

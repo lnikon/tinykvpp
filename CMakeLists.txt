@@ -14,7 +14,7 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
         -Wpedantic
         -Werror
         -Wconversion
-        #            -Wsign-conversion
+        -Wsign-conversion
         -Wshadow
         -Wnon-virtual-dtor
         -Wold-style-cast
@@ -24,14 +24,12 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
         -Wnull-dereference
         -Wdouble-promotion
         -Wformat=2
-        -O3
-        -g
-        -fno-omit-frame-pointer
+        $<$<CONFIG:DEBUG>:-g3>
+        $<$<CONFIG:DEBUG>:-O0>
+        $<$<CONFIG:RELEASE>:-fno-omit-frame-pointer>
+        $<$<CONFIG:RELEASE>:-O3>
     )
 endif()
-
-# target_link_libraries(YOUR_TARGET gtest::gtest)
-# target_link_libraries(YOUR_TARGET benchmark::benchmark_main)
 
 # Runtime dependencies
 find_package(liburing REQUIRED)

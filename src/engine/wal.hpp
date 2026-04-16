@@ -5,6 +5,7 @@
 #include <string_view>
 
 #include "core/scratch_arena.hpp"
+#include "storage/memtable.hpp"
 
 namespace frankie::engine {
 
@@ -30,7 +31,7 @@ struct wal_entry final {
 
   [[nodiscard]] std::string_view encode(core::scratch_arena &arena) const noexcept;
 
-  [[nodiscard]] static std::optional<wal_entry> decode(std::string_view encoded) noexcept;
+  [[nodiscard]] static std::optional<wal_entry> decode(std::string_view &encoded) noexcept;
 };
 
 class wal_writer final {
@@ -59,6 +60,29 @@ class wal_writer final {
   std::uint64_t capacity_{0};
 
   core::scratch_arena scratch_arena_;
+};
+
+class wal_reader final {
+ public:
+  wal_reader() = default;
+  wal_reader(const wal_writer &) = delete;
+  wal_reader &operator=(const wal_writer &) = delete;
+  wal_reader(wal_reader &&) noexcept;
+  wal_reader &operator=(wal_reader &&) noexcept;
+  ~wal_reader() noexcept;
+
+  [[nodiscard]] static std::optional<wal_reader> open(std::filesystem::path path) noexcept;
+
+  [[nodiscard]] std::optional<wal_entry> read() noexcept;
+
+  [[nodiscard]] bool close() noexcept;
+
+ private:
+  std::filesystem::path path_;
+  std::int32_t fd_{-1};
+
+  core::scratch_arena scratch_arena_;
+  std::string_view wal_view_;
 };
 
 }  // namespace frankie::engine
