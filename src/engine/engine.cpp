@@ -85,7 +85,10 @@ std::optional<std::string_view> engine::get(std::string_view key) noexcept {
 
   if (memtable_immutable_.has_value()) {
     entry = memtable_immutable_->get(key);
-    if (entry.has_value() && !entry.value().tombstone_) {
+    if (entry.has_value()) {
+      if (entry.value().tombstone_) {
+        return std::nullopt;
+      }
       return entry.value().value();
     }
   }
@@ -103,7 +106,7 @@ bool engine::del(std::string_view key) noexcept {
           .value_ = "",
           .tombstone_ = true,
       })) {
-    std::println("engine::del: failed to append wal. key={} sequence={}", key, sequence);
+    std::println("engine::del: failed to append wal. key={}, sequence={}", key, sequence);
     return false;
   }
 

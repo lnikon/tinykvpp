@@ -62,8 +62,8 @@ class memtable final {
   memtable() = default;
   memtable(const memtable &) = delete;
   memtable &operator=(const memtable &) = delete;
-  memtable(memtable &&) noexcept = default;
-  memtable &operator=(memtable &&) noexcept = default;
+  memtable(memtable &&) noexcept;
+  memtable &operator=(memtable &&) noexcept;
   ~memtable();
 
   [[nodiscard]] static memtable create(std::uint64_t capacity) noexcept;
@@ -83,6 +83,7 @@ class memtable final {
 
   std::uint64_t count_{0};
   std::uint64_t capacity_{0};
+  std::uint64_t bytes_allocated_{0};
 
   std::uint64_t min_sequence_{std::numeric_limits<std::uint64_t>::max()};
   std::uint64_t max_sequence_{std::numeric_limits<std::uint64_t>::min()};

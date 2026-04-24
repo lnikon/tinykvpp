@@ -6,6 +6,11 @@ if(GTest_FOUND)
     target_include_directories(assert_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
     add_test(NAME AssertTest COMMAND assert_test)
 
+    add_executable(arena_test arena_test.cpp)
+    target_link_libraries(arena_test PRIVATE frankie_lib GTest::gtest_main)
+    target_include_directories(arena_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
+    add_test(NAME ArenaTest COMMAND arena_test)
+
     add_executable(skiplist_test skiplist_test.cpp test_common.cpp)
     target_link_libraries(skiplist_test PRIVATE frankie_lib GTest::gtest_main)
     target_include_directories(skiplist_test PRIVATE ${CMAKE_SOURCE_DIR}/src)

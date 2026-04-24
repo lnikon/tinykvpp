@@ -185,6 +185,18 @@ TEST(MemtableTest, PutAndGetMultipleEntries) {
   EXPECT_EQ(v3->value(), "value3");
 }
 
+TEST(MemtableTest, PutMultipleKeys) {
+  auto mt = memtable::create(1024 * 1024);
+
+  mt.put("a", "1", 0, false);
+  mt.put("b", "2", 0, false);
+  mt.put("c", "3", 0, false);
+
+  EXPECT_EQ(mt.get("a").value().value(), "1");
+  EXPECT_EQ(mt.get("b").value().value(), "2");
+  EXPECT_EQ(mt.get("c").value().value(), "3");
+}
+
 TEST(MemtableTest, GetNonExistentKeyReturnsNullopt) {
   auto mt = memtable::create(1024 * 1024);
 
@@ -304,7 +316,7 @@ TEST(MemtableTest, RandomKeyValuePairs) {
 
   EXPECT_EQ(mt.count(), n);
 
-  for (const auto& [key, value] : entries) {
+  for (const auto &[key, value] : entries) {
     auto result = mt.get(key);
     EXPECT_TRUE(result.has_value()) << "Missing key: " << key;
     EXPECT_EQ(result->value(), value);

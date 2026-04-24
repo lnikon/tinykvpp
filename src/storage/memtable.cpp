@@ -1,5 +1,7 @@
 #include <cstring>
+#include <utility>
 
+#include "core/scratch_arena.hpp"
 #include "core/time.hpp"
 #include "storage/memtable.hpp"
 
@@ -14,7 +16,7 @@ std::string_view internal_key::encode(core::scratch_arena &arena) const noexcept
 
   const std::uint64_t total = user_key.size() + kMetadataSize;
   char *buf = arena.allocate(total);
-
+  std::memset(buf, 0, total);
   char *cursor = buf;
   std::memcpy(cursor, user_key.data(), user_key.size());
   cursor += user_key.size();
@@ -55,6 +57,39 @@ std::uint64_t kv_entry::bytes_allocated() const noexcept {
 // memtable
 // ================================================================================
 
+memtable::memtable(memtable &&other) noexcept
+    : scratch_arena_{std::exchange(other.scratch_arena_, {})},
+      arena_{std::exchange(other.arena_, {})},
+      skiplist_{std::exchange(other.skiplist_, {})},
+      count_{std::exchange(other.count_, 0)},
+      capacity_{std::exchange(other.capacity_, 0)},
+      bytes_allocated_{std::exchange(other.bytes_allocated_, 0)},
+      min_sequence_{std::exchange(other.min_sequence_, 0)},
+      max_sequence_{std::exchange(other.max_sequence_, 0)} {
+  // skiplist_ carried over a raw pointer to the *source* arena; re-point it
+  // at our own arena, which now owns the blocks the skiplist's nodes live in.
+  skiplist_.rebind_arena(&arena_);
+}
+
+memtable &memtable::operator=(memtable &&other) noexcept {
+  if (this == &other) {
+    return *this;
+  }
+
+  scratch_arena_ = std::exchange(other.scratch_arena_, {});
+  arena_ = std::exchange(other.arena_, {});
+  skiplist_ = std::exchange(other.skiplist_, {});
+  count_ = std::exchange(other.count_, 0);
+  capacity_ = std::exchange(other.capacity_, 0);
+  bytes_allocated_ = std::exchange(other.bytes_allocated_, 0);
+  min_sequence_ = std::exchange(other.min_sequence_, 0);
+  max_sequence_ = std::exchange(other.max_sequence_, 0);
+
+  skiplist_.rebind_arena(&arena_);
+
+  return *this;
+}
+
 memtable memtable::create(const std::uint64_t capacity) noexcept {
   memtable result;
   result.capacity_ = capacity;
@@ -76,8 +111,12 @@ void memtable::put(const std::string_view key, const std::string_view value, con
       .timestamp = core::wall_clock_ms(),
       .tombstone = is_tombstone,
   };
-  skiplist_.insert(ikey.encode(scratch_arena_), value);
+
+  const std::string_view ikey_encoded = ikey.encode(scratch_arena_);
+  skiplist_.insert(ikey_encoded, value);
+
   count_++;
+  bytes_allocated_ += ikey_encoded.size();
 }
 
 std::optional<kv_entry> memtable::get(const std::string_view key) const noexcept {
@@ -102,6 +141,6 @@ std::optional<kv_entry> memtable::get(const std::string_view key) const noexcept
 
 std::uint64_t memtable::count() const noexcept { return count_; }
 
-[[nodiscard]] std::uint64_t memtable::bytes_allocated() const noexcept { return arena_.bytes_allocated(); }
+[[nodiscard]] std::uint64_t memtable::bytes_allocated() const noexcept { return skiplist_.bytes_allocated(); }
 
 }  // namespace frankie::storage

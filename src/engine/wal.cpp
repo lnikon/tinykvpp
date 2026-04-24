@@ -228,8 +228,6 @@ bool wal_writer::sync() noexcept {
 }
 
 bool wal_writer::truncate() noexcept {
-  assert(fd_ != -1);
-
   if (fd_ == -1) {
     std::println("wal_writer::truncate: invalid file description. path={}, fd={}", path_.c_str(), fd_);
     return false;
@@ -318,15 +316,17 @@ std::optional<wal_reader> wal_reader::open(std::filesystem::path path) noexcept 
     std::println("wal_reader: failed to fstat wal. path={}", path.c_str());
     return std::nullopt;
   }
-  assert(statbuf.st_size >= 0);
   const auto file_size = static_cast<std::uint64_t>(statbuf.st_size);
 
   core::scratch_arena scratch_arena;
-  auto *buf = scratch_arena.allocate(file_size);
-  const ssize_t bytes_read = ::read(fd, buf, file_size);
-  if (bytes_read == 0) {
-    // EOF reached
-    return std::nullopt;
+  char *buf = nullptr;
+  if (file_size > 0) {
+    buf = scratch_arena.allocate(file_size);
+    const ssize_t bytes_read = ::read(fd, buf, file_size);
+    if (bytes_read == 0) {
+      // EOF reached
+      return std::nullopt;
+    }
   }
 
   std::optional<wal_reader> result;
