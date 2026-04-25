@@ -3,6 +3,7 @@
 #include <cassert>
 #include <optional>
 
+#include "core/assert.hpp"
 #include "core/scratch_arena.hpp"
 #include "storage/skiplist.hpp"
 
@@ -29,8 +30,8 @@ struct internal_key final {
 // ================================================================================
 struct internal_key_comparator {
   constexpr int operator()(const std::string_view a, const std::string_view b) const noexcept {
-    assert(a.size() >= internal_key::kMetadataSize);
-    assert(b.size() >= internal_key::kMetadataSize);
+    FR_VERIFY(a.size() >= internal_key::kMetadataSize);
+    FR_VERIFY(b.size() >= internal_key::kMetadataSize);
     return simd_comparator{}(a.substr(0, a.size() - internal_key::kMetadataSize),
                              b.substr(0, b.size() - internal_key::kMetadataSize));
   }

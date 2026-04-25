@@ -30,7 +30,7 @@ std::string_view internal_key::encode(core::scratch_arena &arena) const noexcept
 }
 
 internal_key internal_key::decode(const std::string_view encoded) noexcept {
-  assert(encoded.size() >= kMetadataSize);
+  FR_VERIFY(encoded.size() >= kMetadataSize);
   const auto user_key_size = encoded.size() - kMetadataSize;
 
   internal_key result;

@@ -89,7 +89,7 @@ TEST(AssertPrintValueTest, FloatingPoint) {
 
 TEST(AssertPrintValueTest, ConstCharPointer) {
   auto buf = make_buf();
-  const char* msg = "hello";
+  const char *msg = "hello";
   frankie::assert_detail::print_value(buf.data(), k_buf_size, msg);
   EXPECT_STREQ(buf.data(), "\"hello\"");
 }
@@ -97,21 +97,21 @@ TEST(AssertPrintValueTest, ConstCharPointer) {
 TEST(AssertPrintValueTest, MutableCharPointer) {
   auto buf = make_buf();
   char msg[] = "world";
-  char* ptr = msg;
+  char *ptr = msg;
   frankie::assert_detail::print_value(buf.data(), k_buf_size, ptr);
   EXPECT_STREQ(buf.data(), "\"world\"");
 }
 
 TEST(AssertPrintValueTest, NullConstCharPointer) {
   auto buf = make_buf();
-  const char* msg = nullptr;
+  const char *msg = nullptr;
   frankie::assert_detail::print_value(buf.data(), k_buf_size, msg);
   EXPECT_STREQ(buf.data(), "nullptr");
 }
 
 TEST(AssertPrintValueTest, NullVoidPointer) {
   auto buf = make_buf();
-  void* ptr = nullptr;
+  void *ptr = nullptr;
   frankie::assert_detail::print_value(buf.data(), k_buf_size, ptr);
   EXPECT_STREQ(buf.data(), "nullptr");
 }
@@ -119,7 +119,7 @@ TEST(AssertPrintValueTest, NullVoidPointer) {
 TEST(AssertPrintValueTest, NonNullVoidPointer) {
   auto buf = make_buf();
   int x = 42;
-  void* ptr = &x;
+  void *ptr = &x;
   frankie::assert_detail::print_value(buf.data(), k_buf_size, ptr);
   EXPECT_GT(std::strlen(buf.data()), 0u);
   EXPECT_STRNE(buf.data(), "nullptr");
@@ -270,9 +270,7 @@ TEST(AssertDecomposerTest, CapturesSingleValue) {
 // has_format_details SFINAE
 // ============================================================================
 
-TEST(AssertHasFormatDetailsTest, FalseForExpressionValue) {
-  EXPECT_FALSE(has_format_details_v<expression_value<int>>);
-}
+TEST(AssertHasFormatDetailsTest, FalseForExpressionValue) { EXPECT_FALSE(has_format_details_v<expression_value<int>>); }
 
 TEST(AssertHasFormatDetailsTest, FalseForPlainType) {
   EXPECT_FALSE(has_format_details_v<int>);
@@ -357,16 +355,16 @@ TEST(AssertMacroTest, AssumePassesWithoutAbort) {
 
 TEST(AssertMacroTest, AssertNotNullReturnsPointer) {
   int x = 42;
-  int* ptr = &x;
-  int* result = FR_ASSERT_NOT_NULL(ptr);
+  int *ptr = &x;
+  int *result = FR_ASSERT_NOT_NULL(ptr);
   EXPECT_EQ(result, &x);
   EXPECT_EQ(*result, 42);
 }
 
 TEST(AssertMacroTest, AssertNotNullUsableInExpressionContext) {
   int x = 7;
-  int* ptr = &x;
-  if (int* result = FR_ASSERT_NOT_NULL(ptr)) {
+  int *ptr = &x;
+  if (int *result = FR_ASSERT_NOT_NULL(ptr)) {
     EXPECT_EQ(*result, 7);
   } else {
     FAIL() << "non-null pointer should have been returned";
@@ -450,7 +448,7 @@ TEST(AssertDeathTest, AssertNotNullOnNullAborts) {
   EXPECT_DEATH(
       {
         set_failure_handler(nullptr);
-        int* ptr = nullptr;
+        int *ptr = nullptr;
         FR_ASSERT_NOT_NULL(ptr);
       },
       "Unexpected null pointer");
@@ -477,25 +475,14 @@ TEST(AssertDeathTest, DebugAssertFailureEmitsDebugAssert) {
 }
 #endif
 
-#if FR_ASSERT_LEVEL >= 2
-TEST(AssertDeathTest, AssumeFailureEmitsAssumption) {
-  EXPECT_DEATH(
-      {
-        set_failure_handler(nullptr);
-        FR_ASSUME(false);
-      },
-      "ASSUMPTION FAILED");
-}
-#endif
-
 // ============================================================================
 // Death tests - custom failure handler
 // ============================================================================
 
 namespace {
 
-void stderr_tagging_handler(assert_level level, const char* expression, const char* message,
-                            const source_location& loc) noexcept {
+void stderr_tagging_handler(assert_level level, const char *expression, const char *message,
+                            const source_location &loc) noexcept {
   (void)loc;
   std::fprintf(stderr, "CUSTOM_HANDLER level=%d expr=%s msg=%s\n", static_cast<int>(level),
                expression ? expression : "<null>", message ? message : "<null>");

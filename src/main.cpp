@@ -1,43 +1,16 @@
-#include <cstdint>
-#include <map>
-#include <string>
+#include "core/assert.hpp"
 
-namespace frankie {
-
-using i8 = std::int8_t;
-using i16 = std::int16_t;
-using i32 = std::int32_t;
-using i64 = std::int64_t;
-
-using u8 = std::uint8_t;
-using u16 = std::uint16_t;
-using u32 = std::uint32_t;
-using u64 = std::uint64_t;
-
-namespace storage {
-
-struct memtable {
-  std::map<std::string, std::string> table_;
-};
-
-bool memtable_put(memtable *memtable, std::string key, std::string value) noexcept {
-  return memtable->table_.emplace(key, value).second;
-}
-
-bool memtable_get(memtable *memtable, const std::string &key, std::string &value) noexcept {
-  if (const auto it = memtable->table_.find(key); it != memtable->table_.end()) {
-    value = it->second;
-    return true;
-  }
-  return false;
-}
-
-}  // namespace storage
-
-}  // namespace frankie
+// #include <cstdint>
+// using i8 = std::int8_t;
+// using i16 = std::int16_t;
+// using i32 = std::int32_t;
+// using i64 = std::int64_t;
+// using u8 = std::uint8_t;
+// using u16 = std::uint16_t;
+// using u32 = std::uint32_t;
+// using u64 = std::uint64_t;
 
 int main() {
-  using namespace frankie;
-
+  FR_DEBUG_ASSERT(&"foo"[0] == &"bar"[0]);
   return 0;
 }

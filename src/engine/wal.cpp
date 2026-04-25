@@ -8,6 +8,7 @@
 #include <print>
 #include <utility>
 
+#include "core/assert.hpp"
 #include "core/crc32.hpp"
 #include "core/scratch_arena.hpp"
 #include "engine/wal.hpp"
@@ -196,7 +197,7 @@ std::optional<wal_writer> wal_writer::open(std::filesystem::path path, std::uint
 }
 
 bool wal_writer::append(const wal_entry &entry) noexcept {
-  assert(fd_ != -1);
+  FR_VERIFY_MSG(fd_ != -1, "wal writer file descriptor should not be empty");
 
   const auto encoded_entry = entry.encode(scratch_arena_);
 
@@ -216,7 +217,7 @@ bool wal_writer::append(const wal_entry &entry) noexcept {
 }
 
 bool wal_writer::sync() noexcept {
-  assert(fd_ != -1);
+  FR_VERIFY_MSG(fd_ != -1, "wal writer file descriptor should not be empty");
 
   const std::int32_t rc = fdatasync(fd_);
   if (rc != 0) {
