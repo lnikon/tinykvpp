@@ -6,6 +6,8 @@
 #include <optional>
 #include <string>
 
+#include "core/config.hpp"
+
 using namespace frankie::engine;
 
 class EngineTest : public ::testing::Test {
@@ -20,6 +22,17 @@ class EngineTest : public ::testing::Test {
   void TearDown() override { std::filesystem::remove_all(tmp_dir_); }
 
   [[nodiscard]] std::filesystem::path wal_path() const { return tmp_dir_ / "test.wal"; }
+
+  [[nodiscard]] frankie::core::config make_config(std::uint64_t memtable_capacity = 1024 * 1024,
+                                                  std::uint64_t wal_capacity = 1024 * 1024) const {
+    return frankie::core::config{
+        .root_dir_path = tmp_dir_,
+        .wal_path = wal_path(),
+        .sstable_dir_path = tmp_dir_ / "segments",
+        .wal_capacity = wal_capacity,
+        .memtable_capacity = memtable_capacity,
+    };
+  }
 };
 
 // ---------------------------------------------------------------------------
@@ -27,12 +40,19 @@ class EngineTest : public ::testing::Test {
 // ---------------------------------------------------------------------------
 
 TEST_F(EngineTest, CreateSucceedsWithValidPath) {
-  auto eng = engine::create(wal_path(), 1024 * 1024, 1024 * 1024);
+  auto eng = engine::create(make_config());
   ASSERT_TRUE(eng.has_value());
 }
 
 TEST_F(EngineTest, CreateFailsWithInvalidPath) {
-  auto eng = engine::create("/nonexistent/dir/wal", 1024, 1024);
+  frankie::core::config cfg{
+      .root_dir_path = "/nonexistent/dir",
+      .wal_path = "/nonexistent/dir/wal",
+      .sstable_dir_path = "/nonexistent/dir/segments",
+      .wal_capacity = 1024,
+      .memtable_capacity = 1024,
+  };
+  auto eng = engine::create(cfg);
   ASSERT_FALSE(eng.has_value());
 }
 
@@ -41,7 +61,7 @@ TEST_F(EngineTest, CreateFailsWithInvalidPath) {
 // ---------------------------------------------------------------------------
 
 TEST_F(EngineTest, PutAndGetSingleKey) {
-  auto eng = engine::create(wal_path(), 1024 * 1024, 1024 * 1024);
+  auto eng = engine::create(make_config());
   ASSERT_TRUE(eng.has_value());
 
   ASSERT_TRUE(eng->put("key1", "value1"));
@@ -52,7 +72,7 @@ TEST_F(EngineTest, PutAndGetSingleKey) {
 }
 
 TEST_F(EngineTest, GetNonExistentKeyReturnsNullopt) {
-  auto eng = engine::create(wal_path(), 1024 * 1024, 1024 * 1024);
+  auto eng = engine::create(make_config());
   ASSERT_TRUE(eng.has_value());
 
   auto result = eng->get("missing");
@@ -60,7 +80,7 @@ TEST_F(EngineTest, GetNonExistentKeyReturnsNullopt) {
 }
 
 TEST_F(EngineTest, PutOverwritesValue) {
-  auto eng = engine::create(wal_path(), 1024 * 1024, 1024 * 1024);
+  auto eng = engine::create(make_config());
   ASSERT_TRUE(eng.has_value());
 
   ASSERT_TRUE(eng->put("key", "v1"));
@@ -72,7 +92,7 @@ TEST_F(EngineTest, PutOverwritesValue) {
 }
 
 TEST_F(EngineTest, PutMultipleKeys) {
-  auto eng = engine::create(wal_path(), 1024 * 1024, 1024 * 1024);
+  auto eng = engine::create(make_config());
   ASSERT_TRUE(eng.has_value());
 
   ASSERT_TRUE(eng->put("a", "1"));
@@ -89,7 +109,7 @@ TEST_F(EngineTest, PutMultipleKeys) {
 // ---------------------------------------------------------------------------
 
 TEST_F(EngineTest, DeleteMakesKeyUnreachable) {
-  auto eng = engine::create(wal_path(), 1024 * 1024, 1024 * 1024);
+  auto eng = engine::create(make_config());
   ASSERT_TRUE(eng.has_value());
 
   ASSERT_TRUE(eng->put("key", "value"));
@@ -100,7 +120,7 @@ TEST_F(EngineTest, DeleteMakesKeyUnreachable) {
 }
 
 TEST_F(EngineTest, DeleteNonExistentKeyDoesNotCrash) {
-  auto eng = engine::create(wal_path(), 1024 * 1024, 1024 * 1024);
+  auto eng = engine::create(make_config());
   ASSERT_TRUE(eng.has_value());
 
   // Tombstone for a non-existent key is a valid no-op.
@@ -110,7 +130,7 @@ TEST_F(EngineTest, DeleteNonExistentKeyDoesNotCrash) {
 }
 
 TEST_F(EngineTest, PutAfterDeleteRecoversKey) {
-  auto eng = engine::create(wal_path(), 1024 * 1024, 1024 * 1024);
+  auto eng = engine::create(make_config());
   ASSERT_TRUE(eng.has_value());
 
   ASSERT_TRUE(eng->put("key", "v1"));
@@ -130,7 +150,7 @@ TEST_F(EngineTest, PutAfterDeleteRecoversKey) {
 TEST_F(EngineTest, RotationMovesActiveToImmutable) {
   // Use a very small memtable capacity to force rotation quickly.
   constexpr std::uint64_t kTinyCapacity = 512;
-  auto eng = engine::create(wal_path(), kTinyCapacity, 4 * 1024 * 1024);
+  auto eng = engine::create(make_config(kTinyCapacity, 4 * 1024 * 1024));
   ASSERT_TRUE(eng.has_value());
 
   // Insert a key that fits in the first active memtable.
@@ -153,7 +173,7 @@ TEST_F(EngineTest, RotationMovesActiveToImmutable) {
 
 TEST_F(EngineTest, RotationNewKeysShadowImmutable) {
   constexpr std::uint64_t kTinyCapacity = 512;
-  auto eng = engine::create(wal_path(), kTinyCapacity, 4 * 1024 * 1024);
+  auto eng = engine::create(make_config(kTinyCapacity, 4 * 1024 * 1024));
   ASSERT_TRUE(eng.has_value());
 
   ASSERT_TRUE(eng->put("key", "old"));
@@ -171,7 +191,7 @@ TEST_F(EngineTest, RotationNewKeysShadowImmutable) {
 
 TEST_F(EngineTest, DeleteInImmutableIsRespected) {
   constexpr std::uint64_t kTinyCapacity = 512;
-  auto eng = engine::create(wal_path(), kTinyCapacity, 4 * 1024 * 1024);
+  auto eng = engine::create(make_config(kTinyCapacity, 4 * 1024 * 1024));
   ASSERT_TRUE(eng.has_value());
 
   ASSERT_TRUE(eng->put("key", "value"));
@@ -191,7 +211,7 @@ TEST_F(EngineTest, DeleteInImmutableIsRespected) {
 
 TEST_F(EngineTest, DeletedKeyInActiveDoesNotResurfaceAfterRotation) {
   constexpr std::uint64_t kTinyCapacity = 512;
-  auto eng = engine::create(wal_path(), kTinyCapacity, 4 * 1024 * 1024);
+  auto eng = engine::create(make_config(kTinyCapacity, 4 * 1024 * 1024));
   ASSERT_TRUE(eng.has_value());
 
   // Put and delete in the active memtable.
@@ -209,7 +229,7 @@ TEST_F(EngineTest, DeletedKeyInActiveDoesNotResurfaceAfterRotation) {
 
 TEST_F(EngineTest, DeleteInActiveOverridesPutInImmutable) {
   constexpr std::uint64_t kTinyCapacity = 512;
-  auto eng = engine::create(wal_path(), kTinyCapacity, 4 * 1024 * 1024);
+  auto eng = engine::create(make_config(kTinyCapacity, 4 * 1024 * 1024));
   ASSERT_TRUE(eng.has_value());
 
   // Put a key that will land in immutable after rotation.
@@ -226,7 +246,7 @@ TEST_F(EngineTest, DeleteInActiveOverridesPutInImmutable) {
 
 TEST_F(EngineTest, DeleteInImmutableDoesNotBlockNewPutInActive) {
   constexpr std::uint64_t kTinyCapacity = 512;
-  auto eng = engine::create(wal_path(), kTinyCapacity, 4 * 1024 * 1024);
+  auto eng = engine::create(make_config(kTinyCapacity, 4 * 1024 * 1024));
   ASSERT_TRUE(eng.has_value());
 
   // Put then delete — both will move to immutable.
@@ -245,7 +265,7 @@ TEST_F(EngineTest, DeleteInImmutableDoesNotBlockNewPutInActive) {
 }
 
 TEST_F(EngineTest, MultipleDeletesDoNotResurrectKey) {
-  auto eng = engine::create(wal_path(), 1024 * 1024, 1024 * 1024);
+  auto eng = engine::create(make_config());
   ASSERT_TRUE(eng.has_value());
 
   ASSERT_TRUE(eng->put("key", "value"));
@@ -260,7 +280,7 @@ TEST_F(EngineTest, MultipleDeletesDoNotResurrectKey) {
 // ---------------------------------------------------------------------------
 
 TEST_F(EngineTest, LatestPutWins) {
-  auto eng = engine::create(wal_path(), 1024 * 1024, 1024 * 1024);
+  auto eng = engine::create(make_config());
   ASSERT_TRUE(eng.has_value());
 
   for (int i = 0; i < 100; ++i) {
@@ -277,7 +297,7 @@ TEST_F(EngineTest, LatestPutWins) {
 // ---------------------------------------------------------------------------
 
 TEST_F(EngineTest, MoveConstructedEngineWorks) {
-  auto eng = engine::create(wal_path(), 1024 * 1024, 1024 * 1024);
+  auto eng = engine::create(make_config());
   ASSERT_TRUE(eng.has_value());
   ASSERT_TRUE(eng->put("key", "value"));
 
@@ -297,7 +317,7 @@ TEST_F(EngineTest, MoveConstructedEngineWorks) {
 // ---------------------------------------------------------------------------
 
 TEST_F(EngineTest, EmptyKeyAndValue) {
-  auto eng = engine::create(wal_path(), 1024 * 1024, 1024 * 1024);
+  auto eng = engine::create(make_config());
   ASSERT_TRUE(eng.has_value());
 
   ASSERT_TRUE(eng->put("", ""));
@@ -307,7 +327,7 @@ TEST_F(EngineTest, EmptyKeyAndValue) {
 }
 
 TEST_F(EngineTest, LargeKeyAndValue) {
-  auto eng = engine::create(wal_path(), 4 * 1024 * 1024, 4 * 1024 * 1024);
+  auto eng = engine::create(make_config(4 * 1024 * 1024, 4 * 1024 * 1024));
   ASSERT_TRUE(eng.has_value());
 
   const std::string large_key(1024, 'K');
@@ -320,7 +340,7 @@ TEST_F(EngineTest, LargeKeyAndValue) {
 }
 
 TEST_F(EngineTest, ManyPutsWithoutRotation) {
-  auto eng = engine::create(wal_path(), 64 * 1024 * 1024, 64 * 1024 * 1024);
+  auto eng = engine::create(make_config(64 * 1024 * 1024, 64 * 1024 * 1024));
   ASSERT_TRUE(eng.has_value());
 
   constexpr int kCount = 1000;

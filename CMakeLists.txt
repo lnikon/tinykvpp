@@ -67,22 +67,13 @@ target_link_libraries(frankie frankie_lib)
 
 if(GTest_FOUND)
     enable_testing()
-
-    # add_executable(main_test src/main_test.cpp)
-    # target_link_libraries(main_test PRIVATE frankie_lib GTest::gtest_main)
-    # add_test(NAME MainTest COMMAND main_test)
-
     add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/test)
-
     message(STATUS "GTest found - testing enabled")
 else()
     message(STATUS "GTest not found - testing disabled")
 endif()
 
 if(benchmark_FOUND)
-    # add_executable(main_bench src/main_bench.cpp)
-    # target_link_libraries(main_bench PRIVATE frankie_lib benchmark::benchmark)
-
     message(STATUS "GoogleBenchmark found - benchmarks are enabled")
 else()
     message(STATUS "GoogleBenchmark not found - benchmarks are disabled")

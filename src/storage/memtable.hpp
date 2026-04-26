@@ -77,6 +77,8 @@ class memtable final {
 
   [[nodiscard]] std::uint64_t bytes_allocated() const noexcept;
 
+  [[nodiscard]] std::uint64_t capacity() const noexcept;
+
  private:
   mutable core::scratch_arena scratch_arena_;
   core::arena arena_;

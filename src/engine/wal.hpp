@@ -4,14 +4,15 @@
 #include <filesystem>
 #include <string_view>
 
+#include "core/config.hpp"
 #include "core/scratch_arena.hpp"
-#include "storage/memtable.hpp"
 
 namespace frankie::engine {
 
 enum class wal_operation : std::uint8_t {
   put,
   del,
+  foo,
 };
 
 struct wal_entry final {
@@ -57,7 +58,7 @@ class wal_writer final {
   std::filesystem::path path_;
   std::int32_t fd_{-1};
 
-  std::uint64_t capacity_{0};
+  std::uint64_t capacity_{core::kDefaultWalCapacity};
 
   core::scratch_arena scratch_arena_;
 };

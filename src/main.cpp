@@ -1,16 +1,78 @@
-#include "core/assert.hpp"
+#include <cstdlib>
+#include <iostream>
+#include <print>
+#include <ranges>
+#include <string>
+#include <string_view>
+#include <vector>
 
-// #include <cstdint>
-// using i8 = std::int8_t;
-// using i16 = std::int16_t;
-// using i32 = std::int32_t;
-// using i64 = std::int64_t;
-// using u8 = std::uint8_t;
-// using u16 = std::uint16_t;
-// using u32 = std::uint32_t;
-// using u64 = std::uint64_t;
+#include "core/config.hpp"
+#include "engine/engine.hpp"
+
+namespace fr = frankie;
+
+namespace {
+
+[[nodiscard]] std::vector<std::string_view> tokenize(std::string_view line) noexcept {
+  auto view = line | std::views::split(' ') |
+              std::views::transform([](auto &&range) { return std::string_view(range.begin(), range.end()); }) |
+              std::views::filter([](std::string_view tok) { return !tok.empty(); });
+  return {view.begin(), view.end()};
+}
+
+}  // namespace
 
 int main() {
-  FR_DEBUG_ASSERT(&"foo"[0] == &"bar"[0]);
+  fr::core::config config{};
+
+  auto engine = fr::engine::engine::create(config);
+  if (!engine.has_value()) {
+    std::println("Failed to create a engine. Exiting...");
+    return EXIT_FAILURE;
+  }
+
+  std::string cmdline;
+  std::print("> ");
+  while (std::getline(std::cin, cmdline)) {
+    const auto tokens = tokenize(cmdline);
+    if (tokens.empty()) {
+      std::print("> ");
+      continue;
+    }
+
+    const std::string_view command = tokens.front();
+    if (command == "PUT") {
+      if (tokens.size() != 3) {
+        std::println("Usage: PUT <key> <value>");
+      } else if (auto s = engine->put(tokens[1], tokens[2]); !s) {
+        std::println("PUT failed");
+      } else {
+        std::println("OK");
+      }
+    } else if (command == "GET") {
+      if (tokens.size() != 2) {
+        std::println("Usage: GET <key>");
+      } else if (auto value = engine->get(tokens[1]); value.has_value()) {
+        std::println("{}", *value);
+      } else {
+        std::println("(nil)");
+      }
+    } else if (command == "DEL") {
+      if (tokens.size() != 2) {
+        std::println("Usage: DEL <key>");
+      } else if (!engine->del(tokens[1])) {
+        std::println("DEL failed");
+      } else {
+        std::println("OK");
+      }
+    } else if (command == "EXIT" || command == "QUIT") {
+      break;
+    } else {
+      std::println("Unknown command: {}", command);
+    }
+
+    std::print("> ");
+  }
+
   return 0;
 }

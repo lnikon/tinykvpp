@@ -141,6 +141,8 @@ std::optional<kv_entry> memtable::get(const std::string_view key) const noexcept
 
 std::uint64_t memtable::count() const noexcept { return count_; }
 
-[[nodiscard]] std::uint64_t memtable::bytes_allocated() const noexcept { return skiplist_.bytes_allocated(); }
+std::uint64_t memtable::bytes_allocated() const noexcept { return skiplist_.bytes_allocated(); }
+
+std::uint64_t memtable::capacity() const noexcept { return capacity_; }
 
 }  // namespace frankie::storage

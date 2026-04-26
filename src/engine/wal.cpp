@@ -207,7 +207,7 @@ bool wal_writer::append(const wal_entry &entry) noexcept {
     return false;
   }
 
-  const int rc = fdatasync(fd_);
+  const int rc = ::fdatasync(fd_);
   if (rc != 0) {
     std::println("wal_writer: fdatasync failed. rc={}, errno={}", rc, strerror(errno));
     return false;
@@ -219,7 +219,7 @@ bool wal_writer::append(const wal_entry &entry) noexcept {
 bool wal_writer::sync() noexcept {
   FR_VERIFY_MSG(fd_ != -1, "wal writer file descriptor should not be empty");
 
-  const std::int32_t rc = fdatasync(fd_);
+  const std::int32_t rc = ::fdatasync(fd_);
   if (rc != 0) {
     std::println("wal_writer: fdatasync failed. rc={}, errno={}", rc, strerror(errno));
     return false;
