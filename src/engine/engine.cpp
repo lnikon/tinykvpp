@@ -125,7 +125,7 @@ void engine::scan(std::string_view range_start_key, std::string_view range_end_k
 
 std::expected<void, core::status> engine::maybe_rotate_memtable(const std::uint64_t incoming_bytes) noexcept {
   if (memtable_active_.bytes_allocated() + incoming_bytes <= memtable_active_.capacity()) {
-    return core::unexpected(core::status_code::io_error);
+    return {};
   }
   memtable_immutable_.emplace(std::move(memtable_active_));
   memtable_active_ = storage::memtable::create(memtable_active_.capacity());

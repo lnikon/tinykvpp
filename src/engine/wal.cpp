@@ -1,15 +1,11 @@
-#include <fcntl.h>
-#include <sys/stat.h>
-#include <unistd.h>
-#include <cassert>
 #include <cstdint>
 #include <cstring>
 #include <optional>
 #include <print>
 #include <utility>
 
-#include "core/assert.hpp"
 #include "core/crc32.hpp"
+#include "core/fs.hpp"
 #include "core/scratch_arena.hpp"
 #include "engine/wal.hpp"
 
@@ -133,8 +129,7 @@ std::optional<wal_entry> wal_entry::decode(std::string_view &encoded) noexcept {
 // wal_writer
 // =============================================================================
 wal_writer::wal_writer(wal_writer &&other) noexcept
-    : path_{std::exchange(other.path_, std::filesystem::path{})},
-      fd_{std::exchange(other.fd_, -1)},
+    : file_{std::exchange(other.file_, {})},
       capacity_{std::exchange(other.capacity_, 0)},
       scratch_arena_{std::move(other.scratch_arena_)} {}
 
@@ -143,141 +138,47 @@ wal_writer &wal_writer::operator=(wal_writer &&other) noexcept {
     return *this;
   }
 
-  if (fd_ != -1) {
-    if (!close()) {
-      std::println("wal_writer: close failed during move-assign, fd={}, errno={}\n", fd_, strerror(errno));
-    }
-  }
+  (void)file_.close();
 
-  path_ = std::exchange(other.path_, std::filesystem::path{});
-  fd_ = std::exchange(other.fd_, -1);
+  file_ = std::exchange(other.file_, {});
   capacity_ = std::exchange(other.capacity_, 0);
   scratch_arena_ = std::move(other.scratch_arena_);
 
   return *this;
 }
 
-wal_writer::~wal_writer() noexcept {
-  if (fd_ != -1) {
-    if (!close()) {
-      std::println("wal_writer: close failed during dtor, fd={}, errno={}\n", fd_, strerror(errno));
-    }
-  }
-}
+wal_writer::~wal_writer() noexcept = default;
 
 std::optional<wal_writer> wal_writer::open(std::filesystem::path path, std::uint64_t capacity) noexcept {
-  const std::int32_t fd = ::open(path.c_str(), O_WRONLY | O_CREAT | O_APPEND, 0644);
-  if (fd == -1) {
-    std::println("wal_writer: failed to open file. path={}, fd={}, errno={}", path.c_str(), fd, strerror(errno));
-    return std::nullopt;
-  }
-
-  // fsync() parent directory of the WAL to synchronize its metadata with its content
-  const auto &parent_dir_path = path.parent_path();
-  const std::int32_t parent_dir_fd = ::open(parent_dir_path.c_str(), O_RDONLY);
-  if (parent_dir_fd == -1) {
-    std::println("wal_writer: failed to open parent dir. dir={}, fd={}, errno={}", parent_dir_path.c_str(),
-                 parent_dir_fd, strerror(errno));
-    return std::nullopt;
-  }
-  const std::int32_t parent_rc = ::fsync(parent_dir_fd);
-  ::close(parent_dir_fd);
-  if (parent_rc != 0) {
-    std::println("wal_writer: fsync failed. dir={}, rc={}, errno={}", parent_dir_path.c_str(), parent_rc,
-                 strerror(errno));
+  auto file = core::append_only_file::open(std::move(path));
+  if (!file) {
     return std::nullopt;
   }
 
   std::optional<wal_writer> result;
   result.emplace();
-  result->path_ = std::move(path);
-  result->fd_ = fd;
+  result->file_ = std::move(file.value());
   result->capacity_ = capacity;
   return result;
 }
 
 bool wal_writer::append(const wal_entry &entry) noexcept {
-  FR_VERIFY_MSG(fd_ != -1, "wal writer file descriptor should not be empty");
-
   const auto encoded_entry = entry.encode(scratch_arena_);
-
-  const ssize_t written = ::write(fd_, encoded_entry.data(), encoded_entry.size());
-  if (written != static_cast<ssize_t>(encoded_entry.size())) {
-    std::println("wal_writer: write failed. written={}", written);
-    return false;
-  }
-
-  const int rc = ::fdatasync(fd_);
-  if (rc != 0) {
-    std::println("wal_writer: fdatasync failed. rc={}, errno={}", rc, strerror(errno));
-    return false;
-  }
-
-  return true;
+  return file_.append_fsync(encoded_entry).has_value();
 }
 
-bool wal_writer::sync() noexcept {
-  FR_VERIFY_MSG(fd_ != -1, "wal writer file descriptor should not be empty");
+bool wal_writer::sync() noexcept { return file_.sync().has_value(); }
 
-  const std::int32_t rc = ::fdatasync(fd_);
-  if (rc != 0) {
-    std::println("wal_writer: fdatasync failed. rc={}, errno={}", rc, strerror(errno));
-    return false;
-  }
+bool wal_writer::truncate() noexcept { return file_.truncate().has_value(); }
 
-  return true;
-}
-
-bool wal_writer::truncate() noexcept {
-  if (fd_ == -1) {
-    std::println("wal_writer::truncate: invalid file description. path={}, fd={}", path_.c_str(), fd_);
-    return false;
-  }
-
-  const std::int32_t rc = ::ftruncate(fd_, 0);
-  if (rc == -1) {
-    std::println("wal_writer::truncate: failed to truncate wal. path={}, fd={}, errno={}", path_.c_str(), fd_,
-                 strerror(errno));
-    return false;
-  }
-
-  const off_t off = ::lseek(fd_, 0, SEEK_SET);
-  if (off == -1) {
-    std::println("wal_writer::truncate: failed to lseek wal. path={}, fd={}, errno={}", path_.c_str(), fd_,
-                 strerror(errno));
-    return false;
-  }
-
-  return true;
-}
-
-bool wal_writer::close() noexcept {
-  // close() is a good example of why dealing with filesystems is a pain in the butt.
-  // It may fail, and has limited error codes to return.
-  // Thing is, the Linux implementation of close() frees fd early in the implementation,
-  // which means regardless of the close() failing, the fd is gone anyway.
-  // This makes retrying close(fd) impossible.
-  // A proper handling of close() boils down to two things (according to `man 2 close`):
-  // 1. Precede close() with an fsync() or succeed write() with an fsync() (which we do in append()),
-  // 2. Log on close() error.
-  if (fd_ != -1) {
-    const std::int32_t rc = ::close(fd_);
-    fd_ = -1;
-    if (rc != 0) {
-      std::println("wal_writer: close failed. rc={}, errno={}", rc, strerror(errno));
-      return false;
-    }
-  }
-  return true;
-}
+bool wal_writer::close() noexcept { return file_.close().has_value(); }
 
 // =============================================================================
 // wal_reader
 // =============================================================================
 wal_reader::wal_reader(wal_reader &&other) noexcept
-    : path_{std::exchange(other.path_, {})},
-      fd_{std::exchange(other.fd_, -1)},
-      scratch_arena_{std::exchange(other.scratch_arena_, {})},
+    : file_{std::move(other.file_)},
+      scratch_arena_{std::move(other.scratch_arena_)},
       wal_view_{std::exchange(other.wal_view_, {})} {}
 
 wal_reader &wal_reader::operator=(wal_reader &&other) noexcept {
@@ -285,72 +186,57 @@ wal_reader &wal_reader::operator=(wal_reader &&other) noexcept {
     return *this;
   }
 
-  if (fd_ != -1) {
-    if (!close()) {
-      std::println("wal_reader: close failed during move-assign, fd={}, errno={}\n", fd_, strerror(errno));
-    }
-  }
+  (void)file_.close();
 
-  path_ = std::exchange(other.path_, std::filesystem::path{});
-  fd_ = std::exchange(other.fd_, -1);
+  file_ = std::move(other.file_);
   scratch_arena_ = std::move(other.scratch_arena_);
   wal_view_ = std::exchange(other.wal_view_, {});
 
   return *this;
 }
 
-wal_reader::~wal_reader() noexcept {
-  if (!close()) {
-    std::println("wal_reader: failed to close reader during destruction");
-  }
-}
+wal_reader::~wal_reader() noexcept = default;
 
 std::optional<wal_reader> wal_reader::open(std::filesystem::path path) noexcept {
-  const std::int32_t fd = ::open(path.c_str(), O_RDONLY, 0644);
-  if (fd == -1) {
-    std::println("wal_reader: failed to open file. path={}, fd={}, errno={}", path.c_str(), fd, strerror(errno));
+  auto file = core::random_access_file::open_read(std::move(path));
+  if (!file) {
     return std::nullopt;
   }
 
-  struct stat statbuf{};
-  if (fstat(fd, &statbuf) == -1) {
-    std::println("wal_reader: failed to fstat wal. path={}", path.c_str());
+  auto file_size = file->size();
+  if (!file_size) {
     return std::nullopt;
   }
-  const auto file_size = static_cast<std::uint64_t>(statbuf.st_size);
+  if (file_size.value() == 0) {
+    // Empty WAL — nothing to recover. Caller proceeds as if no log existed.
+    return std::nullopt;
+  }
 
   core::scratch_arena scratch_arena;
-  char *buf = nullptr;
-  if (file_size > 0) {
-    buf = scratch_arena.allocate(file_size);
-    const ssize_t bytes_read = ::read(fd, buf, file_size);
-    if (bytes_read == 0) {
-      // EOF reached
+  char *buf = scratch_arena.allocate(file_size.value());
+
+  // Slurp the entire file. Loop on short reads — pread on a regular file only
+  // returns short at EOF, which here means the file shrank between size() and
+  // read() (a race or truncation): treat as recovery failure.
+  std::uint64_t total = 0;
+  while (total < file_size.value()) {
+    auto chunk = file->read({buf + total, file_size.value() - total}, total);
+    if (!chunk) {
       return std::nullopt;
     }
+    total += chunk.value();
   }
 
   std::optional<wal_reader> result;
   result.emplace();
-  result->path_ = std::move(path);
-  result->fd_ = fd;
+  result->file_ = std::move(file.value());
   result->scratch_arena_ = std::move(scratch_arena);
-  result->wal_view_ = {buf, file_size};
+  result->wal_view_ = {buf, file_size.value()};
   return result;
 }
 
 [[nodiscard]] std::optional<wal_entry> wal_reader::read() noexcept { return wal_entry::decode(wal_view_); }
 
-[[nodiscard]] bool wal_reader::close() noexcept {
-  if (fd_ != -1) {
-    const std::int32_t rc = ::close(fd_);
-    fd_ = -1;
-    if (rc != 0) {
-      std::println("wal_reader: close failed. rc={}, errno={}", rc, strerror(errno));
-      return false;
-    }
-  }
-  return true;
-}
+[[nodiscard]] bool wal_reader::close() noexcept { return file_.close().has_value(); }
 
 }  // namespace frankie::engine

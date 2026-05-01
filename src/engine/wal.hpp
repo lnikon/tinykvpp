@@ -5,6 +5,7 @@
 #include <string_view>
 
 #include "core/config.hpp"
+#include "core/fs.hpp"
 #include "core/scratch_arena.hpp"
 
 namespace frankie::engine {
@@ -12,7 +13,6 @@ namespace frankie::engine {
 enum class wal_operation : std::uint8_t {
   put,
   del,
-  foo,
 };
 
 struct wal_entry final {
@@ -55,8 +55,7 @@ class wal_writer final {
   [[nodiscard]] bool close() noexcept;
 
  private:
-  std::filesystem::path path_;
-  std::int32_t fd_{-1};
+  core::append_only_file file_;
 
   std::uint64_t capacity_{core::kDefaultWalCapacity};
 
@@ -66,12 +65,14 @@ class wal_writer final {
 class wal_reader final {
  public:
   wal_reader() = default;
-  wal_reader(const wal_writer &) = delete;
-  wal_reader &operator=(const wal_writer &) = delete;
+  wal_reader(const wal_reader &) = delete;
+  wal_reader &operator=(const wal_reader &) = delete;
   wal_reader(wal_reader &&) noexcept;
   wal_reader &operator=(wal_reader &&) noexcept;
   ~wal_reader() noexcept;
 
+  // Slurps the entire WAL into an arena buffer at open time. Returns nullopt
+  // for missing or empty files (caller treats as "nothing to recover").
   [[nodiscard]] static std::optional<wal_reader> open(std::filesystem::path path) noexcept;
 
   [[nodiscard]] std::optional<wal_entry> read() noexcept;
@@ -79,9 +80,7 @@ class wal_reader final {
   [[nodiscard]] bool close() noexcept;
 
  private:
-  std::filesystem::path path_;
-  std::int32_t fd_{-1};
-
+  core::random_access_file file_;
   core::scratch_arena scratch_arena_;
   std::string_view wal_view_;
 };

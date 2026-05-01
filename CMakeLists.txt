@@ -48,6 +48,7 @@ set(CORE_SRC
     src/core/scratch_arena.cpp
     src/core/simd.cpp
     src/core/crc32.cpp
+    src/core/fs.cpp
     src/core/time.cpp
 )
 set(STORAGE_SRC src/storage/skiplist.cpp src/storage/memtable.cpp)
