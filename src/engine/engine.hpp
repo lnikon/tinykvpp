@@ -19,7 +19,7 @@ class engine final {
   engine &operator=(engine &&) noexcept = default;
   ~engine() = default;
 
-  [[nodiscard]] static std::expected<engine, core::status> create(const core::config &config) noexcept;
+  [[nodiscard]] static std::expected<engine, core::status> create(core::config config) noexcept;
 
   [[nodiscard]] std::expected<void, core::status> put(std::string_view key, std::string_view value) noexcept;
 
@@ -33,6 +33,8 @@ class engine final {
  private:
   [[nodiscard]] std::expected<void, core::status> maybe_rotate_memtable(std::uint64_t incoming_bytes) noexcept;
   [[nodiscard]] std::uint64_t get_next_sequence() noexcept;
+
+  core::config config_;
 
   storage::memtable memtable_active_;
   std::optional<storage::memtable> memtable_immutable_;

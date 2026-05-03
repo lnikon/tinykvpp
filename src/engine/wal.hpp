@@ -1,12 +1,14 @@
 #pragma once
 
 #include <cstdint>
+#include <expected>
 #include <filesystem>
 #include <string_view>
 
 #include "core/config.hpp"
 #include "core/fs.hpp"
 #include "core/scratch_arena.hpp"
+#include "core/status.hpp"
 
 namespace frankie::engine {
 
@@ -32,7 +34,7 @@ struct wal_entry final {
 
   [[nodiscard]] std::string_view encode(core::scratch_arena &arena) const noexcept;
 
-  [[nodiscard]] static std::optional<wal_entry> decode(std::string_view &encoded) noexcept;
+  [[nodiscard]] static std::expected<wal_entry, core::status> decode(std::string_view &encoded) noexcept;
 };
 
 class wal_writer final {
@@ -44,21 +46,20 @@ class wal_writer final {
   wal_writer &operator=(wal_writer &&) noexcept;
   ~wal_writer() noexcept;
 
-  [[nodiscard]] static std::optional<wal_writer> open(std::filesystem::path path, std::uint64_t capacity) noexcept;
+  [[nodiscard]] static std::expected<wal_writer, core::status> open(std::filesystem::path path,
+                                                                    std::uint64_t capacity) noexcept;
 
-  [[nodiscard]] bool append(const wal_entry &entry) noexcept;
+  [[nodiscard]] std::expected<std::uint64_t, core::status> append(const wal_entry &entry) noexcept;
 
-  [[nodiscard]] bool sync() noexcept;
+  [[nodiscard]] std::expected<void, core::status> sync() noexcept;
 
-  [[nodiscard]] bool truncate() noexcept;
+  [[nodiscard]] std::expected<void, core::status> truncate() noexcept;
 
-  [[nodiscard]] bool close() noexcept;
+  [[nodiscard]] std::expected<void, core::status> close() noexcept;
 
  private:
   core::append_only_file file_;
-
   std::uint64_t capacity_{core::kDefaultWalCapacity};
-
   core::scratch_arena scratch_arena_;
 };
 
@@ -73,11 +74,11 @@ class wal_reader final {
 
   // Slurps the entire WAL into an arena buffer at open time. Returns nullopt
   // for missing or empty files (caller treats as "nothing to recover").
-  [[nodiscard]] static std::optional<wal_reader> open(std::filesystem::path path) noexcept;
+  [[nodiscard]] static std::expected<wal_reader, core::status> open(std::filesystem::path path) noexcept;
 
-  [[nodiscard]] std::optional<wal_entry> read() noexcept;
+  [[nodiscard]] std::expected<wal_entry, core::status> read() noexcept;
 
-  [[nodiscard]] bool close() noexcept;
+  [[nodiscard]] std::expected<void, core::status> close() noexcept;
 
  private:
   core::random_access_file file_;

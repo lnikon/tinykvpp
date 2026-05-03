@@ -22,8 +22,12 @@ std::expected<std::int32_t, core::status> open_fd(const std::filesystem::path &p
                                                   open_flag flags) noexcept {
   const std::int32_t fd = ::open(path.c_str(), to_native(mode) | to_native(flags), kDefaultFilePermissions);
   if (fd == -1) {
+    // ENOENT is part of the happy path for read-side opens: callers (e.g. WAL
+    // recovery) treat "no file" as "clean start". Distinguish it from real I/O
+    // failures so they can act differently.
+    const auto code = errno == ENOENT ? status_code::not_found : status_code::io_error;
     std::println("fs::open_fd: failed to open file. path={}, errno={} ({})", path.c_str(), errno, strerror(errno));
-    return core::unexpected(status_code::io_error);
+    return core::unexpected(code);
   }
 
   if (any(flags & open_flag::creat)) {

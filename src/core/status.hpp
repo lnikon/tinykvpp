@@ -64,4 +64,6 @@ static_assert(std::is_trivially_copyable_v<status>, "status must be trivially co
   return std::unexpected<status>(std::in_place, code, msg);
 }
 
+[[nodiscard]] constexpr auto unexpected(status st) noexcept { return std::unexpected<status>(std::in_place, st); }
+
 }  // namespace frankie::core

@@ -2,13 +2,17 @@
 
 #include <gtest/gtest.h>
 
+#include <fcntl.h>
+#include <unistd.h>
 #include <filesystem>
 #include <optional>
 #include <string>
 
 #include "core/config.hpp"
+#include "core/status.hpp"
 
 using namespace frankie::engine;
+using frankie::core::status_code;
 
 class EngineTest : public ::testing::Test {
  protected:
@@ -54,6 +58,11 @@ TEST_F(EngineTest, CreateFailsWithInvalidPath) {
   };
   auto eng = engine::create(cfg);
   ASSERT_FALSE(eng.has_value());
+  // Reader returns not_found for the missing WAL (clean-start path), then
+  // writer-open with O_CREAT fails because the parent dir doesn't exist —
+  // ENOENT also surfaces as not_found, which the writer-open arm now forwards
+  // verbatim instead of flattening to io_error.
+  EXPECT_EQ(eng.error().code_, status_code::not_found);
 }
 
 // ---------------------------------------------------------------------------
@@ -353,4 +362,114 @@ TEST_F(EngineTest, ManyPutsWithoutRotation) {
     ASSERT_TRUE(result.has_value()) << "missing key k" << i;
     EXPECT_EQ(result.value(), "v" + std::to_string(i));
   }
+}
+
+// ---------------------------------------------------------------------------
+// WAL recovery on engine::create
+// ---------------------------------------------------------------------------
+
+TEST_F(EngineTest, RecoversPutsFromWalOnReopen) {
+  // First lifetime: write keys, then drop the engine so the WAL file is closed
+  // but left on disk.
+  {
+    auto eng = engine::create(make_config());
+    ASSERT_TRUE(eng.has_value());
+    ASSERT_TRUE(eng->put("a", "1"));
+    ASSERT_TRUE(eng->put("b", "2"));
+    ASSERT_TRUE(eng->put("c", "3"));
+  }
+
+  auto eng = engine::create(make_config());
+  ASSERT_TRUE(eng.has_value());
+
+  EXPECT_EQ(eng->get("a").value(), "1");
+  EXPECT_EQ(eng->get("b").value(), "2");
+  EXPECT_EQ(eng->get("c").value(), "3");
+}
+
+TEST_F(EngineTest, RecoversTombstonesFromWalOnReopen) {
+  {
+    auto eng = engine::create(make_config());
+    ASSERT_TRUE(eng.has_value());
+    ASSERT_TRUE(eng->put("alive", "v"));
+    ASSERT_TRUE(eng->put("doomed", "v"));
+    ASSERT_TRUE(eng->del("doomed"));
+  }
+
+  auto eng = engine::create(make_config());
+  ASSERT_TRUE(eng.has_value());
+
+  EXPECT_EQ(eng->get("alive").value(), "v");
+  EXPECT_FALSE(eng->get("doomed").has_value());
+}
+
+TEST_F(EngineTest, RecoveryContinuesSequenceNumbers) {
+  // Without sequence continuation, an overwrite after recovery would land at
+  // a sequence number <= the recovered entry, and the stale value would win on
+  // get.
+  {
+    auto eng = engine::create(make_config());
+    ASSERT_TRUE(eng.has_value());
+    ASSERT_TRUE(eng->put("k", "old"));
+  }
+
+  auto eng = engine::create(make_config());
+  ASSERT_TRUE(eng.has_value());
+  ASSERT_EQ(eng->get("k").value(), "old");
+
+  ASSERT_TRUE(eng->put("k", "new"));
+  EXPECT_EQ(eng->get("k").value(), "new");
+}
+
+TEST_F(EngineTest, RecoveryAcrossMultipleReopens) {
+  for (int i = 0; i < 4; ++i) {
+    auto eng = engine::create(make_config());
+    ASSERT_TRUE(eng.has_value()) << "create failed at iteration " << i;
+    ASSERT_TRUE(eng->put("k", "v" + std::to_string(i)));
+    EXPECT_EQ(eng->get("k").value(), "v" + std::to_string(i));
+  }
+
+  auto eng = engine::create(make_config());
+  ASSERT_TRUE(eng.has_value());
+  EXPECT_EQ(eng->get("k").value(), "v3");
+}
+
+TEST_F(EngineTest, CreateFailsOnCorruptedWal) {
+  {
+    auto eng = engine::create(make_config());
+    ASSERT_TRUE(eng.has_value());
+    ASSERT_TRUE(eng->put("k", "v"));
+  }
+
+  // Flip a byte inside the entry's CRC field. Layout per record:
+  //   [record_len u32][crc32 u32][...payload...]
+  {
+    int fd = ::open(wal_path().c_str(), O_RDWR);
+    ASSERT_NE(fd, -1);
+    char byte = 0;
+    ASSERT_EQ(::pread(fd, &byte, 1, 4), 1);
+    byte = static_cast<char>(~byte);
+    ASSERT_EQ(::pwrite(fd, &byte, 1, 4), 1);
+    ::close(fd);
+  }
+
+  auto eng = engine::create(make_config());
+  ASSERT_FALSE(eng.has_value());
+  EXPECT_EQ(eng.error().code_, status_code::corrupted);
+}
+
+TEST_F(EngineTest, RecoveryWithEmptyWalSucceeds) {
+  // Touch the WAL file so it exists at zero bytes — reader returns eof, which
+  // recovery must treat as a clean start, not an error.
+  {
+    int fd = ::open(wal_path().c_str(), O_WRONLY | O_CREAT, 0644);
+    ASSERT_NE(fd, -1);
+    ::close(fd);
+  }
+  ASSERT_EQ(std::filesystem::file_size(wal_path()), 0u);
+
+  auto eng = engine::create(make_config());
+  ASSERT_TRUE(eng.has_value());
+  ASSERT_TRUE(eng->put("k", "v"));
+  EXPECT_EQ(eng->get("k").value(), "v");
 }

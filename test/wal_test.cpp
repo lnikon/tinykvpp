@@ -237,7 +237,8 @@ TEST_F(WalEntryTest, DecodeRejectsCorruptedCRC) {
 
   std::string_view view(corrupted);
   auto decoded = wal_entry::decode(view);
-  EXPECT_FALSE(decoded.has_value());
+  ASSERT_FALSE(decoded.has_value());
+  EXPECT_EQ(decoded.error().code_, status_code::corrupted);
 }
 
 TEST_F(WalEntryTest, DecodeRejectsCorruptedPayload) {
@@ -257,7 +258,8 @@ TEST_F(WalEntryTest, DecodeRejectsCorruptedPayload) {
 
   std::string_view view(corrupted);
   auto decoded = wal_entry::decode(view);
-  EXPECT_FALSE(decoded.has_value());
+  ASSERT_FALSE(decoded.has_value());
+  EXPECT_EQ(decoded.error().code_, status_code::corrupted);
 }
 
 TEST_F(WalEntryTest, DecodeRejectsKeyValueOverflowingRecordLen) {
@@ -287,10 +289,18 @@ TEST_F(WalEntryTest, DecodeRejectsKeyValueOverflowingRecordLen) {
 
   std::string_view view(buf);
   auto decoded = wal_entry::decode(view);
-  EXPECT_FALSE(decoded.has_value());
+  ASSERT_FALSE(decoded.has_value());
+  EXPECT_EQ(decoded.error().code_, status_code::corrupted);
 }
 
-TEST_F(WalEntryTest, DecodeTruncatedBufferReturnsNullopt) {
+TEST_F(WalEntryTest, DecodeEmptyBufferReturnsEof) {
+  std::string_view empty;
+  auto decoded = wal_entry::decode(empty);
+  ASSERT_FALSE(decoded.has_value());
+  EXPECT_EQ(decoded.error().code_, status_code::eof);
+}
+
+TEST_F(WalEntryTest, DecodeTruncatedBufferReturnsCorrupted) {
   wal_entry entry{
       .operation_ = wal_operation::put,
       .sequence_ = 1,
@@ -301,11 +311,14 @@ TEST_F(WalEntryTest, DecodeTruncatedBufferReturnsNullopt) {
 
   auto encoded = entry.encode(arena_);
 
-  // Truncate to just the header — missing key/value bytes.
+  // Truncate to just the header — missing key/value bytes. Non-empty but
+  // shorter than kMetadataSize → corrupted (caller can no longer parse a
+  // header).
   std::string_view truncated(encoded.data(), wal_entry::kMetadataSize - 1);
 
   auto decoded = wal_entry::decode(truncated);
-  EXPECT_FALSE(decoded.has_value());
+  ASSERT_FALSE(decoded.has_value());
+  EXPECT_EQ(decoded.error().code_, status_code::corrupted);
 }
 
 TEST_F(WalEntryTest, DecodeAdvancesViewOnSuccess) {
@@ -348,6 +361,22 @@ TEST_F(WalEntryTest, DecodeLeavesViewUntouchedOnFailure) {
   // bytes to report/recover from the corruption.
   EXPECT_EQ(view.data(), data_before);
   EXPECT_EQ(view.size(), size_before);
+}
+
+TEST_F(WalEntryTest, DecodeAfterFullConsumeReturnsEof) {
+  wal_entry entry{
+      .operation_ = wal_operation::put,
+      .sequence_ = 1,
+      .key_ = "k",
+      .value_ = "v",
+      .tombstone_ = 0,
+  };
+  auto encoded = entry.encode(arena_);
+  ASSERT_TRUE(wal_entry::decode(encoded).has_value());
+  // View is fully consumed — next decode reports eof, not corrupted.
+  auto next = wal_entry::decode(encoded);
+  ASSERT_FALSE(next.has_value());
+  EXPECT_EQ(next.error().code_, status_code::eof);
 }
 
 TEST_F(WalEntryTest, DecodeTwoEntriesFromSingleBuffer) {
@@ -695,13 +724,18 @@ class WalReaderTest : public ::testing::Test {
 
 TEST_F(WalReaderTest, OpenNonexistentFileFails) {
   auto reader = wal_reader::open(tmp_dir_ / "does_not_exist.wal");
-  EXPECT_FALSE(reader.has_value());
+  ASSERT_FALSE(reader.has_value());
+  // Missing file (ENOENT) maps to not_found — distinct from eof (existing but
+  // empty file) and from io_error (real I/O failure). Recovery uses the
+  // not_found / eof distinction to treat both as a clean start while still
+  // surfacing real I/O failures.
+  EXPECT_EQ(reader.error().code_, status_code::not_found);
 }
 
-TEST_F(WalReaderTest, OpenEmptyFileReturnsNullopt) {
+TEST_F(WalReaderTest, OpenEmptyFileReturnsEof) {
   // A freshly-opened-then-closed wal_writer leaves a 0-byte file behind. The
-  // reader treats EOF on initial read as "nothing to recover" and declines to
-  // construct.
+  // reader reports eof so the engine can distinguish "nothing to recover" from
+  // a real I/O failure.
   auto path = tmp_dir_ / "empty.wal";
   {
     auto writer = wal_writer::open(path, 1024);
@@ -712,7 +746,8 @@ TEST_F(WalReaderTest, OpenEmptyFileReturnsNullopt) {
   ASSERT_EQ(std::filesystem::file_size(path), 0u);
 
   auto reader = wal_reader::open(path);
-  EXPECT_FALSE(reader.has_value());
+  ASSERT_FALSE(reader.has_value());
+  EXPECT_EQ(reader.error().code_, status_code::eof);
 }
 
 TEST_F(WalReaderTest, ReadSingleEntryRoundTrip) {
@@ -736,10 +771,14 @@ TEST_F(WalReaderTest, ReadSingleEntryRoundTrip) {
   EXPECT_EQ(decoded->value_, "world");
   EXPECT_EQ(decoded->tombstone_, 0);
 
-  // Buffer is now fully consumed — further reads return nullopt and stay
-  // idempotent across repeated calls.
-  EXPECT_FALSE(reader->read().has_value());
-  EXPECT_FALSE(reader->read().has_value());
+  // Buffer is now fully consumed — further reads report eof (not corrupted)
+  // and stay idempotent across repeated calls.
+  auto eof1 = reader->read();
+  ASSERT_FALSE(eof1.has_value());
+  EXPECT_EQ(eof1.error().code_, status_code::eof);
+  auto eof2 = reader->read();
+  ASSERT_FALSE(eof2.has_value());
+  EXPECT_EQ(eof2.error().code_, status_code::eof);
 }
 
 TEST_F(WalReaderTest, ReadMultipleEntriesInOrder) {
@@ -798,10 +837,16 @@ TEST_F(WalReaderTest, ReadStopsAtFirstCorruptedEntry) {
   EXPECT_EQ(first->sequence_, 1u);
   EXPECT_EQ(first->key_, "a");
 
-  // Second entry fails CRC → reader returns nullopt and the buffer stays
-  // parked on the corrupt record (decode leaves the view untouched on failure).
-  EXPECT_FALSE(reader->read().has_value());
-  EXPECT_FALSE(reader->read().has_value());
+  // Second entry fails CRC → reader reports corrupted (not eof) and the
+  // buffer stays parked on the corrupt record so the caller can act on the
+  // error.
+  auto bad = reader->read();
+  ASSERT_FALSE(bad.has_value());
+  EXPECT_EQ(bad.error().code_, status_code::corrupted);
+  // Repeated reads return the same error — decode leaves the view untouched.
+  bad = reader->read();
+  ASSERT_FALSE(bad.has_value());
+  EXPECT_EQ(bad.error().code_, status_code::corrupted);
 }
 
 TEST_F(WalReaderTest, MoveConstructionPreservesReadState) {

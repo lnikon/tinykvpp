@@ -1,4 +1,5 @@
 #include <optional>
+#include <print>
 #include <utility>
 
 #include "core/status.hpp"
@@ -13,38 +14,58 @@ namespace frankie::engine {
 static constexpr std::uint64_t kNodeOverheadEstimate =
     sizeof(storage::skiplist_node) + (storage::skiplist<storage::internal_key_comparator>::kMaxHeight * sizeof(void *));
 
-std::expected<engine, core::status> engine::create(const core::config &config) noexcept {
-  engine result;
-
-  result.memtable_active_ = storage::memtable::create(config.memtable_capacity);
-
-  if (auto wal_reader = wal_reader::open(config.wal_path); wal_reader) {
-    for (auto entry = wal_reader->read(); entry.has_value(); entry = wal_reader->read()) {
-      if (!entry.has_value()) [[unlikely]] {
-        break;
-      }
-
+std::expected<engine, core::status> engine::create(core::config config) noexcept {
+  storage::memtable memtable_active = storage::memtable::create(config.memtable_capacity);
+  std::uint64_t max_sequence_number = 0;
+  auto reader = wal_reader::open(config.wal_path);
+  if (!reader) {
+    // not_found = no WAL on disk yet (first start). eof = WAL exists but is
+    // empty. Both are clean-start cases; anything else is a real failure that
+    // must propagate so the caller doesn't silently lose existing entries.
+    if (reader.error().code_ != core::status_code::not_found && reader.error().code_ != core::status_code::eof)
+        [[unlikely]] {
+      std::println("engine::create: failed to open WAL reader. path={}, status={}", config.wal_path.c_str(),
+                   core::to_cstring(reader.error().code_));
+      return core::unexpected(reader.error());
+    }
+  } else {
+    std::expected<wal_entry, core::status> entry{core::unexpected(core::status_code::eof)};
+    while ((entry = reader->read())) {
       const auto &wal_entry = entry.value();
+
       switch (wal_entry.operation_) {
         case wal_operation::put:
-          result.memtable_active_.put(wal_entry.key_, wal_entry.value_, wal_entry.sequence_, wal_entry.tombstone_);
+          memtable_active.put(wal_entry.key_, wal_entry.value_, wal_entry.sequence_, wal_entry.tombstone_);
           break;
         case wal_operation::del:
-          result.memtable_active_.put(wal_entry.key_, "", wal_entry.sequence_, wal_entry.tombstone_);
+          memtable_active.put(wal_entry.key_, "", wal_entry.sequence_, wal_entry.tombstone_);
           break;
         default:
           FR_VERIFY_MSG(false, "missing handler for WAL operation");
           break;
       }
+
+      max_sequence_number = std::max(max_sequence_number, wal_entry.sequence_);
+    }
+
+    if (entry.error().code_ != core::status_code::eof) [[unlikely]] {
+      std::println("engine::create: failed to recover WAL. path={}, status={}", config.wal_path.c_str(),
+                   core::to_cstring(entry.error().code_));
+      return core::unexpected(entry.error());
     }
   }
 
-  if (auto wal_writer_opt = wal_writer::open(config.wal_path, config.wal_capacity); wal_writer_opt.has_value()) {
-    result.wal_ = std::move(wal_writer_opt.value());
-  } else {
-    return core::unexpected(core::status_code::io_error);
+  auto writer = wal_writer::open(config.wal_path, config.wal_capacity);
+  if (!writer) {
+    std::println("engine::create: failed to open WAL writer. path={}", config.wal_path.c_str());
+    return core::unexpected(writer.error());
   }
 
+  engine result;
+  result.config_ = std::move(config);
+  result.sequence_ = max_sequence_number + 1;
+  result.memtable_active_ = std::move(memtable_active);
+  result.wal_ = std::move(writer.value());
   return result;
 }
 

@@ -7,6 +7,7 @@
 #include "core/crc32.hpp"
 #include "core/fs.hpp"
 #include "core/scratch_arena.hpp"
+#include "core/status.hpp"
 #include "engine/wal.hpp"
 
 namespace frankie::engine {
@@ -60,9 +61,13 @@ std::string_view wal_entry::encode(core::scratch_arena &arena) const noexcept {
   return {buf, buffer_size};
 }
 
-std::optional<wal_entry> wal_entry::decode(std::string_view &encoded) noexcept {
+std::expected<wal_entry, core::status> wal_entry::decode(std::string_view &encoded) noexcept {
+  if (encoded.empty()) {
+    return core::unexpected(core::status_code::eof);
+  }
+
   if (encoded.size() < kMetadataSize) {
-    return std::nullopt;
+    return core::unexpected(core::status_code::corrupted);
   }
 
   const auto *cursor = encoded.data();
@@ -79,7 +84,7 @@ std::optional<wal_entry> wal_entry::decode(std::string_view &encoded) noexcept {
   if (record_len + record_offset > encoded.size()) {
     std::println("wal_entry::decode: not enough bytes to encode. needed={}, given={}", record_len + record_offset,
                  encoded.size());
-    return std::nullopt;
+    return core::unexpected(core::status_code::corrupted);
   }
 
   const std::uint32_t computed_crc32 =
@@ -88,10 +93,10 @@ std::optional<wal_entry> wal_entry::decode(std::string_view &encoded) noexcept {
           .finalize();
   if (stored_crc32 != computed_crc32) {
     std::println("wal_entry::decode: crc32 mismatch. stored={}, computed={}", stored_crc32, computed_crc32);
-    return std::nullopt;
+    return core::unexpected(core::status_code::corrupted);
   }
 
-  std::optional<wal_entry> result;
+  std::expected<wal_entry, core::status> result;
   result.emplace();
 
   std::memcpy(&result->operation_, cursor, sizeof(result->operation_));
@@ -113,7 +118,7 @@ std::optional<wal_entry> wal_entry::decode(std::string_view &encoded) noexcept {
 
   if (const char *payload_end = encoded.data() + record_offset + record_len;
       cursor + key_len + value_len > payload_end) {
-    return std::nullopt;
+    return core::unexpected(core::status_code::corrupted);
   }
 
   result->key_ = {cursor, key_len};
@@ -149,29 +154,29 @@ wal_writer &wal_writer::operator=(wal_writer &&other) noexcept {
 
 wal_writer::~wal_writer() noexcept = default;
 
-std::optional<wal_writer> wal_writer::open(std::filesystem::path path, std::uint64_t capacity) noexcept {
+std::expected<wal_writer, core::status> wal_writer::open(std::filesystem::path path, std::uint64_t capacity) noexcept {
   auto file = core::append_only_file::open(std::move(path));
   if (!file) {
-    return std::nullopt;
+    return core::unexpected(file.error());
   }
 
-  std::optional<wal_writer> result;
+  std::expected<wal_writer, core::status> result;
   result.emplace();
   result->file_ = std::move(file.value());
   result->capacity_ = capacity;
   return result;
 }
 
-bool wal_writer::append(const wal_entry &entry) noexcept {
+std::expected<std::uint64_t, core::status> wal_writer::append(const wal_entry &entry) noexcept {
   const auto encoded_entry = entry.encode(scratch_arena_);
-  return file_.append_fsync(encoded_entry).has_value();
+  return file_.append_fsync(encoded_entry);
 }
 
-bool wal_writer::sync() noexcept { return file_.sync().has_value(); }
+std::expected<void, core::status> wal_writer::sync() noexcept { return file_.sync(); }
 
-bool wal_writer::truncate() noexcept { return file_.truncate().has_value(); }
+std::expected<void, core::status> wal_writer::truncate() noexcept { return file_.truncate(); }
 
-bool wal_writer::close() noexcept { return file_.close().has_value(); }
+std::expected<void, core::status> wal_writer::close() noexcept { return file_.close(); }
 
 // =============================================================================
 // wal_reader
@@ -197,19 +202,19 @@ wal_reader &wal_reader::operator=(wal_reader &&other) noexcept {
 
 wal_reader::~wal_reader() noexcept = default;
 
-std::optional<wal_reader> wal_reader::open(std::filesystem::path path) noexcept {
+std::expected<wal_reader, core::status> wal_reader::open(std::filesystem::path path) noexcept {
   auto file = core::random_access_file::open_read(std::move(path));
   if (!file) {
-    return std::nullopt;
+    return core::unexpected(file.error());
   }
 
   auto file_size = file->size();
   if (!file_size) {
-    return std::nullopt;
+    return core::unexpected(file_size.error());
   }
   if (file_size.value() == 0) {
     // Empty WAL — nothing to recover. Caller proceeds as if no log existed.
-    return std::nullopt;
+    return core::unexpected(core::status_code::eof);
   }
 
   core::scratch_arena scratch_arena;
@@ -222,12 +227,12 @@ std::optional<wal_reader> wal_reader::open(std::filesystem::path path) noexcept 
   while (total < file_size.value()) {
     auto chunk = file->read({buf + total, file_size.value() - total}, total);
     if (!chunk) {
-      return std::nullopt;
+      return core::unexpected(file.error());
     }
     total += chunk.value();
   }
 
-  std::optional<wal_reader> result;
+  std::expected<wal_reader, core::status> result;
   result.emplace();
   result->file_ = std::move(file.value());
   result->scratch_arena_ = std::move(scratch_arena);
@@ -235,8 +240,10 @@ std::optional<wal_reader> wal_reader::open(std::filesystem::path path) noexcept 
   return result;
 }
 
-[[nodiscard]] std::optional<wal_entry> wal_reader::read() noexcept { return wal_entry::decode(wal_view_); }
+[[nodiscard]] std::expected<wal_entry, core::status> wal_reader::read() noexcept {
+  return wal_entry::decode(wal_view_);
+}
 
-[[nodiscard]] bool wal_reader::close() noexcept { return file_.close().has_value(); }
+[[nodiscard]] std::expected<void, core::status> wal_reader::close() noexcept { return file_.close(); }
 
 }  // namespace frankie::engine
