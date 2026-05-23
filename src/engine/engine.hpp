@@ -4,11 +4,15 @@
 #include <optional>
 
 #include "core/config.hpp"
+#include "core/scratch_arena.hpp"
 #include "core/status.hpp"
 #include "engine/wal.hpp"
 #include "storage/memtable.hpp"
 
 namespace frankie::engine {
+
+inline constexpr std::uint32_t kEngineFlushArenaCapacity = 4096;
+inline constexpr std::uint32_t kEngineScratchArenaCapacity = 4096;
 
 class engine final {
  public:
@@ -35,6 +39,8 @@ class engine final {
   [[nodiscard]] std::uint64_t get_next_sequence() noexcept;
 
   core::config config_;
+  // Scratch arena shared between all engine flows. Use only for temporary work.
+  core::scratch_arena scratch_arena_;
 
   storage::memtable memtable_active_;
   std::optional<storage::memtable> memtable_immutable_;
@@ -42,6 +48,10 @@ class engine final {
   std::uint64_t sequence_{0};
 
   wal_writer wal_;
+
+  // TODO(lnikon): Should be recovered from the manifest.
+  std::string_view sstable_file_prefix_{"sst_"};
+  std::uint64_t sstable_id_{0};
 };
 
 }  // namespace frankie::engine

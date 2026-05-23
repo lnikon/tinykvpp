@@ -1,5 +1,5 @@
 ---
-Checks:          '*,-modernize-use-trailing-return-type,-llvm*,-fuchsia*,-altera*,-hicpp*,-cppcoreguidelines-pro-bounds-pointer-arithmetic'
+Checks:          '*,-modernize-use-trailing-return-type,-llvm*,-fuchsia*,-altera*,-hicpp*,-cppcoreguidelines-pro-bounds-pointer-arithmetic,-cppcoreguidelines-avoid-do-while'
 WarningsAsErrors: ''
 HeaderFileExtensions:
   - ''

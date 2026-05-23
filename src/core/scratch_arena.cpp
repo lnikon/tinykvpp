@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include <utility>
+#include "core/assert.hpp"
 
 namespace frankie::core {
 
@@ -39,6 +40,19 @@ char *scratch_arena::allocate(std::uint64_t size) noexcept {
 }
 
 void scratch_arena::reset() noexcept { offset_ = 0; }
+
+// bool scratch_arena::realloc(std::uint64_t new_capacity) noexcept {
+//   FR_VERIFY(new_capacity > capacity_);
+//
+//   char *new_buf = ::malloc(new_capacity);
+//   if (new_buf == nullptr) {
+//     return false;
+//   }
+//
+//   if (buf_ != nullptr) {
+//     std::memcpy(new_buf, buf_, capacity_);
+//   }
+// }
 
 void scratch_arena::destroy() noexcept {
   if (buf_ != nullptr) {

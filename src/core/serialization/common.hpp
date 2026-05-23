@@ -1,0 +1,49 @@
+#pragma once
+
+#include <cstdint>
+#include <span>
+#include <string_view>
+
+namespace frankie::core {
+
+// serialization_error_k represents common serialization errors
+enum class serialization_error_k : std::int8_t {
+  undefined_k = -1,
+
+  // Write errors
+  buffer_overflow_k,
+
+  // Read errors
+  truncated_file_k,
+  end_of_file_k,
+
+  // Format errors
+  invalid_magic_k,
+  version_mismatch_k,
+  checksum_mismatch_k,
+  corrupted_data_k,
+
+  // Encoding errors
+  invalid_variant_k,
+  invalid_offset_k
+};
+
+// MAX_VARINT_BYTES represents maximum number of bytes required to encode 64 bit integer with varint
+constexpr const std::size_t MAX_VARINT_BYTES{10};
+
+// byte_t represents a single byte
+using byte_t = std::byte;
+
+// to_span converts std::string_view into const std::byte array
+[[nodiscard]] auto to_span(std::string_view view) noexcept -> std::span<const std::byte>;
+
+// to_span_mut converts std::string_view into std::byte array
+[[nodiscard]] auto to_writable_span(char *data, std::size_t size) noexcept -> std::span<std::byte>;
+
+// to_string_view converts std::byte span into a std::string_view
+[[nodiscard]] auto to_string_view(std::span<std::byte> span) noexcept -> std::string_view;
+
+// varint_size returns minimum number of bytes required to represent the value
+[[nodiscard]] auto varint_size(std::size_t value) noexcept -> std::size_t;
+
+}  // namespace frankie::core

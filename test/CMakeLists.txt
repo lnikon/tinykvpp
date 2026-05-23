@@ -36,6 +36,11 @@ if(GTest_FOUND)
     target_include_directories(engine_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
     add_test(NAME EngineTest COMMAND engine_test)
 
+    add_executable(sstable_writer_test sstable_writer_test.cpp)
+    target_link_libraries(sstable_writer_test PRIVATE frankie_lib GTest::gtest_main)
+    target_include_directories(sstable_writer_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
+    add_test(NAME SstableWriterTest COMMAND sstable_writer_test)
+
     add_executable(time_test time_test.cpp)
     target_link_libraries(time_test PRIVATE frankie_lib GTest::gtest_main)
     target_include_directories(time_test PRIVATE ${CMAKE_SOURCE_DIR}/src)

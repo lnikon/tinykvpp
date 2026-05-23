@@ -1,11 +1,15 @@
+#include <cstdio>
 #include <optional>
 #include <print>
 #include <utility>
 
+#include "core/fs.hpp"
+#include "core/scratch_arena.hpp"
 #include "core/status.hpp"
 #include "engine/engine.hpp"
 #include "storage/memtable.hpp"
 #include "storage/skiplist.hpp"
+#include "storage/sstable_writer.hpp"
 
 namespace frankie::engine {
 
@@ -148,14 +152,58 @@ std::expected<void, core::status> engine::maybe_rotate_memtable(const std::uint6
   if (memtable_active_.bytes_allocated() + incoming_bytes <= memtable_active_.capacity()) {
     return {};
   }
+
   memtable_immutable_.emplace(std::move(memtable_active_));
   memtable_active_ = storage::memtable::create(memtable_active_.capacity());
-  // TODO(lnikon): Trigger flush of memtable_immutable_ to SST
+
+  scratch_arena_.reset();
+  auto formatted_sstable_path =
+      std::span{scratch_arena_.allocate(kEngineScratchArenaCapacity), kEngineScratchArenaCapacity};
+  std::snprintf(formatted_sstable_path.data(), kEngineScratchArenaCapacity, "%s%lu", sstable_file_prefix_.data(),
+                sstable_id_);
+  // TODO(lnikon): 'config_.sstable_dir_path / sstable_file_prefix_' most probably allocated memory...
+  auto sst_file =
+      core::random_access_file::create_exclusive(config_.sstable_dir_path / std::string_view{formatted_sstable_path});
+  if (!sst_file) {
+    return core::unexpected(sst_file.error());
+  }
+
+  auto writer = storage::sstable_writer::create(storage::sstable_writer_config{});
+  if (!writer) {
+    return core::unexpected(writer.error());
+  }
+
+  std::uint64_t data_block_body_offset = 0;
+  for (auto [ikey, value] : *memtable_immutable_) {
+    if (auto result = writer->append(ikey, value); !result) {
+      return core::unexpected(result.error());
+    }
+
+    if (writer->is_data_block_complete()) {
+      auto get_data_block_or = writer->get_data_block();
+      if (!get_data_block_or) {
+        return core::unexpected(get_data_block_or.error());
+      }
+
+      auto write_result = sst_file->write(get_data_block_or.value(), data_block_body_offset);
+      if (!write_result) {
+        return core::unexpected(write_result.error());
+      }
+
+      if (auto record_result = writer->record_data_block(data_block_body_offset, *write_result); !record_result) {
+        return core::unexpected(record_result.error());
+      }
+
+      data_block_body_offset += *write_result;
+    }
+  }
 
   if (!wal_.truncate()) {
     // TODO(lnikon): Need a fallback strategy e.g. move current wal into wal.old1 and create a new wal
     return core::unexpected(core::status_code::io_error);
   }
+
+  sstable_id_++;
 
   return {};
 }

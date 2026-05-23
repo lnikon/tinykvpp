@@ -5,6 +5,8 @@
 
 namespace frankie::core {
 
+constexpr inline std::uint64_t kScratchAlignment = 64;
+
 class scratch_arena final {
  public:
   scratch_arena() = default;
@@ -17,6 +19,9 @@ class scratch_arena final {
   [[nodiscard]] char *allocate(std::uint64_t size) noexcept;
 
   void reset() noexcept;
+
+  // TODO(lnikon): Needs rethinking...
+  // [[nodiscard]] bool realloc(std::uint64_t new_capacity) noexcept;
 
   void destroy() noexcept;
 

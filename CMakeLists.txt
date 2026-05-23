@@ -50,8 +50,13 @@ set(CORE_SRC
     src/core/crc32.cpp
     src/core/fs.cpp
     src/core/time.cpp
+    src/core/serialization/common.cpp
 )
-set(STORAGE_SRC src/storage/skiplist.cpp src/storage/memtable.cpp)
+set(STORAGE_SRC
+    src/storage/skiplist.cpp
+    src/storage/memtable.cpp
+    src/storage/sstable_writer.cpp
+)
 set(ENGINE_SRC src/engine/engine.cpp src/engine/wal.cpp)
 
 add_library(frankie_lib STATIC ${CORE_SRC} ${STORAGE_SRC} ${ENGINE_SRC})

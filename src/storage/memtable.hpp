@@ -79,6 +79,10 @@ class memtable final {
 
   [[nodiscard]] std::uint64_t capacity() const noexcept;
 
+  using iterator = typename skiplist<internal_key_comparator>::iterator;
+  auto begin() { return skiplist_.begin(); }
+  auto end() { return skiplist_.end(); }
+
  private:
   mutable core::scratch_arena scratch_arena_;
   core::arena arena_;

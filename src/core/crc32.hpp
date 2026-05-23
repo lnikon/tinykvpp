@@ -8,9 +8,9 @@ namespace frankie::core {
 
 constexpr std::uint32_t kCRC32DefaultValue{0xFFFFFFFF};
 constexpr std::uint32_t kCRC32Bits{8};
-constexpr std::size_t kCRC32TableSize{256};
 constexpr std::uint32_t kCRC32Polynomial = 0xEDB88320;
 
+constexpr std::size_t kCRC32TableSize{256};
 using crc32_table = std::array<std::uint32_t, kCRC32TableSize>;
 
 constexpr auto generate_crc32_table() noexcept -> crc32_table {
