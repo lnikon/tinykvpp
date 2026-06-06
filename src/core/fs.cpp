@@ -26,7 +26,8 @@ std::expected<std::int32_t, core::status> open_fd(const std::filesystem::path &p
     // recovery) treat "no file" as "clean start". Distinguish it from real I/O
     // failures so they can act differently.
     const auto code = errno == ENOENT ? status_code::not_found : status_code::io_error;
-    std::println("fs::open_fd: failed to open file. path={}, errno={} ({})", path.c_str(), errno, strerror(errno));
+    // std::println("[DEBUG] fs::open_fd: failed to open file. path={}, errno={} ({})", path.c_str(), errno,
+    // strerror(errno));
     return core::unexpected(code);
   }
 
@@ -39,16 +40,16 @@ std::expected<std::int32_t, core::status> open_fd(const std::filesystem::path &p
     const std::int32_t parent_dir_fd = ::open(parent_dir_path.c_str(), O_RDONLY | O_DIRECTORY);
     if (parent_dir_fd == -1) {
       ::close(fd);
-      std::println("fs::open_fd: failed to open parent dir. dir={}, errno={} ({})", parent_dir_path.c_str(), errno,
-                   strerror(errno));
+      // std::println("[DEBUG] fs::open_fd: failed to open parent dir. dir={}, errno={} ({})", parent_dir_path.c_str(),
+      // errno, strerror(errno));
       return core::unexpected(status_code::io_error);
     }
     const std::int32_t parent_rc = ::fsync(parent_dir_fd);
     ::close(parent_dir_fd);
     if (parent_rc != 0) {
       ::close(fd);
-      std::println("fs::open_fd: parent dir fsync failed. dir={}, errno={} ({})", parent_dir_path.c_str(), errno,
-                   strerror(errno));
+      // std::println("[DEBUG] fs::open_fd: parent dir fsync failed. dir={}, errno={} ({})", parent_dir_path.c_str(),
+      // errno, strerror(errno));
       return core::unexpected(status_code::io_error);
     }
   }

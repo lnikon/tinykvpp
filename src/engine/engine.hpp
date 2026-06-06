@@ -35,7 +35,7 @@ class engine final {
   void scan(std::string_view range_start_key, std::string_view range_end_key) noexcept;
 
  private:
-  [[nodiscard]] std::expected<void, core::status> maybe_rotate_memtable(std::uint64_t incoming_bytes) noexcept;
+  [[nodiscard]] std::expected<void, core::status> maybe_rotate_memtable() noexcept;
   [[nodiscard]] std::uint64_t get_next_sequence() noexcept;
 
   core::config config_;

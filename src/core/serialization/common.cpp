@@ -1,6 +1,7 @@
-#include "core/serialization/common.hpp"
 #include <span>
 #include <string_view>
+
+#include "core/serialization/common.hpp"
 
 namespace frankie::core {
 

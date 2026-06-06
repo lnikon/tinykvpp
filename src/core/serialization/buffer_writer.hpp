@@ -28,13 +28,13 @@ class buffer_writer final {
     FR_VERIFY(buffer.size() > 0ULL);
 
     buffer_writer result;
-    result.m_buffer = buffer;
+    result.buffer_ = buffer;
     return result;
   }
 
   template <EndianInteger T>
   [[nodiscard]] auto write_endian_integer(const T value) noexcept -> buffer_writer & {
-    if (m_error) {
+    if (error_) {
       return *this;
     }
 
@@ -44,7 +44,7 @@ class buffer_writer final {
   }
 
   [[nodiscard]] auto write_varint(std::uint64_t value) noexcept -> buffer_writer & {
-    if (m_error) {
+    if (error_) {
       return *this;
     }
 
@@ -63,7 +63,7 @@ class buffer_writer final {
   }
 
   [[nodiscard]] auto write_bytes(std::span<const byte> buffer) noexcept -> buffer_writer & {
-    if (m_error) {
+    if (error_) {
       return *this;
     }
 
@@ -73,13 +73,13 @@ class buffer_writer final {
   }
 
   [[nodiscard]] auto write_string(const std::string_view str) noexcept -> buffer_writer & {
-    if (m_error) {
+    if (error_) {
       return *this;
     }
 
     (void)write_varint(str.size());
     // (void)write_endian_integer(le_uint64_t{static_cast<std::uint64_t>(str.size())});
-    if (m_error) {
+    if (error_) {
       return *this;
     }
 
@@ -88,43 +88,43 @@ class buffer_writer final {
     return *this;
   }
 
-  [[nodiscard]] auto bytes_written() const noexcept -> std::size_t { return m_cursor; }
+  [[nodiscard]] auto bytes_written() const noexcept -> std::size_t { return cursor_; }
 
-  [[nodiscard]] auto error() const noexcept -> std::optional<serialization_error_k> { return m_error; }
+  [[nodiscard]] auto error() const noexcept -> std::optional<serialization_error_k> { return error_; }
 
-  [[nodiscard]] auto has_error() const noexcept -> bool { return m_error.has_value(); }
+  [[nodiscard]] auto has_error() const noexcept -> bool { return error_.has_value(); }
 
   [[nodiscard]] auto set_cursor(std::uint64_t cursor) noexcept -> std::uint64_t {
-    FR_VERIFY(cursor <= m_buffer.size());
-    auto oldCursor = m_cursor;
-    m_cursor = cursor;
+    FR_VERIFY(cursor <= buffer_.size());
+    auto oldCursor = cursor_;
+    cursor_ = cursor;
     return oldCursor;
   }
 
   void set_buffer(std::span<std::byte> new_buffer) noexcept {
-    FR_VERIFY(new_buffer.size() >= m_buffer.size());
-    m_buffer = new_buffer;
+    FR_VERIFY(new_buffer.size() >= buffer_.size());
+    buffer_ = new_buffer;
   }
 
  private:
   void write_raw_bytes(std::span<const byte> bytes) noexcept {
-    if (m_cursor + bytes.size() > m_buffer.size()) {
+    if (cursor_ + bytes.size() > buffer_.size()) {
       std::println(
           "write_raw_bytes: Failed to serialize bytes due to buffer overflow. m_cursor={} + bytes.size()={}, "
           "m_buffer.size()={}",
-          m_cursor, bytes.size(), m_buffer.size());
-      m_error = serialization_error_k::buffer_overflow_k;
+          cursor_, bytes.size(), buffer_.size());
+      error_ = serialization_error_k::buffer_overflow_k;
       return;
     }
 
-    std::memcpy(&m_buffer[m_cursor], bytes.data(), bytes.size());
+    std::memcpy(&buffer_[cursor_], bytes.data(), bytes.size());
 
-    m_cursor += bytes.size();
+    cursor_ += bytes.size();
   }
 
-  std::span<byte> m_buffer;
-  std::uint64_t m_cursor{0};
-  std::optional<serialization_error_k> m_error{std::nullopt};
+  std::span<byte> buffer_;
+  std::uint64_t cursor_{0};
+  std::optional<serialization_error_k> error_{std::nullopt};
 };
 
 }  // namespace frankie::core

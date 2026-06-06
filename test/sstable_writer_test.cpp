@@ -8,6 +8,7 @@
 
 #include <cstring>
 #include <filesystem>
+#include <print>
 #include <string>
 #include <string_view>
 
@@ -31,7 +32,9 @@ class SstableWriterTest : public ::testing::Test {
   void SetUp() override {
     tmp_dir_ = std::filesystem::temp_directory_path() / "frankie_sstable_writer_test";
     std::filesystem::remove_all(tmp_dir_);
-    std::filesystem::create_directories(tmp_dir_);
+    if (!std::filesystem::create_directories(tmp_dir_)) {
+      std::println("SstableWriterTest: failed to create dir. dir={}", tmp_dir_.c_str());
+    }
     std::filesystem::create_directories(tmp_dir_ / "segments");
   }
 
@@ -344,8 +347,8 @@ TEST_F(EngineRotationTest, ThreeRotationsInARow) {
   const std::string big(400, 'x');
   for (int i = 0; i < 3; ++i) {
     auto put_result = eng->put("fill" + std::to_string(i), big);
-    ASSERT_TRUE(put_result.has_value()) << "rotation #" << i << " failed: "
-                                        << frankie::core::to_cstring(put_result.error().code_);
+    ASSERT_TRUE(put_result.has_value()) << "rotation #" << i
+                                        << " failed: " << frankie::core::to_cstring(put_result.error().code_);
   }
 }
 

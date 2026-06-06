@@ -1,13 +1,11 @@
 #pragma once
 
 #include <cstdint>
+
 #include "core/arena.hpp"
-#include "core/config.hpp"
-#include "core/dynamic_array.hpp"
-#include "core/fs.hpp"
-#include "core/scratch_arena.hpp"
 #include "core/serialization/buffer_writer.hpp"
 #include "core/status.hpp"
+#include "storage/sstable_format.hpp"
 
 namespace frankie::storage {
 
@@ -24,7 +22,7 @@ struct sstable_writer_config final {
 // blocks.
 //
 // Data block uses an arena to buffer up entries. When data block is ready, it is written into the backing file, and
-// arena is reset, buy not freed.
+// arena is reset, but not freed.
 //
 // Index uses arena that is persistent during the lifetime of the writer.
 class sstable_writer final {
@@ -36,8 +34,10 @@ class sstable_writer final {
   sstable_writer &operator=(sstable_writer &&) = default;
   ~sstable_writer() noexcept;
 
+  // Creation.
   [[nodiscard]] static std::expected<sstable_writer, core::status> create(sstable_writer_config config) noexcept;
 
+  // Data block.
   [[nodiscard]] std::expected<void, core::status> append(std::string_view ikey, std::string_view value) noexcept;
 
   [[nodiscard]] bool is_data_block_complete() const noexcept;
@@ -45,6 +45,14 @@ class sstable_writer final {
   [[nodiscard]] std::expected<std::string_view, core::status> get_data_block() noexcept;
 
   [[nodiscard]] std::expected<void, core::status> record_data_block(std::uint64_t offset, std::uint64_t size) noexcept;
+
+  [[nodiscard]] std::uint32_t get_data_block_size() const noexcept;
+
+  // Index.
+  [[nodiscard]] std::expected<std::string_view, core::status> get_index() noexcept;
+
+  // Footer.
+  [[nodiscard]] std::expected<std::string_view, core::status> get_footer(sstable_footer footer) noexcept;
 
  private:
   struct data_block_state {
@@ -66,7 +74,7 @@ class sstable_writer final {
   };
 
   struct index_entries_state {
-    // One entry per data block.
+    // One index entry per data block.
     core::arena arena_;
     index_entry *index_entries_{nullptr};
     std::uint32_t index_entries_size_{0};
@@ -76,6 +84,8 @@ class sstable_writer final {
 
   sstable_writer_config config_;
 
+  // General purpose allocator.
+  core::arena gpa_arena_;
   // Per data block state.
   data_block_state current_block_state_{};
   // Index accounting for all data blocks.

@@ -13,16 +13,16 @@ namespace frankie::core {
 
 class buffer_reader {
  public:
-  buffer_reader(std::span<std::byte> buffer) : m_buffer{buffer} {}
+  buffer_reader(std::span<std::byte> buffer) : buffer_{buffer} {}
 
   template <EndianInteger T>
   [[nodiscard]] auto read_endian_integer(T &out) noexcept -> buffer_reader & {
-    if (m_error) {
+    if (error_) {
       return *this;
     }
 
     auto bytes{read_raw_bytes(T::SIZE)};
-    if (m_error) {
+    if (error_) {
       return *this;
     }
     out = T::from_bytes(bytes);
@@ -31,7 +31,7 @@ class buffer_reader {
   }
 
   [[nodiscard]] auto read_varint(std::uint64_t &out) noexcept -> buffer_reader & {
-    if (m_error) {
+    if (error_) {
       return *this;
     }
 
@@ -56,18 +56,18 @@ class buffer_reader {
       byteCount++;
     }
 
-    m_error = serialization_error_k::invalid_variant_k;
+    error_ = serialization_error_k::invalid_variant_k;
     return *this;
   }
 
   [[nodiscard]] auto read_string(std::string &out) noexcept -> buffer_reader & {
-    if (m_error) {
+    if (error_) {
       return *this;
     }
 
     std::size_t count{0};
     (void)read_varint(count);
-    if (m_error) {
+    if (error_) {
       return *this;
     }
 
@@ -90,31 +90,31 @@ class buffer_reader {
     return *this;
   }
 
-  [[nodiscard]] auto bytes_read() const noexcept -> std::size_t { return m_position; }
+  [[nodiscard]] std::size_t bytes_read() const noexcept { return position_; }
 
-  [[nodiscard]] auto remaining() const noexcept -> std::size_t { return m_buffer.size() - m_position; }
+  [[nodiscard]] std::size_t remaining() const noexcept { return buffer_.size() - position_; }
 
-  [[nodiscard]] auto error() const noexcept -> std::optional<serialization_error_k> { return m_error; }
+  [[nodiscard]] std::optional<serialization_error_k> error() const noexcept { return error_; }
 
-  [[nodiscard]] auto has_error() const noexcept -> bool { return m_error.has_value(); }
+  [[nodiscard]] bool has_error() const noexcept { return error_.has_value(); }
 
-  [[nodiscard]] auto eof() const noexcept -> bool { return m_position == m_buffer.size(); }
+  [[nodiscard]] bool eof() const noexcept { return position_ == buffer_.size(); }
 
  private:
   auto read_raw_bytes(std::size_t count) noexcept -> std::span<std::byte> {
-    if (count + m_position > m_buffer.size()) {
-      m_error = serialization_error_k::truncated_file_k;
+    if (count + position_ > buffer_.size()) {
+      error_ = serialization_error_k::truncated_file_k;
       return {};
     }
 
-    auto result{m_buffer.subspan(m_position, count)};
-    m_position += count;
+    auto result{buffer_.subspan(position_, count)};
+    position_ += count;
     return result;
   }
 
-  std::span<std::byte> m_buffer;
-  std::size_t m_position{0};
-  std::optional<serialization_error_k> m_error{std::nullopt};
+  std::span<std::byte> buffer_;
+  std::size_t position_{0};
+  std::optional<serialization_error_k> error_{std::nullopt};
 };
 
 }  // namespace frankie::core

@@ -45,7 +45,7 @@ arena arena::create(const std::uint64_t capacity) noexcept {
   arena result;
   result.current_ = detail::fixed_aligned_alloc(capacity);
   result.current_->next_ = nullptr;
-  result.default_block_size_ = capacity;
+  // result.default_block_size_ = capacity;
   result.current_block_size_ = capacity;
   result.offset_ = 0;
   result.bytes_allocated_ = detail::block_capacity_rounded(capacity);

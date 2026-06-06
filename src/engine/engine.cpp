@@ -8,15 +8,9 @@
 #include "core/status.hpp"
 #include "engine/engine.hpp"
 #include "storage/memtable.hpp"
-#include "storage/skiplist.hpp"
 #include "storage/sstable_writer.hpp"
 
 namespace frankie::engine {
-
-// Worst-case per-entry overhead from skiplist node allocation:
-// sizeof(skiplist_node) + kMaxHeight * sizeof(pointer) + alignment padding
-static constexpr std::uint64_t kNodeOverheadEstimate =
-    sizeof(storage::skiplist_node) + (storage::skiplist<storage::internal_key_comparator>::kMaxHeight * sizeof(void *));
 
 std::expected<engine, core::status> engine::create(core::config config) noexcept {
   storage::memtable memtable_active = storage::memtable::create(config.memtable_capacity);
@@ -86,13 +80,10 @@ std::expected<void, core::status> engine::put(std::string_view key, std::string_
     return core::unexpected(core::status_code::io_error);
   }
 
-  const std::uint64_t entry_bytes =
-      key.size() + value.size() + storage::internal_key::kMetadataSize + kNodeOverheadEstimate;
-  if (auto status = maybe_rotate_memtable(entry_bytes); !status) {
+  memtable_active_.put(key, value, sequence, false);
+  if (auto status = maybe_rotate_memtable(); !status) {
     return status;
   }
-
-  memtable_active_.put(key, value, sequence, false);
 
   return {};
 }
@@ -132,12 +123,10 @@ std::expected<void, core::status> engine::del(std::string_view key) noexcept {
     return core::unexpected(core::status_code::io_error);
   }
 
-  const std::uint64_t entry_bytes = key.size() + storage::internal_key::kMetadataSize + kNodeOverheadEstimate;
-  if (auto status = maybe_rotate_memtable(entry_bytes); !status) {
+  memtable_active_.put(key, {}, sequence, true);
+  if (auto status = maybe_rotate_memtable(); !status) {
     return status;
   }
-
-  memtable_active_.put(key, {}, sequence, true);
 
   return {};
 }
@@ -148,8 +137,8 @@ void engine::scan(std::string_view range_start_key, std::string_view range_end_k
   (void)range_end_key;
 }
 
-std::expected<void, core::status> engine::maybe_rotate_memtable(const std::uint64_t incoming_bytes) noexcept {
-  if (memtable_active_.bytes_allocated() + incoming_bytes <= memtable_active_.capacity()) {
+std::expected<void, core::status> engine::maybe_rotate_memtable() noexcept {
+  if (memtable_active_.bytes_allocated() <= memtable_active_.capacity()) {
     return {};
   }
 
@@ -157,13 +146,20 @@ std::expected<void, core::status> engine::maybe_rotate_memtable(const std::uint6
   memtable_active_ = storage::memtable::create(memtable_active_.capacity());
 
   scratch_arena_.reset();
+
   auto formatted_sstable_path =
       std::span{scratch_arena_.allocate(kEngineScratchArenaCapacity), kEngineScratchArenaCapacity};
-  std::snprintf(formatted_sstable_path.data(), kEngineScratchArenaCapacity, "%s%lu", sstable_file_prefix_.data(),
-                sstable_id_);
-  // TODO(lnikon): 'config_.sstable_dir_path / sstable_file_prefix_' most probably allocated memory...
-  auto sst_file =
-      core::random_access_file::create_exclusive(config_.sstable_dir_path / std::string_view{formatted_sstable_path});
+
+  const auto len = std::snprintf(formatted_sstable_path.data(), kEngineScratchArenaCapacity, "%s%lu",
+                                 sstable_file_prefix_.data(), sstable_id_);
+  if (len <= 0) {
+    return core::unexpected(core::status_code::invalid_argument);
+  }
+  const auto formatted_len = static_cast<std::size_t>(len);
+
+  auto sst_file = core::random_access_file::create_exclusive(
+      config_.sstable_dir_path / std::string_view{formatted_sstable_path.data(), formatted_len});
+
   if (!sst_file) {
     return core::unexpected(sst_file.error());
   }
@@ -189,21 +185,66 @@ std::expected<void, core::status> engine::maybe_rotate_memtable(const std::uint6
       if (!write_result) {
         return core::unexpected(write_result.error());
       }
+      const std::uint64_t data_block_size = write_result.value();
 
-      if (auto record_result = writer->record_data_block(data_block_body_offset, *write_result); !record_result) {
+      if (auto record_result = writer->record_data_block(data_block_body_offset, data_block_size); !record_result) {
         return core::unexpected(record_result.error());
       }
 
-      data_block_body_offset += *write_result;
+      data_block_body_offset += data_block_size;
     }
   }
+
+  if (writer->get_data_block_size() != 0ULL) {
+    auto get_data_block_or = writer->get_data_block();
+    if (!get_data_block_or) {
+      return core::unexpected(get_data_block_or.error());
+    }
+
+    auto write_result = sst_file->write(get_data_block_or.value(), data_block_body_offset);
+    if (!write_result) {
+      return core::unexpected(write_result.error());
+    }
+    const std::uint64_t data_block_size = write_result.value();
+
+    if (auto record_result = writer->record_data_block(data_block_body_offset, data_block_size); !record_result) {
+      return core::unexpected(record_result.error());
+    }
+
+    data_block_body_offset += data_block_size;
+  }
+
+  // Serialize index.
+  auto index_or = writer->get_index();
+  if (!index_or) {
+    return core::unexpected(core::status_code::corrupted);
+  }
+  const auto index_write_result = sst_file->write(index_or.value(), data_block_body_offset);
+  if (!index_write_result) {
+    return core::unexpected(index_write_result.error());
+  }
+  const std::uint64_t index_size = index_write_result.value();
+  // Index starts where the last data block ends.
+  const std::uint64_t index_offset = data_block_body_offset;
+
+  // Serialize footer.
+  const std::uint64_t footer_offset = data_block_body_offset + index_size;
+  auto footer_or = writer->get_footer({.index_offset_ = static_cast<std::uint32_t>(index_offset),
+                                       .index_size_ = static_cast<std::uint32_t>(index_size)});
+  if (!footer_or) {
+    return core::unexpected(footer_or.error());
+  }
+  const auto footer_write_result = sst_file->write(footer_or.value(), footer_offset);
+  if (!footer_write_result) {
+    return core::unexpected(footer_write_result.error());
+  }
+
+  sstable_id_++;
 
   if (!wal_.truncate()) {
     // TODO(lnikon): Need a fallback strategy e.g. move current wal into wal.old1 and create a new wal
     return core::unexpected(core::status_code::io_error);
   }
-
-  sstable_id_++;
 
   return {};
 }

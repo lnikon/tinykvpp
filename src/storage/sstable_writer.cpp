@@ -1,11 +1,12 @@
-#include "storage/sstable_writer.hpp"
 #include <cstring>
 #include <print>
+
 #include "core/assert.hpp"
 #include "core/serialization/buffer_writer.hpp"
 #include "core/serialization/common.hpp"
 #include "core/status.hpp"
 #include "storage/sstable_format.hpp"
+#include "storage/sstable_writer.hpp"
 
 namespace frankie::storage {
 
@@ -26,6 +27,7 @@ std::expected<sstable_writer, core::status> sstable_writer::create(sstable_write
       core::buffer_writer::create(core::to_writable_span(data_block_body, kSSTableArenaCapacity));
 
   sstable_writer result;
+  result.gpa_arena_ = core::arena::create(1024);
   result.config_ = config;
   result.current_block_state_ = data_block_state{
       .arena_ = std::move(data_block_arena),
@@ -205,6 +207,60 @@ std::expected<void, core::status> sstable_writer::record_data_block(std::uint64_
       core::buffer_writer::create(core::to_writable_span(current_block_state_.data_block_body_, kSSTableArenaCapacity));
 
   return {};
+}
+
+std::uint32_t sstable_writer::get_data_block_size() const noexcept { return current_block_state_.data_block_size_; }
+
+std::expected<std::string_view, core::status> sstable_writer::get_index() noexcept {
+  FR_VERIFY(index_entries_state_.index_entries_ != nullptr);
+  FR_VERIFY(index_entries_state_.index_entries_size_ != 0ULL);
+  FR_VERIFY(index_entries_state_.index_entries_capacity_ != 0ULL);
+  // FR_VERIFY(index_entries_state_.entry_count_ != 0ULL); ---- entry_count_ not updated, check
+
+  std::uint64_t index_image_size = 0;
+  for (std::uint32_t idx{0}; idx < index_entries_state_.index_entries_size_; idx++) {
+    auto &current_index_entry = index_entries_state_.index_entries_[idx];
+    index_image_size += sizeof(std::uint64_t) + current_index_entry.smallest_key_.size() + sizeof(std::uint64_t) +
+                        sizeof(std::uint64_t);
+  }
+  auto *index_image =
+      static_cast<char *>(index_entries_state_.arena_.allocate(index_image_size, sizeof(std::uint64_t)));
+  if (index_image == nullptr) {
+    return core::unexpected(core::status_code::out_of_memory);
+  }
+
+  auto index_buffer_writer = core::buffer_writer::create(core::to_writable_span(index_image, index_image_size));
+  for (std::uint32_t idx{0}; idx < index_entries_state_.index_entries_size_; idx++) {
+    auto &current_index_entry = index_entries_state_.index_entries_[idx];
+
+    auto error_or = index_buffer_writer.write_string(current_index_entry.smallest_key_)
+                        .write_endian_integer(core::le_uint64_t{current_index_entry.data_block_offset_})
+                        .write_endian_integer(core::le_uint64_t{current_index_entry.data_block_size_})
+                        .error();
+    if (error_or) {
+      return core::unexpected(core::status_code::invalid_argument);
+    }
+  }
+
+  return std::string_view{index_image, index_image_size};
+}
+
+std::expected<std::string_view, core::status> sstable_writer::get_footer(sstable_footer footer) noexcept {
+  constexpr std::uint32_t footer_image_size = sizeof(sstable_footer);
+  auto *footer_image = static_cast<char *>(gpa_arena_.allocate(footer_image_size, sizeof(std::uint64_t)));
+  if (footer_image == nullptr) {
+    return core::unexpected(core::status_code::out_of_memory);
+  }
+
+  auto footer_buffer_writter = core::buffer_writer::create(core::to_writable_span(footer_image, footer_image_size));
+  auto error_or = footer_buffer_writter.write_endian_integer(core::le_uint32_t{footer.index_size_})
+                      .write_endian_integer(core::le_uint32_t{footer.index_offset_})
+                      .error();
+  if (error_or) {
+    return core::unexpected(core::status_code::invalid_argument);
+  }
+
+  return std::string_view{footer_image, footer_image_size};
 }
 
 }  // namespace frankie::storage
