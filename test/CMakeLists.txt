@@ -66,6 +66,11 @@ if(GTest_FOUND)
     target_include_directories(crc32_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
     add_test(NAME Crc32Test COMMAND crc32_test)
 
+    add_executable(codec_test codec_test.cpp)
+    target_link_libraries(codec_test PRIVATE frankie_lib GTest::gtest_main)
+    target_include_directories(codec_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
+    add_test(NAME CodecTest COMMAND codec_test)
+
     message(STATUS "GTest found - testing enabled")
 else()
     message(STATUS "GTest not found - testing disabled")
