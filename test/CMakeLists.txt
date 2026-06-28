@@ -71,6 +71,11 @@ if(GTest_FOUND)
     target_include_directories(codec_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
     add_test(NAME CodecTest COMMAND codec_test)
 
+    add_executable(buffer_reader_writer_test buffer_reader_writer_test.cpp)
+    target_link_libraries(buffer_reader_writer_test PRIVATE frankie_lib GTest::gtest_main)
+    target_include_directories(buffer_reader_writer_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
+    add_test(NAME BufferReaderWriterTest COMMAND buffer_reader_writer_test)
+
     message(STATUS "GTest found - testing enabled")
 else()
     message(STATUS "GTest not found - testing disabled")

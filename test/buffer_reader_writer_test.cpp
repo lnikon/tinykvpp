@@ -1,97 +1,91 @@
 #include <array>
-
 #include <cstddef>
+#include <cstdint>
+#include <span>
+#include <string_view>
+
 #include <gtest/gtest.h>
-#include <spdlog/spdlog.h>
 
-#include "serialization/buffer_reader.h"
-#include "serialization/buffer_writer.h"
-#include "serialization/endian_integer.h"
+#include "core/serialization/buffer_reader.hpp"
+#include "core/serialization/buffer_writer.hpp"
+#include "core/status.hpp"
+#include "core/views.hpp"
 
-using namespace serialization;
+using namespace frankie;
 
-class MyFixture : public testing::Test
-{
-  protected:
-    void SetUp() override
-    {
-    }
-
-    void TearDown() override
-    {
-    }
-};
-
-TEST(EndianInteger, Get)
-{
-    const std::int8_t podInt8{12};
-    const le_int8_t   expectedInt8{podInt8};
-
-    EXPECT_EQ(expectedInt8.get(), podInt8);
-}
-
-TEST(EndianInteger, FromBytes)
-{
-    const std::int8_t podInt8{12};
-    const le_int8_t   expectedInt8{podInt8};
-
-    const auto reconstructred{le_int8_t::from_bytes(expectedInt8.bytes())};
-
-    EXPECT_EQ(reconstructred.get(), podInt8);
-}
-
+// Write a mix of values, then read them back in the same order and assert they
+// round-trip unchanged.
 TEST(BufferReaderWriterTest, ReadYourWrites)
 {
-    // Raw data
-    static constexpr const std::uint64_t                     bytesCount{4};
-    static constexpr const std::array<std::byte, bytesCount> rawBytes{
-        std::byte{0x40}, std::byte{0xFC}, std::byte{0x04}, std::byte{0xAF}
-    };
+    constexpr std::uint32_t    expectedU32{0xDEADBEEFU};
+    constexpr std::uint64_t    expectedU64{0x0123456789ABCDEFULL};
+    constexpr std::uint64_t    expectedVarint{300ULL};
+    constexpr std::string_view expectedString{"hello frankie"};
+    constexpr std::string_view blobSource{"raw-blob-payload"};
 
-    // Expected values
-    const le_int8_t                                   expectedInt8{12};
-    const le_int8_t                                   expectedInt8neg{-4};
-    static constexpr const std::string                expectedString{"t!s$ a str "};
-    static constexpr const std::span<const std::byte> expectedBytes{rawBytes};
+    const std::span<const std::byte> expectedBlob{core::to_span(blobSource)};
 
-    // Buffer to serialize into and deserialize from
-    const std::size_t bufferSize{
-        sizeof(expectedInt8) + sizeof(expectedInt8neg) + 1 + expectedString.size() +
-        sizeof(bytesCount) + expectedBytes.size()
-    };
-    std::array<std::byte, bufferSize> buffer{};
+    std::array<std::byte, 256> buffer{};
 
-    // Serilize into buffer
-    buffer_writer_t writer(buffer);
-    auto            status{writer.write_endian_integer(expectedInt8)
-                    .write_endian_integer(expectedInt8neg)
-                    .write_string(expectedString)
-                    .write_endian_integer(le_uint64_t{bytesCount})
-                    .write_bytes(expectedBytes)
-                    .has_error()};
-    EXPECT_FALSE(status);
-    EXPECT_EQ(writer.bytes_written(), bufferSize);
+    auto writer{core::buffer_writer::create(buffer)};
+    (void)writer.write<std::uint32_t>(expectedU32)
+        .write<std::uint64_t>(expectedU64)
+        .write_varint(expectedVarint)
+        .write_string(expectedString)
+        .write_bytes(expectedBlob);
 
-    // Derserialize from buffer
-    buffer_reader_t      reader(buffer);
-    le_int8_t            int8{0};
-    le_int8_t            int8neg{0};
-    std::string          actualString;
-    le_uint64_t          actualBytesCount{0};
-    std::span<std::byte> actualBytes;
-    status = reader.read_endian_integer(int8)
-                 .read_endian_integer(int8neg)
-                 .read_string(actualString)
-                 .read_endian_integer(actualBytesCount)
-                 .read_bytes(bytesCount, actualBytes)
-                 .has_error();
-    EXPECT_FALSE(status);
-    EXPECT_EQ(reader.bytes_read(), writer.bytes_written());
+    EXPECT_FALSE(writer.error().has_value());
 
-    // Check that we read what we wrote
-    EXPECT_EQ(int8.get(), expectedInt8.get());
-    EXPECT_EQ(int8neg.get(), expectedInt8neg.get());
-    EXPECT_EQ(expectedString, actualString);
-    EXPECT_EQ(bytesCount, actualBytesCount.get());
-    EXPECT_TRUE(std::ranges::equal(expectedBytes, actualBytes));
+    core::buffer_reader reader{buffer};
+
+    std::uint32_t              actualU32{0};
+    std::uint64_t              actualU64{0};
+    std::uint64_t              actualVarint{0};
+    std::string_view           actualString;
+    std::span<const std::byte> actualBlob;
+
+    (void)reader.read<std::uint32_t>(actualU32)
+        .read<std::uint64_t>(actualU64)
+        .read_varint(actualVarint)
+        .read_string_view(actualString)
+        .read_bytes(expectedBlob.size(), actualBlob);
+
+    EXPECT_FALSE(reader.error().has_value());
+
+    EXPECT_EQ(actualU32, expectedU32);
+    EXPECT_EQ(actualU64, expectedU64);
+    EXPECT_EQ(actualVarint, expectedVarint);
+    EXPECT_EQ(actualString, expectedString);
+    EXPECT_EQ(core::to_string_view(actualBlob), blobSource);
+
+    EXPECT_EQ(writer.bytes_written(), reader.bytes_read());
+}
+
+// Writing more bytes than the target buffer can hold must surface
+// buffer_overflow on the writer.
+TEST(BufferReaderWriterTest, WriterOverflow)
+{
+    std::array<std::byte, 2> tiny{};
+
+    auto writer{core::buffer_writer::create(tiny)};
+    (void)writer.write<std::uint64_t>(0x1122334455667788ULL);
+
+    EXPECT_TRUE(writer.error().has_value());
+    EXPECT_EQ(*writer.error(), core::status_code::buffer_overflow);
+}
+
+// A varint made entirely of continuation bytes (high bit set) with no
+// terminating byte is corrupted: the reader runs out of input first.
+TEST(BufferReaderWriterTest, ReadTruncatedVarint)
+{
+    std::array<std::byte, 3> truncated{std::byte{0xFF}, std::byte{0xFF}, std::byte{0xFF}};
+
+    core::buffer_reader reader{truncated};
+
+    std::uint64_t value{0};
+    (void)reader.read_varint(value);
+
+    EXPECT_TRUE(reader.has_error());
+    ASSERT_TRUE(reader.error().has_value());
+    EXPECT_EQ(*reader.error(), core::status_code::corrupted);
 }
