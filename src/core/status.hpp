@@ -8,7 +8,16 @@
 namespace frankie::core {
 
 // Coarse status codes grouped by recovery action.
-enum class status_code : std::uint8_t { ok = 0, not_found, io_error, invalid_argument, corrupted, eof, out_of_memory };
+enum class status_code : std::uint8_t {
+  ok = 0,
+  not_found,
+  io_error,
+  invalid_argument,
+  corrupted,
+  eof,
+  out_of_memory,
+  buffer_overflow
+};
 
 [[nodiscard]] constexpr const char *to_cstring(status_code code) noexcept {
   switch (code) {
@@ -26,6 +35,8 @@ enum class status_code : std::uint8_t { ok = 0, not_found, io_error, invalid_arg
       return "eof";
     case status_code::out_of_memory:
       return "out_of_memory";
+    case status_code::buffer_overflow:
+      return "buffer_overflow";
   }
   return "unknown";
 }
@@ -64,6 +75,6 @@ static_assert(std::is_trivially_copyable_v<status>, "status must be trivially co
   return std::unexpected<status>(std::in_place, code, msg);
 }
 
-[[nodiscard]] constexpr auto unexpected(status st) noexcept { return std::unexpected<status>(std::in_place, st); }
+[[nodiscard]] constexpr auto unexpected(status stat) noexcept { return std::unexpected<status>(std::in_place, stat); }
 
 }  // namespace frankie::core

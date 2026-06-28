@@ -2,7 +2,6 @@
 // rotation pipeline. Several tests are expected to fail against the current
 // implementation; each one is annotated with the review item it pins.
 
-#include "storage/sstable_writer.hpp"
 
 #include <gtest/gtest.h>
 
@@ -17,8 +16,8 @@
 #include "core/status.hpp"
 #include "engine/engine.hpp"
 #include "storage/sstable_format.hpp"
+#include "storage/sstable_writer.hpp"
 
-using frankie::core::status_code;
 using frankie::storage::sstable_data_block_header;
 using frankie::storage::sstable_writer;
 using frankie::storage::sstable_writer_config;
@@ -198,11 +197,11 @@ class EngineRotationTest : public ::testing::Test {
   [[nodiscard]] frankie::core::config make_config(std::uint64_t memtable_capacity = 512,
                                                   std::uint64_t wal_capacity = 4 * 1024 * 1024) const {
     return frankie::core::config{
-        .root_dir_path = tmp_dir_,
-        .wal_path = tmp_dir_ / "test.wal",
-        .sstable_dir_path = tmp_dir_ / "segments",
-        .wal_capacity = wal_capacity,
-        .memtable_capacity = memtable_capacity,
+        .root_dir_path_ = tmp_dir_,
+        .wal_path_ = tmp_dir_ / "test.wal",
+        .sstable_dir_path_ = tmp_dir_ / "segments",
+        .wal_capacity_ = wal_capacity,
+        .memtable_capacity_ = memtable_capacity,
     };
   }
 };

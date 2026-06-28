@@ -3,8 +3,8 @@
 
 #include "core/assert.hpp"
 #include "core/serialization/buffer_writer.hpp"
-#include "core/serialization/common.hpp"
 #include "core/status.hpp"
+#include "core/views.hpp"
 #include "storage/sstable_format.hpp"
 #include "storage/sstable_writer.hpp"
 
@@ -43,12 +43,11 @@ std::expected<sstable_writer, core::status> sstable_writer::create(sstable_write
   if (index_entries == nullptr) {
     return core::unexpected(core::status_code::out_of_memory);
   }
-  result.index_entries_state_ = {
+  result.index_entries_state_ = index_entries_state{
       .arena_ = std::move(index_arena),
       .index_entries_ = index_entries,
-      .index_entries_size_ = 0,
+      .index_entries_count_ = 0,
       .index_entries_capacity_ = kSSTableArenaCapacity,
-      .entry_count_ = 0,
   };
   return result;
 }
@@ -74,6 +73,7 @@ std::expected<void, core::status> sstable_writer::append(std::string_view ikey, 
 
     current_block_state_.data_block_body_ = new_buffer;
     current_block_state_.data_block_capacity_ = new_capacity;
+    // TODO(lnikon): Writer creation is super cheap. Why can't I create it when needed, and instead heave to store?
     current_block_state_.buffer_writer_.set_buffer(
         core::to_writable_span(current_block_state_.data_block_body_, current_block_state_.data_block_capacity_));
   }
@@ -87,7 +87,7 @@ std::expected<void, core::status> sstable_writer::append(std::string_view ikey, 
     }
     std::memcpy(smallest_key_buf, ikey.data(), ikey.size());
 
-    if (index_entries_state_.index_entries_size_ >= index_entries_state_.index_entries_capacity_) {
+    if (index_entries_state_.index_entries_count_ >= index_entries_state_.index_entries_capacity_) {
       // Allocate double the existing capacity.
       const auto new_capacity = index_entries_state_.index_entries_capacity_ * 2;
       auto *new_buffer =
@@ -97,7 +97,7 @@ std::expected<void, core::status> sstable_writer::append(std::string_view ikey, 
       }
 
       // Copy index entries from the old buffer into the new one.
-      for (std::size_t idx{0}; idx < index_entries_state_.index_entries_size_; idx++) {
+      for (std::size_t idx{0}; idx < index_entries_state_.index_entries_count_; idx++) {
         new_buffer[idx] = index_entries_state_.index_entries_[idx];
       }
 
@@ -105,7 +105,7 @@ std::expected<void, core::status> sstable_writer::append(std::string_view ikey, 
       index_entries_state_.index_entries_capacity_ = new_capacity;
     }
 
-    index_entries_state_.index_entries_[index_entries_state_.index_entries_size_].smallest_key_ =
+    index_entries_state_.index_entries_[index_entries_state_.index_entries_count_].smallest_key_ =
         std::string_view{smallest_key_buf, ikey.size()};
   }
 
@@ -174,7 +174,7 @@ std::expected<void, core::status> sstable_writer::record_data_block(std::uint64_
   FR_VERIFY(index_entries_state_.index_entries_ != nullptr);
   FR_VERIFY(index_entries_state_.index_entries_capacity_ != 0ULL);
 
-  if (index_entries_state_.index_entries_size_ >= index_entries_state_.index_entries_capacity_) {
+  if (index_entries_state_.index_entries_count_ >= index_entries_state_.index_entries_capacity_) {
     // Allocate double the existing capacity.
     const auto new_capacity = index_entries_state_.index_entries_capacity_ * 2;
     auto *new_buffer =
@@ -184,7 +184,7 @@ std::expected<void, core::status> sstable_writer::record_data_block(std::uint64_
     }
 
     // Copy index entries from the old buffer into the new one.
-    for (std::size_t idx{0}; idx < index_entries_state_.index_entries_size_; idx++) {
+    for (std::size_t idx{0}; idx < index_entries_state_.index_entries_count_; idx++) {
       new_buffer[idx] = index_entries_state_.index_entries_[idx];
     }
 
@@ -192,11 +192,11 @@ std::expected<void, core::status> sstable_writer::record_data_block(std::uint64_
     index_entries_state_.index_entries_capacity_ = new_capacity;
   }
 
-  auto &latest_index_entry = index_entries_state_.index_entries_[index_entries_state_.index_entries_size_];
+  auto &latest_index_entry = index_entries_state_.index_entries_[index_entries_state_.index_entries_count_];
   latest_index_entry.data_block_offset_ = offset;
   latest_index_entry.data_block_size_ = size;
 
-  index_entries_state_.index_entries_size_++;
+  index_entries_state_.index_entries_count_++;
 
   current_block_state_.arena_.destroy();
   current_block_state_.data_block_body_ =
@@ -213,12 +213,11 @@ std::uint32_t sstable_writer::get_data_block_size() const noexcept { return curr
 
 std::expected<std::string_view, core::status> sstable_writer::get_index() noexcept {
   FR_VERIFY(index_entries_state_.index_entries_ != nullptr);
-  FR_VERIFY(index_entries_state_.index_entries_size_ != 0ULL);
+  FR_VERIFY(index_entries_state_.index_entries_count_ != 0ULL);
   FR_VERIFY(index_entries_state_.index_entries_capacity_ != 0ULL);
-  // FR_VERIFY(index_entries_state_.entry_count_ != 0ULL); ---- entry_count_ not updated, check
 
   std::uint64_t index_image_size = 0;
-  for (std::uint32_t idx{0}; idx < index_entries_state_.index_entries_size_; idx++) {
+  for (std::uint32_t idx{0}; idx < index_entries_state_.index_entries_count_; idx++) {
     auto &current_index_entry = index_entries_state_.index_entries_[idx];
     index_image_size += sizeof(std::uint64_t) + current_index_entry.smallest_key_.size() + sizeof(std::uint64_t) +
                         sizeof(std::uint64_t);
@@ -230,12 +229,15 @@ std::expected<std::string_view, core::status> sstable_writer::get_index() noexce
   }
 
   auto index_buffer_writer = core::buffer_writer::create(core::to_writable_span(index_image, index_image_size));
-  for (std::uint32_t idx{0}; idx < index_entries_state_.index_entries_size_; idx++) {
+  if (index_buffer_writer.write(index_entries_state_.index_entries_count_).error()) {
+    return core::unexpected(core::status_code::invalid_argument);
+  }
+  for (std::uint32_t idx{0}; idx < index_entries_state_.index_entries_count_; idx++) {
     auto &current_index_entry = index_entries_state_.index_entries_[idx];
 
     auto error_or = index_buffer_writer.write_string(current_index_entry.smallest_key_)
-                        .write_endian_integer(core::le_uint64_t{current_index_entry.data_block_offset_})
-                        .write_endian_integer(core::le_uint64_t{current_index_entry.data_block_size_})
+                        .write(current_index_entry.data_block_offset_)
+                        .write(current_index_entry.data_block_size_)
                         .error();
     if (error_or) {
       return core::unexpected(core::status_code::invalid_argument);
@@ -253,9 +255,7 @@ std::expected<std::string_view, core::status> sstable_writer::get_footer(sstable
   }
 
   auto footer_buffer_writter = core::buffer_writer::create(core::to_writable_span(footer_image, footer_image_size));
-  auto error_or = footer_buffer_writter.write_endian_integer(core::le_uint32_t{footer.index_size_})
-                      .write_endian_integer(core::le_uint32_t{footer.index_offset_})
-                      .error();
+  auto error_or = footer_buffer_writter.write(footer.index_size_).write(footer.index_offset_).error();
   if (error_or) {
     return core::unexpected(core::status_code::invalid_argument);
   }
