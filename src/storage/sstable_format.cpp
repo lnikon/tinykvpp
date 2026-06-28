@@ -42,7 +42,7 @@ namespace frankie::storage {
 [[nodiscard]] std::expected<sstable_footer, core::status> decode_footer(core::buffer_reader &reader) noexcept {
   std::uint32_t index_offset{0};
   std::uint32_t index_size{0};
-  if (!reader.read(index_offset).read(index_size).error()) {
+  if (reader.read(index_offset).read(index_size).error()) {
     return core::unexpected(core::status_code::corrupted);
   }
   return sstable_footer{.index_offset_ = index_offset, .index_size_ = index_size};
