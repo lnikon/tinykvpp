@@ -51,6 +51,11 @@ if(GTest_FOUND)
     target_include_directories(views_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
     add_test(NAME ViewsTest COMMAND views_test)
 
+    add_executable(sstable_reader_test sstable_reader_test.cpp)
+    target_link_libraries(sstable_reader_test PRIVATE frankie_lib GTest::gtest_main)
+    target_include_directories(sstable_reader_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
+    add_test(NAME SstableReaderTest COMMAND sstable_reader_test)
+
     message(STATUS "GTest found - testing enabled")
 else()
     message(STATUS "GTest not found - testing disabled")
