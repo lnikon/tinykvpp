@@ -56,6 +56,11 @@ if(GTest_FOUND)
     target_include_directories(sstable_reader_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
     add_test(NAME SstableReaderTest COMMAND sstable_reader_test)
 
+    add_executable(segment_test segment_test.cpp)
+    target_link_libraries(segment_test PRIVATE frankie_lib GTest::gtest_main)
+    target_include_directories(segment_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
+    add_test(NAME SegmentTest COMMAND segment_test)
+
     message(STATUS "GTest found - testing enabled")
 else()
     message(STATUS "GTest not found - testing disabled")
