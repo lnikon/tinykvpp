@@ -1,0 +1,33 @@
+### sstable (de)serialization
+- index
+-- serialize number of entries in index block, to later pre-allocate an array with appropriate size
+
+### segment management
+need manifest to store the latest sst id.
+- manifest
+-- stores latest segment id
+
+- segments_mgr
+-- scans 'segments/' topology
+-- caches topology in memory (?)
+-- updates manifest with topology (?)
+
+- engine
+-- uses manifest to get path to the next latest segment
+-- iterates over the segment to find the key
+
+then need sstable_reader to use segments_mgr to get the path to the appropriate sstable.
+for example, on get path, need to get path to the latest segment in level_0, then next and so on until level_0 is exhausted, then need the same logic for other levels. these paths can be cached on the startup.
+compaction logic will effect segment distrubtion of levels, so in future it should update segments_mgr/manifest.
+
+- segments/
+- segments/level_0/ <--- right now only level_0 will be supported
+- segments/level_0/segment_5.sst
+- segments/level_0/segment_6.sst
+- segments/level_0/segment_7.sst
+- segments/level_0/segment_8.sst
+- segments/level_1/
+- segments/level_1/segment_1.sst
+- segments/level_1/segment_2.sst
+- segments/level_1/segment_3.sst
+- segments/level_1/segment_4.sst

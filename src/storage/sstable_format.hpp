@@ -1,10 +1,14 @@
 #pragma once
 
-#include <sys/types.h>
 #include <cstdint>
-#include <limits>
+#include <expected>
+#include <string_view>
 
-// Wire layout for SSTable on-disk format. POD only — no logic.
+#include "core/arena.hpp"
+#include "core/serialization/buffer_reader.hpp"
+#include "core/status.hpp"
+
+// Wire layout for SSTable on-disk format.
 //
 // File layout (sequential):
 //   [data block 0]
@@ -28,24 +32,11 @@
 //
 // Bloom region:
 //   [u64 bits][u64 hashes][bits/8 bytes of bit array]
-
-// - data_block
-// -- data_block_header
-// --- entry_count: u32
-// --- compression_type: u8
-// --- min_sequence: u32
-// --- max_sequence: u32
-// --- min_key: u32
-// --- max_key: u32
-// -- data_block_body
-// --- [key_size:u32 key:@key_size value_size:u32 value:@value_len tombstone:u8 sequence:u32 timestamp:u32]
-// - index
-// -- [key_size:u32 key:@key_size block_offset:u32]
-// - bloom_filter
-// *** no support for blooms yet ***
-// - footer
-// -- index_offset:u32
-// -- bloom_offset:u32
+//
+// Footer region:
+//   [u64 index_offset][u64 index_size]
+//   [u64 bloom_offset][u64 bloom_size]
+//   [u32 crc32]
 
 namespace frankie::storage {
 
@@ -61,6 +52,15 @@ struct sstable_data_block_header final {
 };
 static_assert(sizeof(sstable_data_block_header) == 20, "sstable_data_block_header layout drift");
 
+struct index_entry final {
+  std::string_view smallest_key_;
+  std::uint64_t data_block_offset_{0};
+  std::uint64_t data_block_size_{0};
+};
+
+[[nodiscard]] std::expected<std::span<index_entry>, core::status> decode_index(core::buffer_reader &reader,
+                                                                               core::arena &arena);
+
 struct sstable_footer final {
   std::uint32_t index_offset_{0};
   std::uint32_t index_size_{0};
@@ -68,5 +68,10 @@ struct sstable_footer final {
   std::uint32_t bloom_size_{0};
   std::uint32_t crc32_{0};
 };
+
+[[nodiscard]] std::expected<sstable_footer, core::status> decode_footer(core::buffer_reader &reader) noexcept;
+
+// TODO(lnikon): Replace with sizeof(sst_footer) when bloom and crc32 are ready.
+inline constexpr std::uint32_t kFooterSize = 2 * sizeof(std::uint32_t);
 
 }  // namespace frankie::storage

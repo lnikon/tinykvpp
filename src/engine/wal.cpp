@@ -1,6 +1,5 @@
 #include <cstdint>
 #include <cstring>
-#include <optional>
 #include <print>
 #include <utility>
 

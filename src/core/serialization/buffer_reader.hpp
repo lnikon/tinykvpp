@@ -1,32 +1,29 @@
 #pragma once
 
-#include <spdlog/spdlog.h>
 #include <cstdint>
 #include <optional>
-#include <span>
-#include <string>
 
-#include "core/serialization/common.hpp"
-#include "core/serialization/concepts.hpp"
+#include "core/serialization/codec.hpp"
+#include "core/status.hpp"
+#include "core/views.hpp"
 
 namespace frankie::core {
 
-class buffer_reader {
+class buffer_reader final {
+  std::span<const std::byte> buffer_;
+  std::size_t cursor_{0};
+  std::optional<core::status_code> error_{std::nullopt};
+
  public:
-  buffer_reader(std::span<std::byte> buffer) : buffer_{buffer} {}
+  explicit buffer_reader(std::span<const std::byte> buffer) : buffer_{buffer} {}
 
-  template <EndianInteger T>
-  [[nodiscard]] auto read_endian_integer(T &out) noexcept -> buffer_reader & {
+  template <std::integral T>
+  [[nodiscard]] auto read(T &out) noexcept -> buffer_reader & {
     if (error_) {
       return *this;
     }
-
-    auto bytes{read_raw_bytes(T::SIZE)};
-    if (error_) {
-      return *this;
-    }
-    out = T::from_bytes(bytes);
-
+    out = codec::load_le<T>(buffer_.subspan(cursor_).first<sizeof(T)>());
+    cursor_ += sizeof(T);
     return *this;
   }
 
@@ -34,87 +31,46 @@ class buffer_reader {
     if (error_) {
       return *this;
     }
-
-    std::uint64_t result{0};
-    std::size_t shift{0};
-    std::size_t byteCount{0};
-
-    while (byteCount < MAX_VARINT_BYTES) {
-      const auto bytes{read_raw_bytes(1)};
-      if (has_error()) {
-        return *this;
-      }
-
-      result |= (std::to_integer<std::uint64_t>((bytes[0] & std::byte{0x7F})) << shift);
-
-      if ((bytes[0] & std::byte{0x80}) == std::byte{0}) {
-        out = result;
-        return *this;
-      }
-
-      shift += 7;
-      byteCount++;
+    if (auto value = codec::decode_varint(buffer_, cursor_); value) {
+      out = *value;
+    } else {
+      error_ = core::status_code::corrupted;
     }
-
-    error_ = serialization_error_k::invalid_variant_k;
     return *this;
   }
 
-  [[nodiscard]] auto read_string(std::string &out) noexcept -> buffer_reader & {
+  [[nodiscard]] auto read_string_view(std::string_view &out) noexcept -> buffer_reader & {
     if (error_) {
       return *this;
     }
-
-    std::size_t count{0};
-    (void)read_varint(count);
+    std::uint64_t count = 0;
+    std::span<const std::byte> bytes;
+    (void)read_varint(count).read_bytes(count, bytes);
     if (error_) {
       return *this;
     }
-
-    auto span{read_raw_bytes(count)};
-    if (has_error()) {
-      return *this;
-    }
-    out = to_string_view(span);
-
+    out = to_string_view(bytes);
     return *this;
   }
 
-  [[nodiscard]] auto read_bytes(const std::size_t count, std::span<std::byte> &out) noexcept -> buffer_reader & {
+  [[nodiscard]] auto read_bytes(const std::size_t count, std::span<const std::byte> &out) noexcept -> buffer_reader & {
     if (has_error()) {
       return *this;
     }
-
-    out = read_raw_bytes(count);
-
+    if (count + cursor_ > buffer_.size()) {
+      error_ = core::status_code::buffer_overflow;
+    }
+    out = buffer_.subspan(cursor_, count);
+    cursor_ += count;
     return *this;
   }
 
-  [[nodiscard]] std::size_t bytes_read() const noexcept { return position_; }
+  [[nodiscard]] std::size_t bytes_read() const noexcept { return cursor_; }
+  [[nodiscard]] std::size_t remaining() const noexcept { return buffer_.size() - cursor_; }
 
-  [[nodiscard]] std::size_t remaining() const noexcept { return buffer_.size() - position_; }
-
-  [[nodiscard]] std::optional<serialization_error_k> error() const noexcept { return error_; }
-
+  [[nodiscard]] std::optional<core::status_code> error() const noexcept { return error_; }
   [[nodiscard]] bool has_error() const noexcept { return error_.has_value(); }
-
-  [[nodiscard]] bool eof() const noexcept { return position_ == buffer_.size(); }
-
- private:
-  auto read_raw_bytes(std::size_t count) noexcept -> std::span<std::byte> {
-    if (count + position_ > buffer_.size()) {
-      error_ = serialization_error_k::truncated_file_k;
-      return {};
-    }
-
-    auto result{buffer_.subspan(position_, count)};
-    position_ += count;
-    return result;
-  }
-
-  std::span<std::byte> buffer_;
-  std::size_t position_{0};
-  std::optional<serialization_error_k> error_{std::nullopt};
+  [[nodiscard]] bool eof() const noexcept { return cursor_ == buffer_.size(); }
 };
 
 }  // namespace frankie::core
