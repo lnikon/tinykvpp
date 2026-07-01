@@ -13,16 +13,16 @@
 namespace frankie::engine {
 
 std::expected<engine, core::status> engine::create(core::config config) noexcept {
-  storage::memtable memtable_active = storage::memtable::create(config.memtable_capacity);
+  storage::memtable memtable_active = storage::memtable::create(config.memtable_capacity_);
   std::uint64_t max_sequence_number = 0;
-  auto reader = wal_reader::open(config.wal_path);
+  auto reader = wal_reader::open(config.wal_path_);
   if (!reader) {
     // not_found = no WAL on disk yet (first start). eof = WAL exists but is
     // empty. Both are clean-start cases; anything else is a real failure that
     // must propagate so the caller doesn't silently lose existing entries.
     if (reader.error().code_ != core::status_code::not_found && reader.error().code_ != core::status_code::eof)
         [[unlikely]] {
-      std::println("engine::create: failed to open WAL reader. path={}, status={}", config.wal_path.c_str(),
+      std::println("engine::create: failed to open WAL reader. path={}, status={}", config.wal_path_.c_str(),
                    core::to_cstring(reader.error().code_));
       return core::unexpected(reader.error());
     }
@@ -47,15 +47,15 @@ std::expected<engine, core::status> engine::create(core::config config) noexcept
     }
 
     if (entry.error().code_ != core::status_code::eof) [[unlikely]] {
-      std::println("engine::create: failed to recover WAL. path={}, status={}", config.wal_path.c_str(),
+      std::println("engine::create: failed to recover WAL. path={}, status={}", config.wal_path_.c_str(),
                    core::to_cstring(entry.error().code_));
       return core::unexpected(entry.error());
     }
   }
 
-  auto writer = wal_writer::open(config.wal_path, config.wal_capacity);
+  auto writer = wal_writer::open(config.wal_path_, config.wal_capacity_);
   if (!writer) {
-    std::println("engine::create: failed to open WAL writer. path={}", config.wal_path.c_str());
+    std::println("engine::create: failed to open WAL writer. path={}", config.wal_path_.c_str());
     return core::unexpected(writer.error());
   }
 
@@ -158,7 +158,7 @@ std::expected<void, core::status> engine::maybe_rotate_memtable() noexcept {
   const auto formatted_len = static_cast<std::size_t>(len);
 
   auto sst_file = core::random_access_file::create_exclusive(
-      config_.sstable_dir_path / std::string_view{formatted_sstable_path.data(), formatted_len});
+      config_.sstable_dir_path_ / std::string_view{formatted_sstable_path.data(), formatted_len});
 
   if (!sst_file) {
     return core::unexpected(sst_file.error());

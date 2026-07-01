@@ -232,7 +232,7 @@ std::expected<std::uint64_t, core::status> random_access_file::write_fsync(std::
 }
 
 std::expected<std::uint64_t, core::status> random_access_file::read(std::span<char> data,
-                                                                    std::uint64_t offset) noexcept {
+                                                                    std::uint64_t offset) const noexcept {
   static_assert(sizeof(off_t) >= sizeof(std::uint64_t), "build with _FILE_OFFSET_BITS=64");
   FR_VERIFY_MSG(fd_ != -1, "file descriptor should not be empty");
   FR_VERIFY_MSG(offset <= static_cast<std::uint64_t>(std::numeric_limits<off_t>::max()), "offset overflow");
@@ -264,7 +264,7 @@ std::expected<void, core::status> random_access_file::sync() noexcept {
   return fdatasync_fd(fd_);
 }
 
-std::expected<std::uint64_t, core::status> random_access_file::size() noexcept {
+std::expected<std::uint64_t, core::status> random_access_file::size() const noexcept {
   FR_VERIFY_MSG(fd_ != -1, "file descriptor should not be empty");
   return fstat_size(fd_, path_);
 }

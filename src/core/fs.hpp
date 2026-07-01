@@ -88,11 +88,12 @@ class random_access_file final {
 
   // Single pread at `offset`. Loops over EINTR. Returns eof on zero bytes read.
   // Caller handles short reads.
-  [[nodiscard]] std::expected<std::uint64_t, core::status> read(std::span<char> data, std::uint64_t offset) noexcept;
+  [[nodiscard]] std::expected<std::uint64_t, core::status> read(std::span<char> data,
+                                                                std::uint64_t offset) const noexcept;
 
   [[nodiscard]] std::expected<void, core::status> sync() noexcept;
 
-  [[nodiscard]] std::expected<std::uint64_t, core::status> size() noexcept;
+  [[nodiscard]] std::expected<std::uint64_t, core::status> size() const noexcept;
 
   [[nodiscard]] std::expected<void, core::status> truncate() noexcept;
 
