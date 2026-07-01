@@ -46,10 +46,40 @@ if(GTest_FOUND)
     target_include_directories(time_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
     add_test(NAME TimeTest COMMAND time_test)
 
+    add_executable(codec_test codec_test.cpp)
+    target_link_libraries(codec_test PRIVATE frankie_lib GTest::gtest_main)
+    target_include_directories(codec_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
+    add_test(NAME CodecTest COMMAND codec_test)
+
+    add_executable(views_test views_test.cpp)
+    target_link_libraries(views_test PRIVATE frankie_lib GTest::gtest_main)
+    target_include_directories(views_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
+    add_test(NAME ViewsTest COMMAND views_test)
+
+    add_executable(crc32_test crc32_test.cpp)
+    target_link_libraries(crc32_test PRIVATE frankie_lib GTest::gtest_main)
+    target_include_directories(crc32_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
+    add_test(NAME Crc32Test COMMAND crc32_test)
+
     add_executable(buffer_reader_writer_test buffer_reader_writer_test.cpp)
     target_link_libraries(buffer_reader_writer_test PRIVATE frankie_lib GTest::gtest_main)
     target_include_directories(buffer_reader_writer_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
     add_test(NAME BufferReaderWriterTest COMMAND buffer_reader_writer_test)
+
+    add_executable(sstable_format_test sstable_format_test.cpp)
+    target_link_libraries(sstable_format_test PRIVATE frankie_lib GTest::gtest_main)
+    target_include_directories(sstable_format_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
+    add_test(NAME SstableFormatTest COMMAND sstable_format_test)
+
+    add_executable(segment_test segment_test.cpp)
+    target_link_libraries(segment_test PRIVATE frankie_lib GTest::gtest_main)
+    target_include_directories(segment_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
+    add_test(NAME SegmentTest COMMAND segment_test)
+
+    add_executable(sstable_reader_test sstable_reader_test.cpp)
+    target_link_libraries(sstable_reader_test PRIVATE frankie_lib GTest::gtest_main)
+    target_include_directories(sstable_reader_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
+    add_test(NAME SstableReaderTest COMMAND sstable_reader_test)
 
     message(STATUS "GTest found - testing enabled")
 else()
