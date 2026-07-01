@@ -65,21 +65,12 @@ class sstable_writer final {
     core::buffer_writer buffer_writer_;
   };
 
-  struct index_entry {
-    // Relative to the beginning of the file.
-    std::uint64_t data_block_offset_{0};
-    std::uint64_t data_block_size_{0};
-    // Stored in index dedicated arena.
-    std::string_view smallest_key_;
-  };
-
   struct index_entries_state {
     // One index entry per data block.
     core::arena arena_;
     index_entry *index_entries_{nullptr};
-    std::uint32_t index_entries_size_{0};
+    std::uint32_t index_entries_count_{0};
     std::uint32_t index_entries_capacity_{0};
-    std::uint32_t entry_count_{0};
   };
 
   sstable_writer_config config_;

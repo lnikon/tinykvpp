@@ -50,12 +50,15 @@ set(CORE_SRC
     src/core/crc32.cpp
     src/core/fs.cpp
     src/core/time.cpp
-    src/core/serialization/common.cpp
+    src/core/views.cpp
 )
 set(STORAGE_SRC
     src/storage/skiplist.cpp
     src/storage/memtable.cpp
     src/storage/sstable_writer.cpp
+    src/storage/sstable_reader.cpp
+    src/storage/sstable_format.cpp
+    src/storage/segment.cpp
 )
 set(ENGINE_SRC src/engine/engine.cpp src/engine/wal.cpp)
 

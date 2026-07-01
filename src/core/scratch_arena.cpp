@@ -1,9 +1,9 @@
-#include "scratch_arena.hpp"
-
 #include <algorithm>
 #include <cstdlib>
 #include <utility>
+
 #include "core/assert.hpp"
+#include "scratch_arena.hpp"
 
 namespace frankie::core {
 

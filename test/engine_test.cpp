@@ -30,11 +30,11 @@ class EngineTest : public ::testing::Test {
   [[nodiscard]] frankie::core::config make_config(std::uint64_t memtable_capacity = 1024 * 1024,
                                                   std::uint64_t wal_capacity = 1024 * 1024) const {
     return frankie::core::config{
-        .root_dir_path = tmp_dir_,
-        .wal_path = wal_path(),
-        .sstable_dir_path = tmp_dir_ / "segments",
-        .wal_capacity = wal_capacity,
-        .memtable_capacity = memtable_capacity,
+        .root_dir_path_ = tmp_dir_,
+        .wal_path_ = wal_path(),
+        .sstable_dir_path_ = tmp_dir_ / "segments",
+        .wal_capacity_ = wal_capacity,
+        .memtable_capacity_ = memtable_capacity,
     };
   }
 };
@@ -50,11 +50,11 @@ TEST_F(EngineTest, CreateSucceedsWithValidPath) {
 
 TEST_F(EngineTest, CreateFailsWithInvalidPath) {
   frankie::core::config cfg{
-      .root_dir_path = "/nonexistent/dir",
-      .wal_path = "/nonexistent/dir/wal",
-      .sstable_dir_path = "/nonexistent/dir/segments",
-      .wal_capacity = 1024,
-      .memtable_capacity = 1024,
+      .root_dir_path_ = "/nonexistent/dir",
+      .wal_path_ = "/nonexistent/dir/wal",
+      .sstable_dir_path_ = "/nonexistent/dir/segments",
+      .wal_capacity_ = 1024,
+      .memtable_capacity_ = 1024,
   };
   auto eng = engine::create(cfg);
   ASSERT_FALSE(eng.has_value());
