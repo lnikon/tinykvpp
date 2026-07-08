@@ -90,20 +90,30 @@ std::expected<void, core::status> engine::put(std::string_view key, std::string_
 
 std::expected<std::string_view, core::status> engine::get(std::string_view key) noexcept {
   auto entry = memtable_active_.get(key);
-  if (entry.has_value()) {
-    if (entry.value().tombstone_) {
+  if (entry) {
+    if (entry->tombstone_) {
       return core::unexpected(core::status_code::not_found);
     }
-    return entry.value().value();
+    return entry->value_;
   }
 
-  if (memtable_immutable_.has_value()) {
+  if (memtable_immutable_) {
     entry = memtable_immutable_->get(key);
-    if (entry.has_value()) {
-      if (entry.value().tombstone_) {
+    if (entry) {
+      if (entry->tombstone_) {
         return core::unexpected(core::status_code::not_found);
       }
-      return entry.value().value();
+      return entry->value_;
+    }
+  }
+
+  for (auto &segment : segments_) {
+    entry = segment.get_kv_entry(key);
+    if (entry) {
+      if (entry->tombstone_) {
+        return core::unexpected(core::status_code::not_found);
+      }
+      return entry->value_;
     }
   }
 

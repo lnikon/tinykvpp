@@ -26,7 +26,7 @@ int main() {
   fr::core::config config{};
 
   auto engine = fr::engine::engine::create(config);
-  if (!engine.has_value()) {
+  if (!engine) {
     std::println("Failed to create a engine. Exiting...");
     return EXIT_FAILURE;
   }
@@ -52,7 +52,7 @@ int main() {
     } else if (command == "GET") {
       if (tokens.size() != 2) {
         std::println("Usage: GET <key>");
-      } else if (auto value = engine->get(tokens[1]); value.has_value()) {
+      } else if (auto value = engine->get(tokens[1]); value) {
         std::println("{}", *value);
       } else {
         std::println("(nil)");

@@ -2,60 +2,12 @@
 #include <utility>
 
 #include "core/scratch_arena.hpp"
+#include "core/status.hpp"
 #include "core/time.hpp"
 #include "storage/memtable.hpp"
+#include "storage/sstable_format.hpp"
 
 namespace frankie::storage {
-
-// ================================================================================
-// internal_key
-// ================================================================================
-
-std::string_view internal_key::encode(core::scratch_arena &arena) const noexcept {
-  arena.reset();
-
-  const std::uint64_t total = user_key.size() + kMetadataSize;
-  char *buf = arena.allocate(total);
-  std::memset(buf, 0, total);
-  char *cursor = buf;
-  std::memcpy(cursor, user_key.data(), user_key.size());
-  cursor += user_key.size();
-  std::memcpy(cursor, &sequence, sizeof(sequence));
-  cursor += sizeof(sequence);
-  std::memcpy(cursor, &timestamp, sizeof(timestamp));
-  cursor += sizeof(timestamp);
-  *cursor++ = static_cast<char>(tombstone);
-
-  return std::string_view{buf, total};
-}
-
-internal_key internal_key::decode(const std::string_view encoded) noexcept {
-  FR_VERIFY(encoded.size() >= kMetadataSize);
-  const auto user_key_size = encoded.size() - kMetadataSize;
-
-  internal_key result;
-  result.user_key = encoded.substr(0, user_key_size);
-  std::memcpy(&result.sequence, encoded.data() + user_key_size, sizeof(sequence));
-  std::memcpy(&result.timestamp, encoded.data() + user_key_size + sizeof(sequence), sizeof(timestamp));
-  std::memcpy(&result.tombstone, encoded.data() + user_key_size + sizeof(sequence) + sizeof(timestamp), 1);
-  return result;
-}
-
-// ================================================================================
-// kv_entry
-// ================================================================================
-
-std::string_view kv_entry::user_key() const noexcept { return key_; }
-
-std::string_view kv_entry::value() const noexcept { return value_; }
-
-std::uint64_t kv_entry::bytes_allocated() const noexcept {
-  return key_.size() + value_.size() + internal_key::kMetadataSize;
-}
-
-// ================================================================================
-// memtable
-// ================================================================================
 
 memtable::memtable(memtable &&other) noexcept
     : scratch_arena_{std::exchange(other.scratch_arena_, {})},
@@ -106,37 +58,37 @@ memtable::~memtable() {
 void memtable::put(const std::string_view key, const std::string_view value, const std::uint64_t sequence,
                    const bool is_tombstone) noexcept {
   auto ikey = internal_key{
-      .user_key = key,
-      .sequence = sequence,
-      .timestamp = core::wall_clock_ms(),
-      .tombstone = is_tombstone,
+      .user_key_ = key,
+      .sequence_ = sequence,
+      .timestamp_ = core::wall_clock_ms(),
+      .tombstone_ = is_tombstone,
   };
 
-  const std::string_view ikey_encoded = ikey.encode(scratch_arena_);
+  const std::string_view ikey_encoded = storage::encode_kv_entry(scratch_arena_, ikey);
   skiplist_.insert(ikey_encoded, value);
 
   count_++;
   bytes_allocated_ += ikey_encoded.size();
 }
 
-std::optional<kv_entry> memtable::get(const std::string_view key) const noexcept {
-  auto lookup_ikey = internal_key{
-      .user_key = key,
-      .sequence = 0,
-      .timestamp = 0,
-      .tombstone = false,
+std::expected<kv_entry, core::status> memtable::get(const std::string_view key) const noexcept {
+  auto lookup_ikey = storage::internal_key{
+      .user_key_ = key,
+      .sequence_ = 0,
+      .timestamp_ = 0,
+      .tombstone_ = false,
   };
-  if (auto kv_opt = skiplist_.get(lookup_ikey.encode(scratch_arena_)); kv_opt.has_value()) {
-    auto decoded_ikey = internal_key::decode(kv_opt->first);
+  if (auto kv_opt = skiplist_.get(encode_kv_entry(scratch_arena_, lookup_ikey)); kv_opt) {
+    auto decoded_ikey = decode_kv_entry(kv_opt->first);
     return kv_entry{
-        .key_ = decoded_ikey.user_key,
+        .key_ = decoded_ikey.user_key_,
         .value_ = kv_opt->second,
-        .sequence_ = decoded_ikey.sequence,
-        .timestamp_ = decoded_ikey.timestamp,
-        .tombstone_ = decoded_ikey.tombstone,
+        .sequence_ = decoded_ikey.sequence_,
+        .timestamp_ = decoded_ikey.timestamp_,
+        .tombstone_ = decoded_ikey.tombstone_,
     };
   }
-  return std::nullopt;
+  return core::unexpected(core::status_code::not_found);
 }
 
 std::uint64_t memtable::count() const noexcept { return count_; }

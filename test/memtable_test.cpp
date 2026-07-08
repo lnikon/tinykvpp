@@ -92,7 +92,7 @@ TEST(InternalKeyTest, RoundTripPreservesTombstone) {
 TEST(KvEntryTest, BytesAllocated) {
   kv_entry entry{.key_ = "hello", .value_ = "world", .sequence_ = 1, .timestamp_ = 1, .tombstone_ = false};
   // key(5) + value(5) + seq(8) + ts(8) + tombstone(1) = 27
-  EXPECT_EQ(entry.bytes_allocated(), 27);
+  EXPECT_EQ(entry.kv_entry_allocated_bytes_count(), 27);
 }
 
 // ---------------------------------------------------------------------------

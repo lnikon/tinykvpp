@@ -109,6 +109,7 @@ std::expected<void, core::status> sstable_writer::append(std::string_view ikey, 
         std::string_view{smallest_key_buf, ikey.size()};
   }
 
+  // TODO(lnikon): Should be moved into data_block_body_encoder
   auto error_or = current_block_state_.buffer_writer_.write_string(ikey).write_string(value).error();
   if (error_or) {
     std::println("sstable_writer::append: buffer_writer failed. serialization_error={}",

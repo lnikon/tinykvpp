@@ -1,5 +1,7 @@
 #include "storage/sstable_reader.hpp"
+#include "core/assert.hpp"
 #include "core/fs.hpp"
+#include "core/serialization/buffer_reader.hpp"
 #include "core/status.hpp"
 #include "core/views.hpp"
 #include "storage/sstable_format.hpp"
@@ -36,8 +38,8 @@ std::expected<sstable_footer, core::status> sstable_reader::read_footer() noexce
   return decode_footer(reader);
 }
 
-std::expected<std::span<index_entry>, core::status> sstable_reader::read_index(const sstable_footer &footer,
-                                                                               core::arena &arena) noexcept {
+std::expected<std::span<index_entry>, core::status> sstable_reader::read_index(core::arena &arena,
+                                                                               const sstable_footer &footer) noexcept {
   char *index_buffer = static_cast<char *>(arena.allocate(footer.index_size_, alignof(std::uint8_t)));
   if (index_buffer == nullptr) {
     return core::unexpected(core::status_code::out_of_memory);
@@ -56,9 +58,34 @@ std::expected<std::span<index_entry>, core::status> sstable_reader::read_index(c
   return decode_index(reader, arena);
 }
 
-std::expected<std::string_view, core::status> sstable_reader::get_data_block() noexcept {
-  (void)file_;
-  return {};
+[[nodiscard]] std::expected<sstable_data_block, core::status> sstable_reader::read_data_block(
+    core::arena &arena, const index_entry index) noexcept {
+  FR_VERIFY(index.data_block_size_ != 0ULL);
+  FR_VERIFY(!index.smallest_key_.empty());
+
+  const auto data_block_size = index.data_block_size_;
+  auto *data_block_buffer = static_cast<char *>(arena.allocate(data_block_size, sizeof(char)));
+  auto data_block_span = std::span(data_block_buffer, data_block_size);
+
+  auto bytes_read_or = file_.read(data_block_span, index.data_block_offset_);
+  if (!bytes_read_or) {
+    return core::unexpected(core::status_code::io_error);
+  }
+  if (*bytes_read_or == 0 || *bytes_read_or != data_block_size) {
+    return core::unexpected(core::status_code::corrupted);
+  }
+
+  core::buffer_reader reader(core::to_writable_span(data_block_span));
+  auto header_or = decode_data_block_header(reader);
+  if (!header_or) {
+    return core::unexpected(core::status_code::corrupted);
+  }
+
+  auto data_block = decode_data_block(reader, *header_or);
+  if (!data_block) {
+    return core::unexpected(core::status_code::corrupted);
+  }
+  return *data_block;
 }
 
 }  // namespace frankie::storage

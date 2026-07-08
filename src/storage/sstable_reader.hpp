@@ -6,6 +6,7 @@
 
 #include "core/fs.hpp"
 #include "core/status.hpp"
+#include "storage/memtable.hpp"
 #include "storage/sstable_format.hpp"
 
 namespace frankie::storage {
@@ -29,10 +30,11 @@ class sstable_reader final {
 
   [[nodiscard]] std::expected<sstable_footer, core::status> read_footer() noexcept;
 
-  [[nodiscard]] std::expected<std::span<index_entry>, core::status> read_index(const sstable_footer &footer,
-                                                                               core::arena &arena) noexcept;
+  [[nodiscard]] std::expected<std::span<index_entry>, core::status> read_index(core::arena &arena,
+                                                                               const sstable_footer &footer) noexcept;
 
-  [[nodiscard]] std::expected<std::string_view, core::status> get_data_block() noexcept;
+  [[nodiscard]] std::expected<sstable_data_block, core::status> read_data_block(core::arena &arena,
+                                                                                const index_entry index) noexcept;
 
  private:
   core::random_access_file file_;

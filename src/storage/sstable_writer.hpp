@@ -26,35 +26,6 @@ struct sstable_writer_config final {
 //
 // Index uses arena that is persistent during the lifetime of the writer.
 class sstable_writer final {
- public:
-  sstable_writer() = default;
-  sstable_writer(const sstable_writer &) = delete;
-  sstable_writer &operator=(const sstable_writer &) = delete;
-  sstable_writer(sstable_writer &&) = default;
-  sstable_writer &operator=(sstable_writer &&) = default;
-  ~sstable_writer() noexcept;
-
-  // Creation.
-  [[nodiscard]] static std::expected<sstable_writer, core::status> create(sstable_writer_config config) noexcept;
-
-  // Data block.
-  [[nodiscard]] std::expected<void, core::status> append(std::string_view ikey, std::string_view value) noexcept;
-
-  [[nodiscard]] bool is_data_block_complete() const noexcept;
-
-  [[nodiscard]] std::expected<std::string_view, core::status> get_data_block() noexcept;
-
-  [[nodiscard]] std::expected<void, core::status> record_data_block(std::uint64_t offset, std::uint64_t size) noexcept;
-
-  [[nodiscard]] std::uint32_t get_data_block_size() const noexcept;
-
-  // Index.
-  [[nodiscard]] std::expected<std::string_view, core::status> get_index() noexcept;
-
-  // Footer.
-  [[nodiscard]] std::expected<std::string_view, core::status> get_footer(sstable_footer footer) noexcept;
-
- private:
   struct data_block_state {
     // TODO(lnikon): std::byte instead of a char*.
     core::arena arena_;
@@ -83,6 +54,30 @@ class sstable_writer final {
   index_entries_state index_entries_state_{};
   // Count of all entries from all data blocks.
   std::uint64_t total_entry_count_{};
+
+ public:
+  sstable_writer() = default;
+  sstable_writer(const sstable_writer &) = delete;
+  sstable_writer &operator=(const sstable_writer &) = delete;
+  sstable_writer(sstable_writer &&) = default;
+  sstable_writer &operator=(sstable_writer &&) = default;
+  ~sstable_writer() noexcept;
+
+  [[nodiscard]] static std::expected<sstable_writer, core::status> create(sstable_writer_config config) noexcept;
+
+  [[nodiscard]] std::expected<void, core::status> append(std::string_view ikey, std::string_view value) noexcept;
+
+  [[nodiscard]] bool is_data_block_complete() const noexcept;
+
+  [[nodiscard]] std::expected<std::string_view, core::status> get_data_block() noexcept;
+
+  [[nodiscard]] std::expected<void, core::status> record_data_block(std::uint64_t offset, std::uint64_t size) noexcept;
+
+  [[nodiscard]] std::uint32_t get_data_block_size() const noexcept;
+
+  [[nodiscard]] std::expected<std::string_view, core::status> get_index() noexcept;
+
+  [[nodiscard]] std::expected<std::string_view, core::status> get_footer(sstable_footer footer) noexcept;
 };
 
 }  // namespace frankie::storage

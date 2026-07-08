@@ -5,8 +5,8 @@
 #include <string_view>
 
 #include "core/arena.hpp"
+#include "core/scratch_arena.hpp"
 #include "core/serialization/buffer_reader.hpp"
-#include "core/status.hpp"
 
 // Wire layout for SSTable on-disk format.
 //
@@ -40,8 +40,41 @@
 
 namespace frankie::storage {
 
+//
+// Internal key
+//
+struct internal_key final {
+  static constexpr std::uint64_t kMetadataSize = 8 + 8 + 1;  // sequence + timestamp + tombstone
+
+  std::string_view user_key_;
+  std::uint64_t sequence_;
+  std::uint64_t timestamp_;
+  bool tombstone_;
+};
+
+[[nodiscard]] std::string_view encode_kv_entry(core::scratch_arena &arena, const internal_key &ikey) noexcept;
+
+[[nodiscard]] internal_key decode_kv_entry(std::string_view encoded) noexcept;
+
+//
+// Memtable KV entry
+//
+struct kv_entry final {
+  std::string_view key_;
+  std::string_view value_;
+  std::uint64_t sequence_;
+  std::uint64_t timestamp_;
+  bool tombstone_;
+};
+
+[[nodiscard]] std::uint64_t kv_entry_allocated_bytes_count(const kv_entry &entry) noexcept;
+
+//
+// Compression
+//
 enum class sstable_compression_type : std::uint8_t { none, lz4 };
 
+// SSTable Data Block Header
 struct sstable_data_block_header final {
   std::uint32_t entry_count_{0};
   std::uint32_t uncompressed_size{0};
@@ -52,6 +85,22 @@ struct sstable_data_block_header final {
 };
 static_assert(sizeof(sstable_data_block_header) == 20, "sstable_data_block_header layout drift");
 
+[[nodiscard]] std::expected<sstable_data_block_header, core::status> decode_data_block_header(
+    core::buffer_reader &reader) noexcept;
+
+//
+// SSTable Data Block Header
+//
+struct sstable_data_block final {
+  std::span<std::string_view> entries_;
+};
+
+[[nodiscard]] std::expected<sstable_data_block, core::status> decode_data_block(
+    core::buffer_reader &reader, sstable_data_block_header header) noexcept;
+
+//
+// SSTable Index
+//
 struct index_entry final {
   std::string_view smallest_key_;
   std::uint64_t data_block_offset_{0};
@@ -59,8 +108,11 @@ struct index_entry final {
 };
 
 [[nodiscard]] std::expected<std::span<index_entry>, core::status> decode_index(core::buffer_reader &reader,
-                                                                               core::arena &arena);
+                                                                               core::arena &arena) noexcept;
 
+//
+// SSTable Footer
+//
 struct sstable_footer final {
   std::uint32_t index_offset_{0};
   std::uint32_t index_size_{0};

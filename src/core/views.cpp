@@ -13,6 +13,10 @@ std::span<std::byte> to_writable_span(char *data, std::size_t size) noexcept {
   return std::span{reinterpret_cast<std::byte *>(data), size};
 }
 
+std::span<std::byte> to_writable_span(std::span<char> span) noexcept {
+  return to_writable_span(span.data(), span.size());
+}
+
 std::string_view to_string_view(std::span<const std::byte> span) noexcept {
   if (span.empty()) {
     return {};

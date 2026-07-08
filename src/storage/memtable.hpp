@@ -1,29 +1,13 @@
 #pragma once
 
 #include <cassert>
-#include <optional>
 
 #include "core/assert.hpp"
 #include "core/scratch_arena.hpp"
 #include "storage/skiplist.hpp"
+#include "storage/sstable_format.hpp"
 
 namespace frankie::storage {
-
-// ================================================================================
-// internal_key — user key + metadata, symmetric encode/decode
-// ================================================================================
-struct internal_key final {
-  static constexpr std::uint64_t kMetadataSize = 8 + 8 + 1;  // sequence + timestamp + tombstone
-
-  std::string_view user_key;
-  std::uint64_t sequence;
-  std::uint64_t timestamp;
-  bool tombstone;
-
-  [[nodiscard]] std::string_view encode(core::scratch_arena &arena) const noexcept;
-
-  [[nodiscard]] static internal_key decode(std::string_view encoded) noexcept;
-};
 
 // ================================================================================
 // internal_key_comparator - comparator aware of internal_key structure
@@ -37,23 +21,6 @@ struct internal_key_comparator {
   }
 };
 static_assert(Comparator<internal_key_comparator>);
-
-// ================================================================================
-// kv_entry — memtable entry & convenient wrappers
-// ================================================================================
-struct kv_entry final {
-  std::string_view key_;
-  std::string_view value_;
-  std::uint64_t sequence_;
-  std::uint64_t timestamp_;
-  bool tombstone_;
-
-  [[nodiscard]] std::string_view user_key() const noexcept;
-
-  [[nodiscard]] std::string_view value() const noexcept;
-
-  [[nodiscard]] std::uint64_t bytes_allocated() const noexcept;
-};
 
 // ================================================================================
 // memtable — backed by frankie::core::arena & frankie::core::skiplist
@@ -71,7 +38,7 @@ class memtable final {
 
   void put(std::string_view key, std::string_view value, std::uint64_t sequence, bool is_tombstone) noexcept;
 
-  [[nodiscard]] std::optional<kv_entry> get(std::string_view key) const noexcept;
+  [[nodiscard]] std::expected<kv_entry, core::status> get(std::string_view key) const noexcept;
 
   [[nodiscard]] std::uint64_t count() const noexcept;
 

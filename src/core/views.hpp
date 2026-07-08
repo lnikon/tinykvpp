@@ -12,7 +12,8 @@ constexpr const std::size_t kMaxVarintBytes{10};
 [[nodiscard]] auto to_span(std::string_view view) noexcept -> std::span<const std::byte>;
 
 // to_span_mut converts std::string_view into std::byte array
-[[nodiscard]] auto to_writable_span(char *data, std::size_t size) noexcept -> std::span<std::byte>;
+std::span<std::byte> to_writable_span(char *data, std::size_t size) noexcept;
+std::span<std::byte> to_writable_span(std::span<char> span) noexcept;
 
 // to_string_view converts std::byte span into a std::string_view
 [[nodiscard]] auto to_string_view(std::span<const std::byte> span) noexcept -> std::string_view;
