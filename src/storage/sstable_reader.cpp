@@ -67,7 +67,7 @@ std::expected<std::span<index_entry>, core::status> sstable_reader::read_index(c
   auto *data_block_buffer = static_cast<char *>(arena.allocate(data_block_size, sizeof(char)));
   auto data_block_span = std::span(data_block_buffer, data_block_size);
 
-  auto bytes_read_or = file_.read(data_block_span, index.data_block_offset_);
+  const auto bytes_read_or = file_.read(data_block_span, index.data_block_offset_);
   if (!bytes_read_or) {
     return core::unexpected(core::status_code::io_error);
   }
@@ -76,12 +76,12 @@ std::expected<std::span<index_entry>, core::status> sstable_reader::read_index(c
   }
 
   core::buffer_reader reader(core::to_writable_span(data_block_span));
-  auto header_or = decode_data_block_header(reader);
+  const auto header_or = decode_data_block_header(reader);
   if (!header_or) {
     return core::unexpected(core::status_code::corrupted);
   }
 
-  auto data_block = decode_data_block(reader, *header_or);
+  const auto data_block = decode_data_block(reader, *header_or);
   if (!data_block) {
     return core::unexpected(core::status_code::corrupted);
   }

@@ -64,7 +64,7 @@ void memtable::put(const std::string_view key, const std::string_view value, con
       .tombstone_ = is_tombstone,
   };
 
-  const std::string_view ikey_encoded = storage::encode_kv_entry(scratch_arena_, ikey);
+  const std::string_view ikey_encoded = storage::encode_internal_key(scratch_arena_, ikey);
   skiplist_.insert(ikey_encoded, value);
 
   count_++;
@@ -78,8 +78,8 @@ std::expected<kv_entry, core::status> memtable::get(const std::string_view key) 
       .timestamp_ = 0,
       .tombstone_ = false,
   };
-  if (auto kv_opt = skiplist_.get(encode_kv_entry(scratch_arena_, lookup_ikey)); kv_opt) {
-    auto decoded_ikey = decode_kv_entry(kv_opt->first);
+  if (auto kv_opt = skiplist_.get(encode_internal_key(scratch_arena_, lookup_ikey)); kv_opt) {
+    auto decoded_ikey = decode_internal_key(kv_opt->first);
     return kv_entry{
         .key_ = decoded_ikey.user_key_,
         .value_ = kv_opt->second,

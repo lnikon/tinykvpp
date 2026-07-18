@@ -41,3 +41,13 @@ cmake --build ./build/Release
 At the moment, there is no entry point such as `int main()` in the project. Instead, different modules ([core](./src/core), [engine](./src/engine), [storage](./src/storage)) are covered with unit tests and benchmarks, to make sure that all building blocks are in place and valid when the integration phase of the project into a proper server begins.
 
 Built tests are located in the build directory `build/Debug` or `build/Release` or the directory under build corresponding to the profile of your choice.
+
+# LLM Usage
+
+LLMs are used for:
+
+- Code reviews
+- Basic unit test coverage
+- Research and information retrieval
+
+Otherwise, the **ACTUAL** database code is written by **ME, a HUMAN** (or so I think I am one).

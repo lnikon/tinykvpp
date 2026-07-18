@@ -6,7 +6,7 @@
 
 namespace frankie::storage {
 
-[[nodiscard]] std::string_view encode_kv_entry(core::scratch_arena &arena, const internal_key &ikey) noexcept {
+[[nodiscard]] std::string_view encode_internal_key(core::scratch_arena &arena, const internal_key &ikey) noexcept {
   arena.reset();
 
   const std::uint64_t total = ikey.user_key_.size() + internal_key::kMetadataSize;
@@ -24,7 +24,7 @@ namespace frankie::storage {
   return std::string_view{buf, total};
 }
 
-[[nodiscard]] internal_key decode_kv_entry(std::string_view encoded) noexcept {
+[[nodiscard]] internal_key decode_internal_key(std::string_view encoded) noexcept {
   FR_VERIFY(encoded.size() >= internal_key::kMetadataSize);
   const auto user_key_size = encoded.size() - internal_key::kMetadataSize;
 
@@ -50,9 +50,17 @@ namespace frankie::storage {
   return {};
 }
 
-[[nodiscard]] std::uint64_t kv_entry_allocated_bytes_count(const kv_entry &entry) noexcept {
-  return entry.key_.size() + entry.value_.size() + internal_key::kMetadataSize;
+[[nodiscard]] std::uint64_t kv_entry_bytes_count(const kv_entry &entry) noexcept {
+  return entry.key_.size() + entry.value_.size() + 2 * sizeof(std::size_t) + internal_key::kMetadataSize;
 }
+
+[[nodiscard]] std::string_view encode_kv_entry(core::scratch_arena &arena, const kv_entry &entry) noexcept {
+  const auto buffer_size = kv_entry_bytes_count(entry);
+
+  auto encoded_internal_key = encode_internal_key(arena, entry.internal_key());
+}
+
+[[nodiscard]] std::string_view encode_kv_entry(std::string_view) noexcept {}
 
 [[nodiscard]] std::expected<std::span<index_entry>, core::status> decode_index(core::buffer_reader &reader,
                                                                                core::arena &arena) noexcept {

@@ -28,13 +28,13 @@ namespace frankie::storage {
   core::arena arena = core::arena::create(sst_footer_or->index_size_);
   const auto index_entries_or = reader->read_index(arena, *sst_footer_or);
 
-  segment result;
-  result.arena_ = std::move(arena);
-  result.scratch_arena_ = core::scratch_arena{};
-  result.index_entries_ = *index_entries_or;
-  result.path_ = std::move(path);
-  result.footer_ = *sst_footer_or;
-  return result;
+  return segment{
+      .arena_ = std::move(arena),
+      .scratch_arena_ = core::scratch_arena{},
+      .index_entries_ = *index_entries_or,
+      .path_ = std::move(path),
+      .footer_ = *sst_footer_or,
+  };
 }
 
 std::expected<kv_entry, core::status> segment::get_kv_entry(std::string_view user_key) noexcept {
@@ -57,12 +57,12 @@ std::expected<kv_entry, core::status> segment::get_kv_entry(std::string_view use
     return core::unexpected(data_block_or.error());
   }
 
-  const auto ikey = encode_kv_entry(scratch_arena_, storage::internal_key{
-                                                        .user_key_ = user_key,
-                                                        .sequence_ = 0,
-                                                        .timestamp_ = 0,
-                                                        .tombstone_ = false,
-                                                    });
+  const auto ikey = encode_internal_key(scratch_arena_, storage::internal_key{
+                                                            .user_key_ = user_key,
+                                                            .sequence_ = 0,
+                                                            .timestamp_ = 0,
+                                                            .tombstone_ = false,
+                                                        });
 
   const auto kv_entries_it = std::lower_bound(data_block_or->entries_.begin(), data_block_or->entries_.end(), ikey,
                                               [](std::string_view encoded_entry, std::string_view rhs) {
@@ -71,7 +71,7 @@ std::expected<kv_entry, core::status> segment::get_kv_entry(std::string_view use
 
   if (kv_entries_it != data_block_or->entries_.end()) {
     // TODO(lnikon): Should also use sstable_data_block_entry_decoder (tmp name) here to get value as well
-    auto decoded_ikey = decode_kv_entry(*kv_entries_it);
+    auto decoded_ikey = decode_internal_key(*kv_entries_it);
     return kv_entry{
         .key_ = decoded_ikey.user_key_,
         .value_ = kv_opt->second,

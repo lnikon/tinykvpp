@@ -52,9 +52,9 @@ struct internal_key final {
   bool tombstone_;
 };
 
-[[nodiscard]] std::string_view encode_kv_entry(core::scratch_arena &arena, const internal_key &ikey) noexcept;
+[[nodiscard]] std::string_view encode_internal_key(core::scratch_arena &arena, const internal_key &ikey) noexcept;
 
-[[nodiscard]] internal_key decode_kv_entry(std::string_view encoded) noexcept;
+[[nodiscard]] internal_key decode_internal_key(std::string_view encoded) noexcept;
 
 //
 // Memtable KV entry
@@ -65,9 +65,22 @@ struct kv_entry final {
   std::uint64_t sequence_;
   std::uint64_t timestamp_;
   bool tombstone_;
+
+  [[nodiscard]] internal_key internal_key() const noexcept {
+    return {
+        .user_key_ = key_,
+        .sequence_ = sequence_,
+        .timestamp_ = timestamp_,
+        .tombstone_ = tombstone_,
+    };
+  }
 };
 
-[[nodiscard]] std::uint64_t kv_entry_allocated_bytes_count(const kv_entry &entry) noexcept;
+[[nodiscard]] std::uint64_t kv_entry_bytes_count(const kv_entry &entry) noexcept;
+
+[[nodiscard]] std::string_view encode_kv_entry(core::scratch_arena &arena, const kv_entry &entry) noexcept;
+
+[[nodiscard]] std::string_view encode_kv_entry(std::string_view) noexcept;
 
 //
 // Compression

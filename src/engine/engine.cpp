@@ -169,7 +169,6 @@ std::expected<void, core::status> engine::maybe_rotate_memtable() noexcept {
 
   auto sst_file = core::random_access_file::create_exclusive(
       config_.sstable_dir_path_ / std::string_view{formatted_sstable_path.data(), formatted_len});
-
   if (!sst_file) {
     return core::unexpected(sst_file.error());
   }
@@ -178,78 +177,6 @@ std::expected<void, core::status> engine::maybe_rotate_memtable() noexcept {
   if (!writer) {
     return core::unexpected(writer.error());
   }
-
-  std::uint64_t data_block_body_offset = 0;
-  for (auto [ikey, value] : *memtable_immutable_) {
-    if (auto result = writer->append(ikey, value); !result) {
-      return core::unexpected(result.error());
-    }
-
-    if (writer->is_data_block_complete()) {
-      auto get_data_block_or = writer->get_data_block();
-      if (!get_data_block_or) {
-        return core::unexpected(get_data_block_or.error());
-      }
-
-      auto write_result = sst_file->write(get_data_block_or.value(), data_block_body_offset);
-      if (!write_result) {
-        return core::unexpected(write_result.error());
-      }
-      const std::uint64_t data_block_size = write_result.value();
-
-      if (auto record_result = writer->record_data_block(data_block_body_offset, data_block_size); !record_result) {
-        return core::unexpected(record_result.error());
-      }
-
-      data_block_body_offset += data_block_size;
-    }
-  }
-
-  if (writer->get_data_block_size() != 0ULL) {
-    auto get_data_block_or = writer->get_data_block();
-    if (!get_data_block_or) {
-      return core::unexpected(get_data_block_or.error());
-    }
-
-    auto write_result = sst_file->write(get_data_block_or.value(), data_block_body_offset);
-    if (!write_result) {
-      return core::unexpected(write_result.error());
-    }
-    const std::uint64_t data_block_size = write_result.value();
-
-    if (auto record_result = writer->record_data_block(data_block_body_offset, data_block_size); !record_result) {
-      return core::unexpected(record_result.error());
-    }
-
-    data_block_body_offset += data_block_size;
-  }
-
-  // Serialize index.
-  auto index_or = writer->get_index();
-  if (!index_or) {
-    return core::unexpected(core::status_code::corrupted);
-  }
-  const auto index_write_result = sst_file->write(index_or.value(), data_block_body_offset);
-  if (!index_write_result) {
-    return core::unexpected(index_write_result.error());
-  }
-  const std::uint64_t index_size = index_write_result.value();
-  // Index starts where the last data block ends.
-  const std::uint64_t index_offset = data_block_body_offset;
-
-  // Serialize footer.
-  const std::uint64_t footer_offset = data_block_body_offset + index_size;
-  auto footer_or = writer->get_footer({.index_offset_ = static_cast<std::uint32_t>(index_offset),
-                                       .index_size_ = static_cast<std::uint32_t>(index_size)});
-  if (!footer_or) {
-    return core::unexpected(footer_or.error());
-  }
-  const auto footer_write_result = sst_file->write(footer_or.value(), footer_offset);
-  if (!footer_write_result) {
-    return core::unexpected(footer_write_result.error());
-  }
-
-  sstable_id_++;
 
   if (!wal_.truncate()) {
     // TODO(lnikon): Need a fallback strategy e.g. move current wal into wal.old1 and create a new wal
