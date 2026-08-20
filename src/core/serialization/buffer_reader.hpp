@@ -68,7 +68,13 @@ class buffer_reader final {
   [[nodiscard]] std::size_t bytes_read() const noexcept { return cursor_; }
   [[nodiscard]] std::size_t remaining() const noexcept { return buffer_.size() - cursor_; }
 
-  [[nodiscard]] std::optional<core::status_code> error() const noexcept { return error_; }
+  [[nodiscard]] auto error() const noexcept -> std::expected<void, core::status> {
+    if (error_ != std::nullopt) {
+      return core::unexpected(*error_);
+    }
+    return {};
+  }
+
   [[nodiscard]] bool has_error() const noexcept { return error_.has_value(); }
   [[nodiscard]] bool eof() const noexcept { return cursor_ == buffer_.size(); }
 };

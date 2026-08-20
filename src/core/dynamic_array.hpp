@@ -34,8 +34,7 @@ class dynamic_array final {
     }
   }
 
-  [[nodiscard]] static std::expected<dynamic_array<TEntry>, core::status> create(core::arena *arena,
-                                                                                 std::uint32_t capacity) noexcept {
+  [[nodiscard]] static std::expected<dynamic_array<TEntry>, core::status> create(core::arena *arena, std::uint32_t capacity) noexcept {
     FR_VERIFY_MSG(capacity > 0ULL, "capacity should be greater than zero");
 
     auto *buffer = arena->allocate(capacity, alignof(TEntry));
@@ -67,6 +66,8 @@ class dynamic_array final {
 
   [[nodiscard]] bool empty() noexcept { return size_ == 0; }
 
+  [[nodiscard]] std::span<TEntry> as_span() noexcept { return std::span<TEntry>(items_, size_); }
+
  private:
   std::expected<void, core::status> increase_capacity(std::uint32_t new_capacity) noexcept {
     FR_VERIFY_MSG(arena_ != nullptr, "arena should not be null");
@@ -74,23 +75,14 @@ class dynamic_array final {
     FR_VERIFY_MSG(new_capacity > capacity_, "capacity must be greater than existing capacity");
     FR_VERIFY_MSG(items_ != nullptr, "items should be not-null");
 
-    // TODO(lnikon): No way to clear already allocated array:
-    //               (1) Either need to introduce new arena based on freelist,
-    //               (2) or modify arena interface to support reallocation, but what if that arena is shared between
-    //               different objects?
-    //
-    //               A workaround would be to manually execute free() on items_, after successfully allocating new
-    //               array.
     auto *buffer = arena_->allocate(new_capacity, alignof(TEntry));
     if (buffer == nullptr) {
       return core::unexpected(core::status_code::out_of_memory);
     }
 
+    // TODO(lnikon): Old items are never freed.
     auto *new_items = static_cast<TEntry>(buffer);
     std::memcpy(new_items, items_, size_);
-
-    // TODO(lnikon): This free() call is a manual workaround until a proper arena is introduced.
-    std::free(items_);
 
     items_ = new_items;
     capacity_ = new_capacity;

@@ -57,24 +57,6 @@ using default_comparator = simd_comparator;
 // Node — flat allocation: [skiplist_node][forward ptrs][keys bytes][values bytes]
 // ================================================================================
 class skiplist_node final {
- public:
-  [[nodiscard]] static skiplist_node *create(core::arena *arena, std::string_view key, std::string_view value,
-                                             std::uint32_t height) noexcept;
-
-  [[nodiscard]] std::span<skiplist_node *> forward() noexcept;
-
-  [[nodiscard]] std::span<const skiplist_node *const> forward() const noexcept;
-
-  [[nodiscard]] std::string_view key() const noexcept;
-
-  [[nodiscard]] std::string_view value() const noexcept;
-
-  [[nodiscard]] std::uint32_t height() const noexcept;
-
-  [[nodiscard]] static constexpr std::size_t layout_size(std::uint32_t height, std::size_t key_size,
-                                                         std::size_t value_size) noexcept;
-
- private:
   std::uint32_t key_size_ = 0;
   std::uint32_t value_size_ = 0;
   std::uint32_t height_ = 0;
@@ -86,10 +68,24 @@ class skiplist_node final {
   [[nodiscard]] std::span<std::byte> value_bytes() noexcept;
 
   [[nodiscard]] std::span<const std::byte> value_bytes() const noexcept;
+
+ public:
+  [[nodiscard]] static skiplist_node *create(core::arena *arena, std::string_view key, std::string_view value, std::uint32_t height) noexcept;
+
+  [[nodiscard]] std::span<skiplist_node *> forward() noexcept;
+
+  [[nodiscard]] std::span<const skiplist_node *const> forward() const noexcept;
+
+  [[nodiscard]] std::string_view key() const noexcept;
+
+  [[nodiscard]] std::string_view value() const noexcept;
+
+  [[nodiscard]] std::uint32_t height() const noexcept;
+
+  [[nodiscard]] static constexpr std::size_t layout_size(std::uint32_t height, std::size_t key_size, std::size_t value_size) noexcept;
 };
 
-constexpr std::size_t skiplist_node::layout_size(const std::uint32_t height, const std::size_t key_size,
-                                                 const std::size_t value_size) noexcept {
+constexpr std::size_t skiplist_node::layout_size(const std::uint32_t height, const std::size_t key_size, const std::size_t value_size) noexcept {
   return sizeof(skiplist_node) + (height * sizeof(skiplist_node *)) + key_size + value_size;
 }
 
@@ -118,8 +114,7 @@ class skiplist final {
 
   void insert(std::string_view key, std::string_view value) noexcept;
 
-  [[nodiscard]] std::expected<std::pair<std::string_view, std::string_view>, error> get(
-      std::string_view key) const noexcept;
+  [[nodiscard]] std::expected<std::pair<std::string_view, std::string_view>, error> get(std::string_view key) const noexcept;
 
   [[nodiscard]] std::size_t size() const noexcept;
 
@@ -242,8 +237,7 @@ void skiplist<Cmp>::insert(const std::string_view key, const std::string_view va
 }
 
 template <Comparator Cmp>
-std::expected<std::pair<std::string_view, std::string_view>, error> skiplist<Cmp>::get(
-    std::string_view key) const noexcept {
+std::expected<std::pair<std::string_view, std::string_view>, error> skiplist<Cmp>::get(std::string_view key) const noexcept {
   const auto *current = head_;
 
   for (int level = static_cast<int>(current_height_) - 1; level >= 0; --level) {

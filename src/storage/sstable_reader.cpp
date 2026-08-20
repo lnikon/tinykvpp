@@ -38,8 +38,7 @@ std::expected<sstable_footer, core::status> sstable_reader::read_footer() noexce
   return decode_footer(reader);
 }
 
-std::expected<std::span<index_entry>, core::status> sstable_reader::read_index(core::arena &arena,
-                                                                               const sstable_footer &footer) noexcept {
+std::expected<std::span<sstable_inedx>, core::status> sstable_reader::read_index(core::arena &arena, const sstable_footer &footer) noexcept {
   char *index_buffer = static_cast<char *>(arena.allocate(footer.index_size_, alignof(std::uint8_t)));
   if (index_buffer == nullptr) {
     return core::unexpected(core::status_code::out_of_memory);
@@ -58,8 +57,8 @@ std::expected<std::span<index_entry>, core::status> sstable_reader::read_index(c
   return decode_index(reader, arena);
 }
 
-[[nodiscard]] std::expected<sstable_data_block, core::status> sstable_reader::read_data_block(
-    core::arena &arena, const index_entry index) noexcept {
+[[nodiscard]] std::expected<sstable_data_block, core::status> sstable_reader::read_data_block(core::arena &arena,
+                                                                                              const sstable_inedx index) noexcept {
   FR_VERIFY(index.data_block_size_ != 0ULL);
   FR_VERIFY(!index.smallest_key_.empty());
 

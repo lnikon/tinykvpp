@@ -55,39 +55,53 @@ memtable::~memtable() {
   scratch_arena_.destroy();
 }
 
-void memtable::put(const std::string_view key, const std::string_view value, const std::uint64_t sequence,
-                   const bool is_tombstone) noexcept {
+std::expected<void, core::status> memtable::put(const std::string_view user_key, const std::string_view value, const std::uint64_t sequence,
+                                                const bool is_tombstone) noexcept {
   auto ikey = internal_key{
-      .user_key_ = key,
+      .user_key_ = user_key,
       .sequence_ = sequence,
       .timestamp_ = core::wall_clock_ms(),
       .tombstone_ = is_tombstone,
   };
+  auto encoded_or = encode_internal_key(ikey);
+  if (!encoded_or) {
+    return core::unexpected(encoded_or.error());
+  }
 
-  const std::string_view ikey_encoded = storage::encode_internal_key(scratch_arena_, ikey);
-  skiplist_.insert(ikey_encoded, value);
+  skiplist_.insert(*encoded_or, value);
 
   count_++;
-  bytes_allocated_ += ikey_encoded.size();
+  bytes_allocated_ += ikey.bytes_required();
+
+  return {};
 }
 
-std::expected<kv_entry, core::status> memtable::get(const std::string_view key) const noexcept {
-  auto lookup_ikey = storage::internal_key{
+std::expected<kv_entry, core::status> memtable::get(const std::string_view key) noexcept {
+  auto ikey = storage::internal_key{
       .user_key_ = key,
       .sequence_ = 0,
       .timestamp_ = 0,
       .tombstone_ = false,
   };
-  if (auto kv_opt = skiplist_.get(encode_internal_key(scratch_arena_, lookup_ikey)); kv_opt) {
-    auto decoded_ikey = decode_internal_key(kv_opt->first);
+  auto encoded_or = encode_internal_key(ikey);
+  if (!encoded_or) {
+    return core::unexpected(encoded_or.error());
+  }
+
+  if (auto kv_opt = skiplist_.get(*encoded_or); kv_opt) {
+    auto decoded_ikey = internal_key::decode(kv_opt->first);
+    if (!decoded_ikey) {
+      return core::unexpected(core::status_code::corrupted);
+    }
     return kv_entry{
-        .key_ = decoded_ikey.user_key_,
+        .key_ = decoded_ikey->user_key_,
         .value_ = kv_opt->second,
-        .sequence_ = decoded_ikey.sequence_,
-        .timestamp_ = decoded_ikey.timestamp_,
-        .tombstone_ = decoded_ikey.tombstone_,
+        .sequence_ = decoded_ikey->sequence_,
+        .timestamp_ = decoded_ikey->timestamp_,
+        .tombstone_ = decoded_ikey->tombstone_,
     };
   }
+
   return core::unexpected(core::status_code::not_found);
 }
 
@@ -96,5 +110,25 @@ std::uint64_t memtable::count() const noexcept { return count_; }
 std::uint64_t memtable::bytes_allocated() const noexcept { return skiplist_.bytes_allocated(); }
 
 std::uint64_t memtable::capacity() const noexcept { return capacity_; }
+
+memtable::iterator memtable::begin() { return skiplist_.begin(); }
+
+std::default_sentinel_t memtable::end() { return skiplist_.end(); }
+
+std::expected<std::string_view, core::status> memtable::encode_internal_key(const internal_key &ikey) noexcept {
+  scratch_arena_.reset();
+  auto *buffer = static_cast<char *>(scratch_arena_.allocate(ikey.bytes_required(), alignof(std::uint8_t)));
+  if (buffer == nullptr) {
+    return core::unexpected(core::status_code::out_of_memory);
+  }
+  auto buffer_span = core::to_writable_span(buffer, ikey.bytes_required());
+  auto writer = core::buffer_writer::create(&buffer_span);
+
+  if (const auto result = ikey.encode(writer); !result) {
+    return core::unexpected(result.error());
+  }
+
+  return std::string_view{buffer, ikey.bytes_required()};
+}
 
 }  // namespace frankie::storage

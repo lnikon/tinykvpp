@@ -3,12 +3,15 @@
 #include "core/fs.hpp"
 #include "core/scratch_arena.hpp"
 #include "core/status.hpp"
+#include "storage/memtable.hpp"
 #include "storage/sstable_format.hpp"
 #include "storage/sstable_reader.hpp"
 
 namespace frankie::storage {
 
-[[nodiscard]] std::expected<segment, core::status> segment::create(std::filesystem::path path) noexcept {
+std::expected<segment, core::status> segment::create(const storage::memtable &memtable, std::filesystem::path path) noexcept {}
+
+std::expected<segment, core::status> segment::open(std::filesystem::path path) noexcept {
   if (!std::filesystem::exists(path)) {
     return core::unexpected(core::status_code::not_found);
   }
@@ -64,10 +67,9 @@ std::expected<kv_entry, core::status> segment::get_kv_entry(std::string_view use
                                                             .tombstone_ = false,
                                                         });
 
-  const auto kv_entries_it = std::lower_bound(data_block_or->entries_.begin(), data_block_or->entries_.end(), ikey,
-                                              [](std::string_view encoded_entry, std::string_view rhs) {
-                                                return internal_key_comparator{}(encoded_entry, rhs);
-                                              });
+  const auto kv_entries_it =
+      std::lower_bound(data_block_or->entries_.begin(), data_block_or->entries_.end(), ikey,
+                       [](std::string_view encoded_entry, std::string_view rhs) { return internal_key_comparator{}(encoded_entry, rhs); });
 
   if (kv_entries_it != data_block_or->entries_.end()) {
     // TODO(lnikon): Should also use sstable_data_block_entry_decoder (tmp name) here to get value as well
@@ -84,10 +86,9 @@ std::expected<kv_entry, core::status> segment::get_kv_entry(std::string_view use
   return {};
 }
 
-std::optional<index_entry> segment::get_record_offset(std::string_view key) const noexcept {
-  const auto index_entry_it =
-      std::lower_bound(index_entries_.begin(), index_entries_.end(), key,
-                       [](const index_entry &entry, std::string_view rhs) { return entry.smallest_key_ < rhs; });
+std::optional<sstable_inedx> segment::get_record_offset(std::string_view key) const noexcept {
+  const auto index_entry_it = std::lower_bound(index_entries_.begin(), index_entries_.end(), key,
+                                               [](const sstable_inedx &entry, std::string_view rhs) { return entry.smallest_key_ < rhs; });
 
   // TODO(lnikon): Should use comparator from memtable here?
   if (index_entry_it != index_entries_.end() && index_entry_it->smallest_key_ == key) {

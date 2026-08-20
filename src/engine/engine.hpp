@@ -17,9 +17,6 @@ inline constexpr std::uint32_t kEngineFlushArenaCapacity = 4096;
 inline constexpr std::uint32_t kEngineScratchArenaCapacity = 4096;
 
 class engine final {
-  [[nodiscard]] std::expected<void, core::status> maybe_rotate_memtable() noexcept;
-  [[nodiscard]] std::uint64_t get_next_sequence() noexcept;
-
   core::config config_;
   // Scratch arena shared between all engine flows. Use only for temporary work.
   core::scratch_arena scratch_arena_;
@@ -27,7 +24,10 @@ class engine final {
   storage::memtable memtable_active_;
   std::optional<storage::memtable> memtable_immutable_;
 
+  // TODO(lnikon) Restored from manifest.
   std::uint64_t sequence_{0};
+  // TODO(lnikon): Restored from manifest.
+  std::uint64_t latest_segment_id_{0};
 
   wal_writer wal_;
 
@@ -54,6 +54,11 @@ class engine final {
 
   // TODO(lnikon): Interface tdb. Needs memtable iterator. Should search in both active and immutable?
   void scan(std::string_view range_start_key, std::string_view range_end_key) noexcept;
+
+ private:
+  [[nodiscard]] std::expected<void, core::status> rotate_memtable() noexcept;
+
+  [[nodiscard]] std::uint64_t get_next_sequence() noexcept;
 };
 
 }  // namespace frankie::engine

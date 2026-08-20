@@ -15,7 +15,7 @@ using byte = std::byte;
 
 class buffer_writer final {
   // Mutable view into the target buffer.
-  std::span<byte> buffer_;
+  std::span<byte> *buffer_;
   // Last modification position.
   std::uint64_t cursor_{0};
   // Stateful error.
@@ -29,8 +29,8 @@ class buffer_writer final {
   buffer_writer &operator=(buffer_writer &&) = default;
   ~buffer_writer() = default;
 
-  [[nodiscard]] static buffer_writer create(std::span<byte> buffer) noexcept {
-    FR_VERIFY(buffer.size() > 0ULL);
+  [[nodiscard]] static buffer_writer create(std::span<byte> *buffer) noexcept {
+    FR_VERIFY(buffer->size() > 0ULL);
 
     buffer_writer result;
     result.buffer_ = buffer;
@@ -42,11 +42,11 @@ class buffer_writer final {
     if (error_) {
       return *this;
     }
-    if (cursor_ + sizeof(T) > buffer_.size()) {
+    if (cursor_ + sizeof(T) > buffer_->size()) {
       error_ = core::status_code::buffer_overflow;
       return *this;
     }
-    codec::store_le(value, buffer_.subspan(cursor_).first<sizeof(T)>());
+    codec::store_le(value, buffer_->subspan(cursor_).first<sizeof(T)>());
     cursor_ += sizeof(T);
     return *this;
   }
@@ -63,7 +63,7 @@ class buffer_writer final {
     if (error_) {
       return *this;
     }
-    if (cursor_ + bytes.size() > buffer_.size()) {
+    if (cursor_ + bytes.size() > buffer_->size()) {
       error_ = core::status_code::buffer_overflow;
       return *this;
     }
@@ -78,10 +78,15 @@ class buffer_writer final {
 
   [[nodiscard]] auto bytes_written() const noexcept -> std::size_t { return cursor_; }
 
-  [[nodiscard]] auto error() const noexcept -> std::optional<core::status_code> { return error_; }
+  [[nodiscard]] auto error() const noexcept -> std::expected<void, core::status> {
+    if (error_ != std::nullopt) {
+      return core::unexpected(*error_);
+    }
+    return {};
+  }
 
-  void set_buffer(std::span<std::byte> new_buffer) noexcept {
-    FR_VERIFY(new_buffer.size() >= buffer_.size());
+  void set_buffer(std::span<std::byte> *new_buffer) noexcept {
+    FR_VERIFY(new_buffer->size() >= buffer_->size());
     buffer_ = new_buffer;
   }
 };

@@ -91,6 +91,24 @@ void arena::destroy() noexcept {
   bytes_allocated_ = 0;
 }
 
+void arena::reset() noexcept {
+  if (current_ == nullptr) {
+    return;
+  }
+
+  auto *block = current_->next_;
+  while (block != nullptr) {
+    auto *next = block->next_;
+    // TODO(lnikon): Return into global pool via detail::release_block()
+    std::free(block);
+    block = next;
+  }
+
+  current_->next_ = nullptr;
+  offset_ = 0;
+  bytes_allocated_ = detail::block_capacity_rounded(current_block_size_);
+}
+
 std::uint64_t arena::bytes_allocated() const noexcept { return bytes_allocated_; }
 
 }  // namespace frankie::core

@@ -37,9 +37,12 @@ class arena final {
 
   [[nodiscard]] static arena create(std::uint64_t capacity) noexcept;
 
+  // TODO(lnikon): Return a std::span instead. void* is converted to it anyways at call sites.
   [[nodiscard]] void *allocate(std::uint64_t requested_capacity, std::uint64_t align) noexcept;
 
   void destroy() noexcept;
+
+  void reset() noexcept;
 
   [[nodiscard]] std::uint64_t bytes_allocated() const noexcept;
 

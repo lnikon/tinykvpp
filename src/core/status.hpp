@@ -16,7 +16,8 @@ enum class status_code : std::uint8_t {
   corrupted,
   eof,
   out_of_memory,
-  buffer_overflow
+  buffer_overflow,
+  not_implemented
 };
 
 [[nodiscard]] constexpr const char *to_cstring(status_code code) noexcept {
@@ -37,6 +38,8 @@ enum class status_code : std::uint8_t {
       return "out_of_memory";
     case status_code::buffer_overflow:
       return "buffer_overflow";
+    case status_code::not_implemented:
+      return "not_implemented";
   }
   return "unknown";
 }

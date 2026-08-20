@@ -1,10 +1,7 @@
-#include <cstdio>
 #include <optional>
 #include <print>
 #include <utility>
 
-#include "core/fs.hpp"
-#include "core/scratch_arena.hpp"
 #include "core/status.hpp"
 #include "engine/engine.hpp"
 #include "storage/memtable.hpp"
@@ -20,10 +17,8 @@ std::expected<engine, core::status> engine::create(core::config config) noexcept
     // not_found = no WAL on disk yet (first start). eof = WAL exists but is
     // empty. Both are clean-start cases; anything else is a real failure that
     // must propagate so the caller doesn't silently lose existing entries.
-    if (reader.error().code_ != core::status_code::not_found && reader.error().code_ != core::status_code::eof)
-        [[unlikely]] {
-      std::println("engine::create: failed to open WAL reader. path={}, status={}", config.wal_path_.c_str(),
-                   core::to_cstring(reader.error().code_));
+    if (reader.error().code_ != core::status_code::not_found && reader.error().code_ != core::status_code::eof) [[unlikely]] {
+      std::println("engine::create: failed to open WAL reader. path={}, status={}", config.wal_path_.c_str(), core::to_cstring(reader.error().code_));
       return core::unexpected(reader.error());
     }
   } else {
@@ -47,8 +42,7 @@ std::expected<engine, core::status> engine::create(core::config config) noexcept
     }
 
     if (entry.error().code_ != core::status_code::eof) [[unlikely]] {
-      std::println("engine::create: failed to recover WAL. path={}, status={}", config.wal_path_.c_str(),
-                   core::to_cstring(entry.error().code_));
+      std::println("engine::create: failed to recover WAL. path={}, status={}", config.wal_path_.c_str(), core::to_cstring(entry.error().code_));
       return core::unexpected(entry.error());
     }
   }
@@ -81,7 +75,7 @@ std::expected<void, core::status> engine::put(std::string_view key, std::string_
   }
 
   memtable_active_.put(key, value, sequence, false);
-  if (auto status = maybe_rotate_memtable(); !status) {
+  if (auto status = rotate_memtable(); !status) {
     return status;
   }
 
@@ -134,7 +128,7 @@ std::expected<void, core::status> engine::del(std::string_view key) noexcept {
   }
 
   memtable_active_.put(key, {}, sequence, true);
-  if (auto status = maybe_rotate_memtable(); !status) {
+  if (auto status = rotate_memtable(); !status) {
     return status;
   }
 
@@ -147,35 +141,30 @@ void engine::scan(std::string_view range_start_key, std::string_view range_end_k
   (void)range_end_key;
 }
 
-std::expected<void, core::status> engine::maybe_rotate_memtable() noexcept {
+std::expected<void, core::status> engine::rotate_memtable() noexcept {
   if (memtable_active_.bytes_allocated() <= memtable_active_.capacity()) {
     return {};
   }
 
   memtable_immutable_.emplace(std::move(memtable_active_));
-  memtable_active_ = storage::memtable::create(memtable_active_.capacity());
+  memtable_active_ = storage::memtable::create(config_.memtable_capacity_);
 
-  scratch_arena_.reset();
-
-  auto formatted_sstable_path =
-      std::span{scratch_arena_.allocate(kEngineScratchArenaCapacity), kEngineScratchArenaCapacity};
-
-  const auto len = std::snprintf(formatted_sstable_path.data(), kEngineScratchArenaCapacity, "%s%lu",
-                                 sstable_file_prefix_.data(), sstable_id_);
-  if (len <= 0) {
-    return core::unexpected(core::status_code::invalid_argument);
-  }
-  const auto formatted_len = static_cast<std::size_t>(len);
-
-  auto sst_file = core::random_access_file::create_exclusive(
-      config_.sstable_dir_path_ / std::string_view{formatted_sstable_path.data(), formatted_len});
-  if (!sst_file) {
-    return core::unexpected(sst_file.error());
+  // TODO(lnikon): Should be arena based. Temporary workaround until manifest is rerady. Latest segment ID should be recovered from the manifest.
+  std::filesystem::path segment_path{std::format("segment_{}.sst", latest_segment_id_++)};
+  auto segment_file = core::random_access_file::create_exclusive(segment_path);
+  if (!segment_file) {
+    return core::unexpected(segment_file.error());
   }
 
-  auto writer = storage::sstable_writer::create(storage::sstable_writer_config{});
-  if (!writer) {
-    return core::unexpected(writer.error());
+  auto writer = storage::sstable_writer::create(std::move(*segment_file));
+  for (auto [ikey, value] : *memtable_immutable_) {
+    if (!writer->add(ikey, value)) {
+      break;
+    }
+  }
+  auto segment_or = writer->finish();
+  if (!segment_or) {
+    return core::unexpected(segment_or.error());
   }
 
   if (!wal_.truncate()) {
