@@ -18,7 +18,6 @@ class sstable_writer final {
   core::arena arena_;
 
   std::span<std::byte> body_span_;
-  std::uint64_t body_offset_{0};
   core::buffer_writer body_writer_;
 
  public:

@@ -19,7 +19,7 @@ struct segment final {
   // Scratch arena for comparisons.
   core::scratch_arena scratch_arena_;
   // Sorted span of index entries over arena.
-  std::span<sstable_inedx> index_entries_;
+  sstable_index index_;
   // Path to the segment relative to the something idk.
   std::filesystem::path path_;
   // Compaction sh]ould have a way to track in-use segments to avoid prematurely removing them.
@@ -32,7 +32,7 @@ struct segment final {
   [[nodiscard]] std::expected<kv_entry, core::status> get_kv_entry(std::string_view user_key) noexcept;
 
  private:
-  [[nodiscard]] std::optional<sstable_inedx> get_record_offset(std::string_view key) const noexcept;
+  [[nodiscard]] std::optional<sstable_index> get_record_offset(std::string_view key) const noexcept;
 };
 
 }  // namespace frankie::storage

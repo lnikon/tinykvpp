@@ -4,6 +4,7 @@
 #include "core/scratch_arena.hpp"
 #include "core/status.hpp"
 #include "core/time.hpp"
+#include "core/views.hpp"
 #include "storage/memtable.hpp"
 #include "storage/sstable_format.hpp"
 
@@ -89,7 +90,8 @@ std::expected<kv_entry, core::status> memtable::get(const std::string_view key) 
   }
 
   if (auto kv_opt = skiplist_.get(*encoded_or); kv_opt) {
-    auto decoded_ikey = internal_key::decode(kv_opt->first);
+    core::buffer_reader reader(core::to_span(kv_opt->first));
+    auto decoded_ikey = internal_key::decode(reader);
     if (!decoded_ikey) {
       return core::unexpected(core::status_code::corrupted);
     }

@@ -30,11 +30,10 @@ std::expected<segment, core::status> segment::open(std::filesystem::path path) n
 
   core::arena arena = core::arena::create(sst_footer_or->index_size_);
   const auto index_entries_or = reader->read_index(arena, *sst_footer_or);
-
   return segment{
       .arena_ = std::move(arena),
       .scratch_arena_ = core::scratch_arena{},
-      .index_entries_ = *index_entries_or,
+      .index_ = {.entries_ = *index_entries_or},
       .path_ = std::move(path),
       .footer_ = *sst_footer_or,
   };
@@ -42,7 +41,7 @@ std::expected<segment, core::status> segment::open(std::filesystem::path path) n
 
 std::expected<kv_entry, core::status> segment::get_kv_entry(std::string_view user_key) noexcept {
   FR_VERIFY(!path_.empty());
-  FR_VERIFY(!index_entries_.empty());
+  FR_VERIFY(!index_.entries_.empty());
 
   const auto index_entry = get_record_offset(user_key);
   if (!index_entry) {
@@ -86,9 +85,9 @@ std::expected<kv_entry, core::status> segment::get_kv_entry(std::string_view use
   return {};
 }
 
-std::optional<sstable_inedx> segment::get_record_offset(std::string_view key) const noexcept {
-  const auto index_entry_it = std::lower_bound(index_entries_.begin(), index_entries_.end(), key,
-                                               [](const sstable_inedx &entry, std::string_view rhs) { return entry.smallest_key_ < rhs; });
+std::optional<sstable_index> segment::get_record_offset(std::string_view key) const noexcept {
+  const auto index_entry_it = std::lower_bound(index_.entries_.begin(), index._entries_.end(), key,
+                                               [](const sstable_index &entry, std::string_view rhs) { return entry.smallest_key_ < rhs; });
 
   // TODO(lnikon): Should use comparator from memtable here?
   if (index_entry_it != index_entries_.end() && index_entry_it->smallest_key_ == key) {

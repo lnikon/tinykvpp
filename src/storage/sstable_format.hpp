@@ -79,7 +79,7 @@ struct internal_key final {
 
   [[nodiscard]] std::expected<void, core::status> encode(core::buffer_writer &writer) const noexcept;
 
-  [[nodiscard]] static std::expected<internal_key, core::status> decode(std::string_view encoded) noexcept;
+  [[nodiscard]] static std::expected<internal_key, core::status> decode(core::arena &arena, core::buffer_reader &reader) noexcept;
 
   [[nodiscard]] std::uint64_t bytes_required() const noexcept;
 };
@@ -100,7 +100,7 @@ struct kv_entry final {
 
   [[nodiscard]] std::expected<void, core::status> encode(core::buffer_writer &writer) const noexcept;
 
-  [[nodiscard]] static std::string_view decode(core::arena &arena, core::buffer_reader &reader) noexcept;
+  [[nodiscard]] static std::expected<kv_entry, core::status> decode(core::arena &arena, core::buffer_reader &reader) noexcept;
 };
 
 //

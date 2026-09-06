@@ -29,9 +29,9 @@ class sstable_reader final {
 
   [[nodiscard]] std::expected<sstable_footer, core::status> read_footer() noexcept;
 
-  [[nodiscard]] std::expected<std::span<sstable_inedx>, core::status> read_index(core::arena &arena, const sstable_footer &footer) noexcept;
+  [[nodiscard]] std::expected<std::span<sstable_index_entry>, core::status> read_index(core::arena &arena, const sstable_footer &footer) noexcept;
 
-  [[nodiscard]] std::expected<sstable_data_block, core::status> read_data_block(core::arena &arena, const sstable_inedx index) noexcept;
+  [[nodiscard]] std::expected<sstable_data_block, core::status> read_data_block(core::arena &arena, const sstable_index_entry &index) noexcept;
 
  private:
   core::random_access_file file_;

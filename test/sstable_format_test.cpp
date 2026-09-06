@@ -60,6 +60,30 @@ TEST(SstableFormatTest, IndexRoundTrip) {
   }
 }
 
+TEST(SstableFormatTest, InternalKeyBufferReaderRoundTrip) {
+  constexpr std::uint64_t sequence = 42u;
+  constexpr std::uint64_t timestamp = 12345u;
+  constexpr bool tombstone = true;
+
+  // user_key must outlive the test body: decoded user_key_ is a string_view
+  // into the encode buffer.
+  const std::string user_key = "hello-world";
+
+  std::array<std::byte, 64> buf{};
+  std::span<std::byte> buf_span(buf);
+  auto w = core::buffer_writer::create(&buf_span);
+  const internal_key ik{.user_key_ = user_key, .sequence_ = sequence, .timestamp_ = timestamp, .tombstone_ = tombstone};
+  ASSERT_TRUE(ik.encode(w).has_value());
+
+  core::buffer_reader r(std::span<const std::byte>(buf).first(w.cursor()));
+  auto decoded = internal_key::decode(r);
+  ASSERT_TRUE(decoded.has_value());
+  EXPECT_EQ(decoded->user_key_, user_key);
+  EXPECT_EQ(decoded->sequence_, sequence);
+  EXPECT_EQ(decoded->timestamp_, timestamp);
+  EXPECT_EQ(decoded->tombstone_, tombstone);
+}
+
 TEST(SstableFormatTest, DataBlockHeaderSize) {
   EXPECT_EQ(sizeof(frankie::storage::sstable_data_block_header), 20u);
 }

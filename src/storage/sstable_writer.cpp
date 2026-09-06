@@ -1,9 +1,10 @@
-#include "storage/sstable_writer.hpp"
 #include <cstring>
+
 #include "core/assert.hpp"
 #include "core/status.hpp"
 #include "core/views.hpp"
 #include "storage/sstable_format.hpp"
+#include "storage/sstable_writer.hpp"
 
 namespace frankie::storage {
 
@@ -21,19 +22,17 @@ std::expected<sstable_writer, core::status> sstable_writer::create(core::random_
   result.arena_ = std::move(arena);
   // Size of the span acts as a capacity.
   result.body_span_ = core::to_writable_span(body_buffer, kBodyAllocationCapacityBytes);
-  // How many bytes we have written into the body so far.
-  result.body_offset_ = 0;
   // Holding a pointer to body_span_ so that we do not have to re-create the writer after growing the body.
   result.body_writer_ = core::buffer_writer::create(&result.body_span_);
   return result;
 }
 
-std::expected<void, core::status> sstable_writer::add(std::string_view ikey, std::string_view value) noexcept {
+std::expected<void, core::status> sstable_writer::add(std::string_view internal_key, std::string_view value) noexcept {
   FR_VERIFY(!body_span_.empty());
 
   // TODO(lnikon): What to do if entry size is 0?
-  const auto entry_size = sstable_data_block::calculate_entry_size(ikey, value);
-  if (entry_size + body_offset_ >= body_span_.size()) {
+  const auto entry_size = sstable_data_block::calculate_entry_size(internal_key, value);
+  if (entry_size + body_writer_.bytes_written() >= body_span_.size()) {
     const auto body_buffer_size = body_span_.size() * 2;
     char *body_buffer = static_cast<char *>(arena_.allocate(body_buffer_size, alignof(std::uint8_t)));
     if (body_buffer == nullptr) {
@@ -44,16 +43,24 @@ std::expected<void, core::status> sstable_writer::add(std::string_view ikey, std
     body_span_ = core::to_writable_span(body_buffer, body_buffer_size);
   }
 
-  if (const auto result =
-          body_writer_.write(ikey.size()).write_bytes(core::to_span(ikey)).write(value.size()).write_bytes(core::to_span(value)).error();
+  if (const auto result = body_writer_.write(internal_key.size())
+                              .write_bytes(core::to_span(internal_key))
+                              .write(value.size())
+                              .write_bytes(core::to_span(value))
+                              .error();
       !result) {
     return core::unexpected(result.error());
   }
-  body_offset_ += entry_size;
 
   return {};
 }
 
-[[nodiscard]] std::expected<void, core::status> sstable_writer::finish() noexcept { return core::unexpected(core::status_code::invalid_argument); }
+[[nodiscard]] std::expected<void, core::status> sstable_writer::finish() noexcept {
+  const auto bytes_written_or = file_.write(core::to_string_view(body_span_), body_span_.size());
+  if (!bytes_written_or) {
+    return core::unexpected(bytes_written_or.error());
+  }
+  return {};
+}
 
 }  // namespace frankie::storage

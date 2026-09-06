@@ -26,19 +26,19 @@ std::expected<sstable_footer, core::status> sstable_reader::read_footer() noexce
   }
 
   std::array<char, 2 * sizeof(std::uint32_t)> buffer{};
-  auto bytes_read_or = file_.read(buffer, *file_size - kFooterSize);
+  auto bytes_read_or = file_.read(buffer, *file_size - sstable_footer::kFooterSize);
   if (!bytes_read_or) {
     return core::unexpected(bytes_read_or.error());
   }
-  if (bytes_read_or != kFooterSize) {
+  if (bytes_read_or != sstable_footer::kFooterSize) {
     return core::unexpected(core::status_code::corrupted);
   }
 
   core::buffer_reader reader(core::to_writable_span(buffer.data(), buffer.size()));
-  return decode_footer(reader);
+  return sstable_footer::decode(reader);
 }
 
-std::expected<std::span<sstable_inedx>, core::status> sstable_reader::read_index(core::arena &arena, const sstable_footer &footer) noexcept {
+std::expected<std::span<sstable_index_entry>, core::status> sstable_reader::read_index(core::arena &arena, const sstable_footer &footer) noexcept {
   char *index_buffer = static_cast<char *>(arena.allocate(footer.index_size_, alignof(std::uint8_t)));
   if (index_buffer == nullptr) {
     return core::unexpected(core::status_code::out_of_memory);
@@ -54,19 +54,18 @@ std::expected<std::span<sstable_inedx>, core::status> sstable_reader::read_index
 
   const auto index_buffer_span = core::to_writable_span(index_buffer, footer.index_size_);
   core::buffer_reader reader(index_buffer_span);
-  return decode_index(reader, arena);
+  return sstable_index::decode(reader, arena);
 }
 
-[[nodiscard]] std::expected<sstable_data_block, core::status> sstable_reader::read_data_block(core::arena &arena,
-                                                                                              const sstable_inedx index) noexcept {
-  FR_VERIFY(index.data_block_size_ != 0ULL);
-  FR_VERIFY(!index.smallest_key_.empty());
+std::expected<sstable_data_block, core::status> sstable_reader::read_data_block(core::arena &arena, const sstable_index_entry &index_entry) noexcept {
+  FR_VERIFY(index_entry.data_block_size_ != 0ULL);
+  FR_VERIFY(!index_entry.smallest_key_.empty());
 
-  const auto data_block_size = index.data_block_size_;
+  const auto data_block_size = index_entry.data_block_size_;
   auto *data_block_buffer = static_cast<char *>(arena.allocate(data_block_size, sizeof(char)));
   auto data_block_span = std::span(data_block_buffer, data_block_size);
 
-  const auto bytes_read_or = file_.read(data_block_span, index.data_block_offset_);
+  const auto bytes_read_or = file_.read(data_block_span, index_entry.data_block_offset_);
   if (!bytes_read_or) {
     return core::unexpected(core::status_code::io_error);
   }
@@ -75,12 +74,12 @@ std::expected<std::span<sstable_inedx>, core::status> sstable_reader::read_index
   }
 
   core::buffer_reader reader(core::to_writable_span(data_block_span));
-  const auto header_or = decode_data_block_header(reader);
+  const auto header_or = sstable_data_block_header::decode(reader);
   if (!header_or) {
     return core::unexpected(core::status_code::corrupted);
   }
 
-  const auto data_block = decode_data_block(reader, *header_or);
+  const auto data_block = sstable_data_block::decode(reader, arena, *header_or);
   if (!data_block) {
     return core::unexpected(core::status_code::corrupted);
   }

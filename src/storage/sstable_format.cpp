@@ -1,8 +1,8 @@
 #include <cstdint>
 #include <string_view>
 
-#include "core/assert.hpp"
 #include "core/status.hpp"
+#include "core/views.hpp"
 #include "storage/sstable_format.hpp"
 
 namespace frankie::storage {
@@ -12,15 +12,23 @@ std::expected<void, core::status> internal_key::encode(core::buffer_writer &writ
   return writer.write_bytes(core::to_span(user_key_)).write(sequence_).write(timestamp_).write(tombstone_).error();
 }
 
-[[nodiscard]] std::expected<internal_key, core::status> internal_key::decode(std::string_view encoded) noexcept {
-  FR_VERIFY(encoded.size() >= internal_key::kMetadataSize);
-  const auto user_key_size = encoded.size() - internal_key::kMetadataSize;
+std::expected<internal_key, core::status> internal_key::decode(core::arena &arena, core::buffer_reader &reader) noexcept {
+  if (reader.remaining() < internal_key::kMetadataSize) {
+    return core::unexpected(core::status_code::corrupted);
+  }
+
+  const auto user_key_size = reader.remaining() - internal_key::kMetadataSize;
 
   internal_key result;
-  result.user_key_ = encoded.substr(0, user_key_size);
-  std::memcpy(&result.sequence_, encoded.data() + user_key_size, sizeof(result.sequence_));
-  std::memcpy(&result.timestamp_, encoded.data() + user_key_size + sizeof(result.sequence_), sizeof(result.timestamp_));
-  std::memcpy(&result.tombstone_, encoded.data() + user_key_size + sizeof(result.sequence_) + sizeof(result.timestamp_), sizeof(bool));
+  std::span<const std::byte> user_key_bytes;
+  if (auto status = reader.read_bytes(user_key_size, user_key_bytes).read(result.sequence_).read(result.timestamp_).read(result.tombstone_).error();
+      !status) {
+    return core::unexpected(status.error());
+  }
+
+  auto *user_key_buf = static_cast<std::byte *>(arena.allocate(user_key_size, alignof(std::uint8_t)));
+  std::memcpy(user_key_buf, user_key_bytes.data(), user_key_size);
+  result.user_key_ = core::to_string_view(std::span<const std::byte>(user_key_buf, user_key_size));
   return result;
 }
 
@@ -50,7 +58,37 @@ std::uint64_t internal_key::bytes_required() const noexcept { return user_key_.s
   return error;
 }
 
-[[nodiscard]] std::string_view kv_entry::decode(core::arena &arena, core::buffer_reader &reader) noexcept {}
+std::expected<kv_entry, core::status> kv_entry::decode(core::arena &arena, core::buffer_reader &reader) noexcept {
+  // Decode internal key.
+  auto ikey_or = internal_key::decode(arena, reader);
+  if (!ikey_or) {
+    return core::unexpected(ikey_or.error());
+  }
+
+  // Get the size of the value.
+  std::uint64_t value_size = 0;
+  if (auto status = reader.read(value_size).error(); !status) {
+    return core::unexpected(status.error());
+  }
+
+  // Allocate memory to store the value, prepare the span, and read the value into it.
+  auto *value_buf = static_cast<char *>(arena.allocate(value_size, alignof(std::uint8_t)));
+  if (value_buf == nullptr) {
+    return core::unexpected(core::status_code::out_of_memory);
+  }
+  auto value_span = core::to_span(std::string_view(value_buf, value_size));
+  if (auto status = reader.read_bytes(value_size, value_span).error(); !status) {
+    return core::unexpected(status.error());
+  }
+
+  kv_entry result;
+  result.key_ = ikey_or->user_key_;
+  result.sequence_ = ikey_or->sequence_;
+  result.timestamp_ = ikey_or->timestamp_;
+  result.tombstone_ = ikey_or->tombstone_;
+  result.value_ = core::to_string_view(value_span);
+  return result;
+}
 
 /// Data block
 [[nodiscard]] std::expected<void, core::status> sstable_data_block_header::encode(core::buffer_writer &writer) const noexcept {}
