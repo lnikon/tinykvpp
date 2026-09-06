@@ -1,5 +1,6 @@
 #include <cstdint>
 #include <string_view>
+#include <utility>
 
 #include "core/status.hpp"
 #include "core/views.hpp"
@@ -91,10 +92,22 @@ std::expected<kv_entry, core::status> kv_entry::decode(core::arena &arena, core:
 }
 
 /// Data block
-[[nodiscard]] std::expected<void, core::status> sstable_data_block_header::encode(core::buffer_writer &writer) const noexcept {}
+[[nodiscard]] std::expected<void, core::status> sstable_data_block_header::encode(core::buffer_writer &writer) const noexcept {
+  return writer.write(entry_count_).write(uncompressed_size).write(compressed_size).write(compression_type).write(crc32_).error();
+}
 
-[[nodiscard]] std::expected<sstable_data_block_header, core::status> sstable_data_block_header::decode(core::buffer_reader &reader) noexcept {
-  return {};
+std::expected<sstable_data_block_header, core::status> sstable_data_block_header::decode(core::buffer_reader &reader) noexcept {
+  sstable_data_block_header result;
+  if (auto status = reader.read(result.entry_count_)
+                        .read(result.uncompressed_size)
+                        .read(result.compressed_size)
+                        .read(result.compression_type)
+                        .read(result.crc32_)
+                        .error();
+      !status) {
+    return core::unexpected(status.error());
+  }
+  return result;
 }
 
 [[nodiscard]] static std::expected<sstable_data_block, core::status> sstable_data_block::decode(core::buffer_reader &reader, core::arena &arena,
@@ -122,7 +135,8 @@ std::expected<kv_entry, core::status> kv_entry::decode(core::arena &arena, core:
   }
 }
 
-[[nodiscard]] std::expected<std::span<sstable_index>, core::status> sstable_index::decode(core::buffer_reader &reader, core::arena &arena) noexcept {
+[[nodiscard]] std::expected<std::span<sstable_index_entry>, core::status> sstable_index::decode(core::buffer_reader &reader,
+                                                                                                core::arena &arena) noexcept {
   // TODO(lnikon) No idea at the moment how to do this
   // std::uint32_t entries_count{0};
   // if (auto result = reader.read(entries_count).error(); !result) {

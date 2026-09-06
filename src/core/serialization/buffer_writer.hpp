@@ -3,6 +3,8 @@
 #include <cstdint>
 #include <cstring>
 #include <optional>
+#include <type_traits>
+#include <utility>
 
 #include "core/assert.hpp"
 #include "core/serialization/codec.hpp"
@@ -47,6 +49,21 @@ class buffer_writer final {
       return *this;
     }
     codec::store_le(value, buffer_->subspan(cursor_).first<sizeof(T)>());
+    cursor_ += sizeof(T);
+    return *this;
+  }
+
+  template <typename T>
+    requires std::is_enum_v<T>
+  [[nodiscard]] auto write(const T value) noexcept -> buffer_writer & {
+    if (error_) {
+      return *this;
+    }
+    if (cursor_ + sizeof(std::underlying_type_t<T>) > buffer_->size()) {
+      error_ = core::status_code::buffer_overflow;
+      return *this;
+    }
+    codec::store_le(std::to_underlying(value), buffer_->subspan(cursor_).first<sizeof(T)>());
     cursor_ += sizeof(T);
     return *this;
   }

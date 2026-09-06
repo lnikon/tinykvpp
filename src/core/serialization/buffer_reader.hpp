@@ -27,6 +27,17 @@ class buffer_reader final {
     return *this;
   }
 
+  template <typename T>
+    requires std::is_enum_v<T>
+  [[nodiscard]] auto read(T &out) noexcept -> buffer_reader & {
+    if (error_) {
+      return *this;
+    }
+    out = static_cast<T>(codec::load_le<T>(buffer_.subspan(cursor_).first<sizeof(T)>()));
+    cursor_ += sizeof(T);
+    return *this;
+  }
+
   [[nodiscard]] auto read_varint(std::uint64_t &out) noexcept -> buffer_reader & {
     if (error_) {
       return *this;
