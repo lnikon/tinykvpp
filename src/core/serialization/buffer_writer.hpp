@@ -21,7 +21,7 @@ class buffer_writer final {
   // Last modification position.
   std::uint64_t cursor_{0};
   // Stateful error.
-  std::optional<core::status_code> error_{std::nullopt};
+std::optional<core::status_code> error_{std::nullopt};
 
  public:
   buffer_writer() = default;
@@ -84,7 +84,7 @@ class buffer_writer final {
       error_ = core::status_code::buffer_overflow;
       return *this;
     }
-    std::memcpy(&buffer_[cursor_], bytes.data(), bytes.size());
+    std::memcpy(buffer_->data() + cursor_, bytes.data(), bytes.size());
     cursor_ += bytes.size();
     return *this;
   }

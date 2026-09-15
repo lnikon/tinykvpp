@@ -10,9 +10,12 @@ namespace frankie::storage {
 
 sstable_writer::~sstable_writer() noexcept { arena_.destroy(); }
 
-std::expected<sstable_writer, core::status> sstable_writer::create(core::random_access_file file) noexcept {
-  core::arena arena = core::arena::create(kBodyAllocationCapacityBytes);
-  char *body_buffer = static_cast<char *>(arena.allocate(kBodyAllocationCapacityBytes, alignof(std::uint8_t)));
+std::expected<sstable_writer, core::status> sstable_writer::create(core::random_access_file file, sstable_writer_options options) noexcept {
+  const auto target_block_size = options.target_block_size_ + options.max_entry_size;
+  
+  core::arena arena = core::arena::create(target_block_size);
+
+  char *body_buffer = static_cast<char *>(arena.allocate(target_block_size, alignof(std::uint8_t)));
   if (body_buffer == nullptr) {
     return core::unexpected(core::status_code::out_of_memory);
   }
@@ -43,14 +46,8 @@ std::expected<void, core::status> sstable_writer::add(std::string_view internal_
     body_span_ = core::to_writable_span(body_buffer, body_buffer_size);
   }
 
-  if (const auto result = body_writer_.write(internal_key.size())
-                              .write_bytes(core::to_span(internal_key))
-                              .write(value.size())
-                              .write_bytes(core::to_span(value))
-                              .error();
-      !result) {
-    return core::unexpected(result.error());
-  }
+  sstable_data_block data_block_{.entries_ = {}};
+  data_block_.encode(body_writer_);
 
   return {};
 }

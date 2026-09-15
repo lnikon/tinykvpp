@@ -36,7 +36,7 @@ std::expected<internal_key, core::status> internal_key::decode(core::arena &aren
 std::uint64_t internal_key::bytes_required() const noexcept { return user_key_.size() + kMetadataSize; }
 
 // KV entry
-[[nodiscard]] internal_key kv_entry::get_internal_key() const noexcept {
+internal_key kv_entry::get_internal_key() const noexcept {
   return {
       .user_key_ = key_,
       .sequence_ = sequence_,
@@ -45,11 +45,9 @@ std::uint64_t internal_key::bytes_required() const noexcept { return user_key_.s
   };
 }
 
-[[nodiscard]] std::uint64_t kv_entry::bytes_count() const noexcept {
-  return key_.size() + value_.size() + (2 * sizeof(std::size_t)) + internal_key::kMetadataSize;
-}
+std::uint64_t kv_entry::bytes_count() const noexcept { return key_.size() + value_.size() + (2 * sizeof(std::size_t)) + internal_key::kMetadataSize; }
 
-[[nodiscard]] std::expected<void, core::status> kv_entry::encode(core::buffer_writer &writer) const noexcept {
+std::expected<void, core::status> kv_entry::encode(core::buffer_writer &writer) const noexcept {
   const auto internal_key = get_internal_key();
   auto error = internal_key.encode(writer);
   if (error) {
@@ -91,8 +89,8 @@ std::expected<kv_entry, core::status> kv_entry::decode(core::arena &arena, core:
   return result;
 }
 
-/// Data block
-[[nodiscard]] std::expected<void, core::status> sstable_data_block_header::encode(core::buffer_writer &writer) const noexcept {
+/// Data block header
+std::expected<void, core::status> sstable_data_block_header::encode(core::buffer_writer &writer) const noexcept {
   return writer.write(entry_count_).write(uncompressed_size).write(compressed_size).write(compression_type).write(crc32_).error();
 }
 
@@ -110,24 +108,26 @@ std::expected<sstable_data_block_header, core::status> sstable_data_block_header
   return result;
 }
 
-[[nodiscard]] static std::expected<sstable_data_block, core::status> sstable_data_block::decode(core::buffer_reader &reader, core::arena &arena,
-                                                                                                const sstable_data_block_header &header) noexcept {}
+/// Data block
+std::expected<void, core::status> sstable_data_block::encode(core::buffer_writer &writer) const noexcept {}
 
-[[nodiscard]] std::uint64_t sstable_data_block::calculate_entry_size(std::string_view ikey, std::string_view value) noexcept {
+std::expected<sstable_data_block, core::status> sstable_data_block::decode(core::buffer_reader &reader, core::arena &arena,
+                                                                           const sstable_data_block_header &header) noexcept {}
+
+std::uint64_t sstable_data_block::calculate_entry_size(std::string_view ikey, std::string_view value) noexcept {
   return (sizeof(std::uint64_t) * 2) + ikey.size() + value.size();
 }
 
 /// Index
-[[nodiscard]] std::expected<void, core::status> sstable_index_entry::encode(core::buffer_writer &writer) const noexcept {
+std::expected<void, core::status> sstable_index_entry::encode(core::buffer_writer &writer) const noexcept {
   return core::unexpected(core::status_code::not_implemented);
 }
 
-[[nodiscard]] std::expected<std::span<sstable_index_entry>, core::status> sstable_index_entry::decode(core::buffer_reader &reader,
-                                                                                                      core::arena &arena) noexcept {
+std::expected<std::span<sstable_index_entry>, core::status> sstable_index_entry::decode(core::buffer_reader &reader, core::arena &arena) noexcept {
   return core::unexpected(core::status_code::not_implemented);
 }
 
-[[nodiscard]] std::expected<void, core::status> sstable_index::encode(core::buffer_writer &writer) const noexcept {
+std::expected<void, core::status> sstable_index::encode(core::buffer_writer &writer) const noexcept {
   for (auto &entry : entries_) {
     if (auto result = entry.encode(writer); !result) {
       return result;
@@ -135,8 +135,7 @@ std::expected<sstable_data_block_header, core::status> sstable_data_block_header
   }
 }
 
-[[nodiscard]] std::expected<std::span<sstable_index_entry>, core::status> sstable_index::decode(core::buffer_reader &reader,
-                                                                                                core::arena &arena) noexcept {
+std::expected<std::span<sstable_index_entry>, core::status> sstable_index::decode(core::buffer_reader &reader, core::arena &arena) noexcept {
   // TODO(lnikon) No idea at the moment how to do this
   // std::uint32_t entries_count{0};
   // if (auto result = reader.read(entries_count).error(); !result) {

@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <optional>
+#include <type_traits>
 
 #include "core/serialization/codec.hpp"
 #include "core/status.hpp"
@@ -30,10 +31,15 @@ class buffer_reader final {
   template <typename T>
     requires std::is_enum_v<T>
   [[nodiscard]] auto read(T &out) noexcept -> buffer_reader & {
+    using U = std::underlying_type_t<T>;
     if (error_) {
       return *this;
     }
-    out = static_cast<T>(codec::load_le<T>(buffer_.subspan(cursor_).first<sizeof(T)>()));
+    if (sizeof(U) > buffer_.size() - cursor_) {
+      error_ = core::status_code::out_of_memory;
+      return *this;
+    }
+    out = static_cast<T>(codec::load_le<U>(buffer_.subspan(cursor_).template first<sizeof(U)>()));
     cursor_ += sizeof(T);
     return *this;
   }
