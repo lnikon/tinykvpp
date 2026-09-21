@@ -1,7 +1,5 @@
-#include <cstring>
 #include <utility>
 
-#include "core/scratch_arena.hpp"
 #include "core/status.hpp"
 #include "core/time.hpp"
 #include "core/views.hpp"
@@ -91,7 +89,7 @@ std::expected<kv_entry, core::status> memtable::get(const std::string_view key) 
 
   if (auto kv_opt = skiplist_.get(*encoded_or); kv_opt) {
     core::buffer_reader reader(core::to_span(kv_opt->first));
-    auto decoded_ikey = internal_key::decode(reader);
+    auto decoded_ikey = internal_key::decode(scratch_arena_.reset(), reader);
     if (!decoded_ikey) {
       return core::unexpected(core::status_code::corrupted);
     }
@@ -124,7 +122,7 @@ std::expected<std::string_view, core::status> memtable::encode_internal_key(cons
     return core::unexpected(core::status_code::out_of_memory);
   }
   auto buffer_span = core::to_writable_span(buffer, ikey.bytes_required());
-  auto writer = core::buffer_writer::create(&buffer_span);
+  auto writer = core::buffer_writer::create(buffer_span);
 
   if (const auto result = ikey.encode(writer); !result) {
     return core::unexpected(result.error());

@@ -44,6 +44,8 @@
 //   [index region]
 //   [bloom region]
 //   [footer (sstable_footer_size bytes, fixed)]
+// Data block header:
+// [u32 entry_count][u32 uncompressed_size][u32 compressed_size][u8 compression_type][u8 padding][u32 crc32]
 //
 // Data block:
 //   [sstable_data_block_header (sstable_data_block_header_size bytes)]

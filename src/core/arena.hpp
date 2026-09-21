@@ -42,7 +42,7 @@ class arena final {
 
   void destroy() noexcept;
 
-  void reset() noexcept;
+  arena& reset() noexcept;
 
   [[nodiscard]] std::uint64_t bytes_allocated() const noexcept;
 

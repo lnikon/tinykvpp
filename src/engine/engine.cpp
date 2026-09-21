@@ -156,17 +156,6 @@ std::expected<void, core::status> engine::rotate_memtable() noexcept {
     return core::unexpected(segment_file.error());
   }
 
-  auto writer = storage::sstable_writer::create(std::move(*segment_file));
-  for (auto [ikey, value] : *memtable_immutable_) {
-    if (!writer->add(ikey, value)) {
-      break;
-    }
-  }
-  auto segment_or = writer->finish();
-  if (!segment_or) {
-    return core::unexpected(segment_or.error());
-  }
-
   if (!wal_.truncate()) {
     // TODO(lnikon): Need a fallback strategy e.g. move current wal into wal.old1 and create a new wal
     return core::unexpected(core::status_code::io_error);

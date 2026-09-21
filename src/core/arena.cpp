@@ -91,9 +91,9 @@ void arena::destroy() noexcept {
   bytes_allocated_ = 0;
 }
 
-void arena::reset() noexcept {
+arena &arena::reset() noexcept {
   if (current_ == nullptr) {
-    return;
+    return *this;
   }
 
   auto *block = current_->next_;
@@ -107,6 +107,8 @@ void arena::reset() noexcept {
   current_->next_ = nullptr;
   offset_ = 0;
   bytes_allocated_ = detail::block_capacity_rounded(current_block_size_);
+
+  return *this;
 }
 
 std::uint64_t arena::bytes_allocated() const noexcept { return bytes_allocated_; }

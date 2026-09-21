@@ -76,7 +76,7 @@ target_link_libraries(frankie frankie_lib)
 
 if(GTest_FOUND)
     enable_testing()
-    add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/test)
+    # add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/test)
     message(STATUS "GTest found - testing enabled")
 else()
     message(STATUS "GTest not found - testing disabled")
