@@ -46,6 +46,7 @@ cmake-build-*/
 # CMake generated files
 CMakeFiles/
 CMakeCache.txt
+CMakeUserPresets.json
 cmake_install.cmake
 Makefile
 install_manifest.txt
@@ -56,6 +57,7 @@ compile_commands.json
 *.log
 *.bak
 *.swp
+Session.vim
 
 # vcpkg
 vcpkg_installed/
@@ -65,5 +67,6 @@ vcpkg_installed/
 
 # test output & cache
 Testing/
+tmp/
 .cache/
 
