@@ -1,5 +1,8 @@
 #include "storage/sstable_writer.hpp"
+#include <memory>
+#include <ranges>
 #include "core/assert.hpp"
+#include "core/serialization/buffer_writer.hpp"
 #include "core/status.hpp"
 #include "core/views.hpp"
 #include "storage/sstable_format.hpp"
@@ -8,31 +11,34 @@ namespace frankie::storage {
 
 sstable_writer::~sstable_writer() noexcept { arena_.destroy(); }
 
-// std::expected<void, core::status> sstable_writer::flush(std::ranges::range<std::pair<std::string_view, std::string_view>> range,
-//                                                         core::random_access_file file, sstable_writer_options options) {
-//   auto writer = sstable_writer::create(std::move(file), options);
-//   if (!writer) {
-//     return core::unexpected(writer.error());
-//   }
-// }
-
 std::expected<sstable_writer, core::status> sstable_writer::create(core::random_access_file file, sstable_writer_options options) noexcept {
-  const auto target_block_size = options.target_block_size_ + options.max_entry_size_;
-  core::arena arena = core::arena::create(target_block_size);
-  char *body_buffer = static_cast<char *>(arena.allocate(target_block_size, alignof(std::uint8_t)));
-  if (body_buffer == nullptr) {
+  auto alloc_or = sstable_allocation_config::from(options);
+  if (!alloc_or) {
+    return core::unexpected(alloc_or.error());
+  }
+
+  // TODO(lnikon): Need a method to check that arena was successfully created
+  core::arena arena = core::arena::create(alloc_or->arena_bytes_);
+  auto *scratch = static_cast<std::byte *>(arena.allocate(alloc_or->scratch_bytes_, alignof(std::byte)));
+  auto *index_buffer = static_cast<sstable_index_entry *>(arena.allocate(alloc_or->index_entries_bytes_, alignof(sstable_index_entry)));
+  auto *key_blob_buffer = static_cast<char *>(arena.allocate(alloc_or->index_key_blob_bytes_, alignof(char)));
+  if (scratch == nullptr || index_buffer == nullptr || key_blob_buffer == nullptr) {
+    arena.destroy();
     return core::unexpected(core::status_code::out_of_memory);
   }
+  std::start_lifetime_as_array<sstable_index_entry>(index_buffer, alloc_or->data_block_count_max_);
 
   sstable_writer result;
   result.options_ = options;
+  result.allocation_config = *alloc_or;
   result.file_ = std::move(file);
   result.arena_ = std::move(arena);
-  // Size of the span acts as a capacity.
-  result.data_block_span_ = core::to_writable_span(body_buffer, target_block_size);
-  // Holding a pointer to body_span_ so that we do not have to re-create the writer after growing the body.
-  result.data_block_span_writer_ = core::buffer_writer::create(result.data_block_span_);
-  result.index_entries_.resize(kMaxIndexEntriesCount);
+
+  result.data_block_span_ = core::to_writable_span(reinterpret_cast<char *>(scratch), sizeof(sstable_data_block_header) + alloc_or->block_body_max_);
+  result.data_block_span_writer_ = core::buffer_writer::create(result.data_block_span_.subspan(sizeof(sstable_data_block_header)));
+  result.index_entries_ = {index_buffer, alloc_or->data_block_count_max_};
+  result.index_key_blob_ = {key_blob_buffer, alloc_or->index_key_blob_bytes_};
+
   return result;
 }
 
@@ -47,9 +53,11 @@ std::expected<void, core::status> sstable_writer::add(std::string_view encoded_i
   // don't let data_block grow over max target size.
   // add a new index entry and reset data block state (need an separate arena probably)
   if (data_block_size_bytes_ + entry_size >= options_.target_block_size_ + options_.max_entry_size_) {
-    index_entries_.emplace_back(sstable_index_entry{.smallest_key_ = data_block_smallest_key_,
-                                                    .data_block_offset_ = data_block_offset_relative_to_zero_,
-                                                    .data_block_size_ = data_block_span_writer_.bytes_written()});
+    index_entries_.emplace_back(sstable_index_entry{
+        .smallest_key_ = data_block_smallest_key_,
+        .data_block_offset_ = data_block_offset_relative_to_zero_,
+        .data_block_size_ = data_block_span_writer_.bytes_written(),
+    });
     // flush the block
     if (auto status = file_.write(core::to_string_view(data_block_span_), data_block_offset_relative_to_zero_); !status) {
       return core::unexpected(status.error());

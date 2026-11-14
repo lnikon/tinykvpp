@@ -28,10 +28,14 @@ std::expected<engine, core::status> engine::create(core::config config) noexcept
 
       switch (wal_entry.operation_) {
         case wal_operation::put:
-          memtable_active.put(wal_entry.key_, wal_entry.value_, wal_entry.sequence_, wal_entry.tombstone_);
+          if (auto status = memtable_active.put(wal_entry.key_, wal_entry.value_, wal_entry.sequence_, wal_entry.tombstone_); !status) {
+            return core::unexpected(status.error());
+          }
           break;
         case wal_operation::del:
-          memtable_active.put(wal_entry.key_, "", wal_entry.sequence_, wal_entry.tombstone_);
+          if (auto status = memtable_active.put(wal_entry.key_, "", wal_entry.sequence_, wal_entry.tombstone_); !status) {
+            return core::unexpected(status.error());
+          }
           break;
         default:
           FR_VERIFY_MSG(false, "missing handler for WAL operation");
@@ -74,7 +78,10 @@ std::expected<void, core::status> engine::put(std::string_view key, std::string_
     return core::unexpected(core::status_code::io_error);
   }
 
-  memtable_active_.put(key, value, sequence, false);
+  if (auto status = memtable_active_.put(key, value, sequence, false); !status) {
+    return status;
+  }
+
   if (auto status = rotate_memtable(); !status) {
     return status;
   }
@@ -127,7 +134,10 @@ std::expected<void, core::status> engine::del(std::string_view key) noexcept {
     return core::unexpected(core::status_code::io_error);
   }
 
-  memtable_active_.put(key, {}, sequence, true);
+  if (auto status = memtable_active_.put(key, {}, sequence, true); !status) {
+    return status;
+  }
+
   if (auto status = rotate_memtable(); !status) {
     return status;
   }
@@ -146,9 +156,6 @@ std::expected<void, core::status> engine::rotate_memtable() noexcept {
     return {};
   }
 
-  memtable_immutable_.emplace(std::move(memtable_active_));
-  memtable_active_ = storage::memtable::create(config_.memtable_capacity_);
-
   // TODO(lnikon): Should be arena based. Temporary workaround until manifest is rerady. Latest segment ID should be recovered from the manifest.
   std::filesystem::path segment_path{std::format("segment_{}.sst", latest_segment_id_++)};
   auto segment_file = core::random_access_file::create_exclusive(segment_path);
@@ -156,9 +163,16 @@ std::expected<void, core::status> engine::rotate_memtable() noexcept {
     return core::unexpected(segment_file.error());
   }
 
-  if (!wal_.truncate()) {
+  if (const auto status = storage::sstable_writer::flush(memtable_active_, std::move(*segment_file), storage::sstable_writer_options{}); !status) {
+    return status;
+  }
+
+  memtable_immutable_.emplace(std::move(memtable_active_));
+  memtable_active_ = storage::memtable::create(config_.memtable_capacity_);
+
+  if (const auto status = wal_.truncate(); !status) {
     // TODO(lnikon): Need a fallback strategy e.g. move current wal into wal.old1 and create a new wal
-    return core::unexpected(core::status_code::io_error);
+    return status;
   }
 
   return {};

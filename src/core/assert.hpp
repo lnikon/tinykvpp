@@ -110,12 +110,12 @@ struct expression_value {
 
   void print_to(char *buf, std::uint64_t size) const noexcept { print_value(buf, size, value_); }
 
-#define FR_ASSERT_DEFINE_BINARY_OP(op, op_name)                                         \
-  template <typename R>                                                                 \
-  constexpr auto operator op(R &&rhs) const noexcept {                                  \
-    auto tmp = value_ op rhs;                                                           \
-    return binary_expression<expression_value<T>, expression_value<R>, struct op_name>{ \
-        *this, expression_value<R>{std::forward<R>(rhs)}, std::move(tmp)};              \
+#define FR_ASSERT_DEFINE_BINARY_OP(op, op_name)                                                                                          \
+  template <typename R>                                                                                                                  \
+  constexpr auto operator op(R &&rhs) const noexcept {                                                                                   \
+    auto tmp = value_ op rhs;                                                                                                            \
+    return binary_expression<expression_value<T>, expression_value<R>, struct op_name>{*this, expression_value<R>{std::forward<R>(rhs)}, \
+                                                                                       std::move(tmp)};                                  \
   }
 
   FR_ASSERT_DEFINE_BINARY_OP(==, op_eq)
@@ -184,8 +184,7 @@ enum class assert_level {
 // Failure handler
 // ================================================================================
 
-using failure_handler = void (*)(assert_level level, const char *expression, const char *message,
-                                 const assert_detail::source_location &loc) noexcept;
+using failure_handler = void (*)(assert_level level, const char *expression, const char *message, const assert_detail::source_location &loc) noexcept;
 
 inline void default_failure_handler(assert_level level, const char *expression, const char *message,
                                     const assert_detail::source_location &loc) noexcept {
@@ -228,17 +227,14 @@ inline failure_handler &get_failure_handler() noexcept {
   return handler;
 }
 
-inline void set_failure_handler(failure_handler handler) noexcept {
-  get_failure_handler() = handler ? handler : default_failure_handler;
-}
+inline void set_failure_handler(failure_handler handler) noexcept { get_failure_handler() = handler ? handler : default_failure_handler; }
 
 // ================================================================================
 // Core Assertion Implementation
 // ================================================================================
 
 [[noreturn, gnu::cold, gnu::noinline]]
-inline void assertion_failed(assert_level level, const char *expression, const char *details,
-                             const assert_detail::source_location &loc) noexcept {
+inline void assertion_failed(assert_level level, const char *expression, const char *details, const assert_detail::source_location &loc) noexcept {
   get_failure_handler()(level, expression, details, loc);
 
   // Attempt to break into a debuffer if available
@@ -256,8 +252,8 @@ template <typename T, typename = void>
 struct has_format_details : std::false_type {};
 
 template <typename T>
-struct has_format_details<T, std::void_t<decltype(std::declval<const T &>().format_details(
-                                 std::declval<char *>(), std::declval<std::uint64_t>()))>> : std::true_type {};
+struct has_format_details<T, std::void_t<decltype(std::declval<const T &>().format_details(std::declval<char *>(), std::declval<std::uint64_t>()))>>
+    : std::true_type {};
 
 template <typename T>
 constexpr bool has_format_details_v = has_format_details<T>::value;
@@ -280,8 +276,7 @@ inline void check_assertion(assert_level level, const Expr &expression, const ch
 
 template <typename Expr>
 [[gnu::always_inline]]
-inline void check_assertion_msg(assert_level level, const Expr &expression, const char *expression_str,
-                                const char *message,
+inline void check_assertion_msg(assert_level level, const Expr &expression, const char *expression_str, const char *message,
                                 const assert_detail::source_location &location = assert_detail::source_location{}) {
   if (!static_cast<bool>(expression)) {
     constexpr const std::uint64_t k_details_size = 1024;
@@ -312,8 +307,7 @@ inline void check_assertion_msg(assert_level level, const Expr &expression, cons
 
 // Disable Clang's -Woverloaded-shift-op-parentheses.
 #if defined(__clang__)
-#define FR_ASSERT_DIAG_PUSH \
-  _Pragma("clang diagnostic push") _Pragma("clang diagnostic ignored \"-Woverloaded-shift-op-parentheses\"")
+#define FR_ASSERT_DIAG_PUSH _Pragma("clang diagnostic push") _Pragma("clang diagnostic ignored \"-Woverloaded-shift-op-parentheses\"")
 #define FR_ASSERT_DIAG_POP _Pragma("clang diagnostic pop")
 #else
 #define FR_ASSERT_DIAG_PUSH
@@ -329,20 +323,20 @@ inline void check_assertion_msg(assert_level level, const Expr &expression, cons
 
 // DEBUG_ASSERT - only active when ASSERT_LEVEL >= 3
 #if FR_ASSERT_LEVEL >= 3
-#define FR_DEBUG_ASSERT(expr)                                                                            \
-  do {                                                                                                   \
-    FR_ASSERT_DIAG_PUSH                                                                                  \
-    ::frankie::assert_detail::check_assertion(::frankie::assert_detail::assert_level::debug,             \
-                                              FR_DECOMPOSE_EXPRESSION(expr), FR_ASSERT_STRINGIFY(expr)); \
-    FR_ASSERT_DIAG_POP                                                                                   \
+#define FR_DEBUG_ASSERT(expr)                                                                                               \
+  do {                                                                                                                      \
+    FR_ASSERT_DIAG_PUSH                                                                                                     \
+    ::frankie::assert_detail::check_assertion(::frankie::assert_detail::assert_level::debug, FR_DECOMPOSE_EXPRESSION(expr), \
+                                              FR_ASSERT_STRINGIFY(expr));                                                   \
+    FR_ASSERT_DIAG_POP                                                                                                      \
   } while (0)
 
-#define FR_DEBUG_ASSERT_MSG(expr, msg)                                                                            \
-  do {                                                                                                            \
-    FR_ASSERT_DIAG_PUSH                                                                                           \
-    ::frankie::assert_detail::check_assertion_msg(::frankie::assert_detail::assert_level::debug,                  \
-                                                  FR_DECOMPOSE_EXPRESSION(expr), FR_ASSERT_STRINGIFY(expr), msg); \
-    FR_ASSERT_DIAG_POP                                                                                            \
+#define FR_DEBUG_ASSERT_MSG(expr, msg)                                                                                          \
+  do {                                                                                                                          \
+    FR_ASSERT_DIAG_PUSH                                                                                                         \
+    ::frankie::assert_detail::check_assertion_msg(::frankie::assert_detail::assert_level::debug, FR_DECOMPOSE_EXPRESSION(expr), \
+                                                  FR_ASSERT_STRINGIFY(expr), msg);                                              \
+    FR_ASSERT_DIAG_POP                                                                                                          \
   } while (0)
 #else
 #define FR_DEBUG_ASSERT(expr) ((void)0)
@@ -351,20 +345,20 @@ inline void check_assertion_msg(assert_level level, const Expr &expression, cons
 
 // VERIFY - only active when ASSERT_LEVEL >= 1
 #if FR_ASSERT_LEVEL >= 1
-#define FR_VERIFY(expr)                                                                                  \
-  do {                                                                                                   \
-    FR_ASSERT_DIAG_PUSH                                                                                  \
-    ::frankie::assert_detail::check_assertion(::frankie::assert_detail::assert_level::verify,            \
-                                              FR_DECOMPOSE_EXPRESSION(expr), FR_ASSERT_STRINGIFY(expr)); \
-    FR_ASSERT_DIAG_POP                                                                                   \
+#define FR_VERIFY(expr)                                                                                                      \
+  do {                                                                                                                       \
+    FR_ASSERT_DIAG_PUSH                                                                                                      \
+    ::frankie::assert_detail::check_assertion(::frankie::assert_detail::assert_level::verify, FR_DECOMPOSE_EXPRESSION(expr), \
+                                              FR_ASSERT_STRINGIFY(expr));                                                    \
+    FR_ASSERT_DIAG_POP                                                                                                       \
   } while (0)
 
-#define FR_VERIFY_MSG(expr, msg)                                                                                  \
-  do {                                                                                                            \
-    FR_ASSERT_DIAG_PUSH                                                                                           \
-    ::frankie::assert_detail::check_assertion_msg(::frankie::assert_detail::assert_level::verify,                 \
-                                                  FR_DECOMPOSE_EXPRESSION(expr), FR_ASSERT_STRINGIFY(expr), msg); \
-    FR_ASSERT_DIAG_POP                                                                                            \
+#define FR_VERIFY_MSG(expr, msg)                                                                                                 \
+  do {                                                                                                                           \
+    FR_ASSERT_DIAG_PUSH                                                                                                          \
+    ::frankie::assert_detail::check_assertion_msg(::frankie::assert_detail::assert_level::verify, FR_DECOMPOSE_EXPRESSION(expr), \
+                                                  FR_ASSERT_STRINGIFY(expr), msg);                                               \
+    FR_ASSERT_DIAG_POP                                                                                                           \
   } while (0)
 #else
 #define FR_VERIFY(expr) ((void)0)
@@ -397,50 +391,46 @@ inline void check_assertion_msg(assert_level level, const Expr &expression, cons
   } while (0)
 
 // FR_UNREACHABLE - marks unreachable code
-#define FR_UNREACHABLE()                                                                                     \
-  do {                                                                                                       \
-    FR_ASSERT_DIAG_PUSH                                                                                      \
-    ::frankie::assert_detail::assertion_failed(::frankie::assert_detail::assert_level::panic, "UNREACHABLE", \
-                                               "Code marked as unreachable was executed",                    \
-                                               ::frankie::assert_detail::source_location{});                 \
-    FR_ASSERT_DIAG_POP                                                                                       \
+#define FR_UNREACHABLE()                                                                                                                \
+  do {                                                                                                                                  \
+    FR_ASSERT_DIAG_PUSH                                                                                                                 \
+    ::frankie::assert_detail::assertion_failed(::frankie::assert_detail::assert_level::panic, "UNREACHABLE",                            \
+                                               "Code marked as unreachable was executed", ::frankie::assert_detail::source_location{}); \
+    FR_ASSERT_DIAG_POP                                                                                                                  \
   } while (0)
 
 // FR_NOT_IMPLEMENTED - Marks unimplemented code paths
-#define FR_NOT_IMPLEMENTED()                                                                                     \
-  do {                                                                                                           \
-    FR_ASSERT_DIAG_PUSH                                                                                          \
-    ::frankie::assert_detail::assertion_failed(::frankie::assert_detail::assert_level::panic, "NOT_IMPLEMENTED", \
-                                               "This functionality is not yet implemented",                      \
-                                               ::frankie::assert_detail::source_location{});                     \
-    FR_ASSERT_DIAG_POP                                                                                           \
+#define FR_NOT_IMPLEMENTED()                                                                                                              \
+  do {                                                                                                                                    \
+    FR_ASSERT_DIAG_PUSH                                                                                                                   \
+    ::frankie::assert_detail::assertion_failed(::frankie::assert_detail::assert_level::panic, "NOT_IMPLEMENTED",                          \
+                                               "This functionality is not yet implemented", ::frankie::assert_detail::source_location{}); \
+    FR_ASSERT_DIAG_POP                                                                                                                    \
   } while (0)
 
 // ================================================================================
 // Utility macros
 // ================================================================================
 
-#define FR_ASSERT_NOT_NULL(ptr)                                                                                   \
-  ([](auto &&p, ::frankie::assert_detail::source_location location = {}) -> decltype(auto) {                      \
-    if (p == nullptr) [[unlikely]] {                                                                              \
-      ::frankie::assert_detail::assertion_failed(::frankie::assert_detail::assert_level::panic,                   \
-                                                 FR_ASSERT_STRINGIFY(p) " != nullptr", "Unexpected null pointer", \
-                                                 location);                                                       \
-    }                                                                                                             \
-    return std::forward<decltype(p)>(p);                                                                          \
+#define FR_ASSERT_NOT_NULL(ptr)                                                                                                       \
+  ([](auto &&p, ::frankie::assert_detail::source_location location = {}) -> decltype(auto) {                                          \
+    if (p == nullptr) [[unlikely]] {                                                                                                  \
+      ::frankie::assert_detail::assertion_failed(::frankie::assert_detail::assert_level::panic, FR_ASSERT_STRINGIFY(p) " != nullptr", \
+                                                 "Unexpected null pointer", location);                                                \
+    }                                                                                                                                 \
+    return std::forward<decltype(p)>(p);                                                                                              \
   })(ptr)
 
-#define FR_ASSERT_VAL(expression, expected)                                                                            \
-  ([](auto &&val, ::frankie::assert_detail::source_location location = {}) -> void {                                   \
-    if (!(val == (expected))) [[unlikely]] {                                                                           \
-      constexpr const std::uint64_t k_details_size = 256;                                                              \
-      char details[k_details_size];                                                                                    \
-      ::frankie::assert_detail::print_value(details, sizeof(details), val);                                            \
-      constexpr const std::uint64_t k_msg_size = 1024;                                                                 \
-      char msg[k_msg_size];                                                                                            \
-      std::snprintf(msg, sizeof(msg), "Expected: " FR_ASSERT_STRINGIFY(expected) ", Got: %s", details);                \
-      ::frankie::assert_detail::assertion_failed(::frankie::assert_detail::assert_level::verify,                       \
-                                                 FR_ASSERT_STRINGIFY(expression) " != " FR_ASSERT_STRINGIFY(expected), \
-                                                 msg, location);                                                       \
-    }                                                                                                                  \
+#define FR_ASSERT_VAL(expression, expected)                                                                                            \
+  ([](auto &&val, ::frankie::assert_detail::source_location location = {}) -> void {                                                   \
+    if (!(val == (expected))) [[unlikely]] {                                                                                           \
+      constexpr const std::uint64_t k_details_size = 256;                                                                              \
+      char details[k_details_size];                                                                                                    \
+      ::frankie::assert_detail::print_value(details, sizeof(details), val);                                                            \
+      constexpr const std::uint64_t k_msg_size = 1024;                                                                                 \
+      char msg[k_msg_size];                                                                                                            \
+      std::snprintf(msg, sizeof(msg), "Expected: " FR_ASSERT_STRINGIFY(expected) ", Got: %s", details);                                \
+      ::frankie::assert_detail::assertion_failed(::frankie::assert_detail::assert_level::verify,                                       \
+                                                 FR_ASSERT_STRINGIFY(expression) " != " FR_ASSERT_STRINGIFY(expected), msg, location); \
+    }                                                                                                                                  \
   })(expression)
